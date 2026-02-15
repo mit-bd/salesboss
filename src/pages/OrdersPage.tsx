@@ -53,7 +53,7 @@ export default function OrdersPage() {
       </div>
 
       {editOrder && (
-        <EditOrderDialog order={editOrder} open={!!editOrder} onOpenChange={(open) => !open && setEditOrder(null)} onSave={(updated) => { updateOrder(updated); setEditOrder(null); }} />
+        <EditOrderDialog order={editOrder} open={!!editOrder} onOpenChange={(open) => !open && setEditOrder(null)} onSave={async (updated) => { await updateOrder(updated); setEditOrder(null); }} />
       )}
     </AppLayout>
   );

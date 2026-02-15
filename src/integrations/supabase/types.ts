@@ -14,6 +14,108 @@ export type Database = {
   }
   public: {
     Tables: {
+      orders: {
+        Row: {
+          address: string
+          assigned_to: string | null
+          assigned_to_name: string
+          created_at: string
+          created_by: string | null
+          customer_name: string
+          delivery_date: string | null
+          delivery_method: string
+          followup_date: string | null
+          followup_step: number
+          health: string
+          id: string
+          invoice_id: string
+          is_deleted: boolean
+          is_repeat: boolean
+          is_upsell: boolean
+          mobile: string
+          note: string
+          order_date: string
+          order_source: string
+          paid_amount: number
+          parent_order_id: string | null
+          price: number
+          product_id: string | null
+          product_title: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string
+          assigned_to?: string | null
+          assigned_to_name?: string
+          created_at?: string
+          created_by?: string | null
+          customer_name: string
+          delivery_date?: string | null
+          delivery_method?: string
+          followup_date?: string | null
+          followup_step?: number
+          health?: string
+          id?: string
+          invoice_id?: string
+          is_deleted?: boolean
+          is_repeat?: boolean
+          is_upsell?: boolean
+          mobile: string
+          note?: string
+          order_date?: string
+          order_source?: string
+          paid_amount?: number
+          parent_order_id?: string | null
+          price?: number
+          product_id?: string | null
+          product_title?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          assigned_to?: string | null
+          assigned_to_name?: string
+          created_at?: string
+          created_by?: string | null
+          customer_name?: string
+          delivery_date?: string | null
+          delivery_method?: string
+          followup_date?: string | null
+          followup_step?: number
+          health?: string
+          id?: string
+          invoice_id?: string
+          is_deleted?: boolean
+          is_repeat?: boolean
+          is_upsell?: boolean
+          mobile?: string
+          note?: string
+          order_date?: string
+          order_source?: string
+          paid_amount?: number
+          parent_order_id?: string | null
+          price?: number
+          product_id?: string | null
+          product_title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_parent_order_id_fkey"
+            columns: ["parent_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           created_at: string

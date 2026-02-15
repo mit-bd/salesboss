@@ -43,14 +43,14 @@ export default function DeletedOrdersPage() {
     );
   }
 
-  const handleRestore = (id: string) => {
-    restoreOrder(id);
+  const handleRestore = async (id: string) => {
+    await restoreOrder(id);
     toast({ title: "Order Restored", description: `Order #${id} has been restored.` });
   };
 
-  const handleHardDelete = () => {
+  const handleHardDelete = async () => {
     if (!hardDeleteId) return;
-    hardDelete(hardDeleteId);
+    await hardDelete(hardDeleteId);
     toast({ title: "Permanently Deleted", description: `Order #${hardDeleteId} permanently removed.`, variant: "destructive" });
     setHardDeleteId(null);
   };
