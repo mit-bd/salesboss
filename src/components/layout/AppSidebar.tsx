@@ -9,6 +9,7 @@ import {
   Upload,
   Settings,
   Truck,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ const navItems = [
   { label: "All Orders", icon: ShoppingCart, path: "/orders" },
   { label: "Followups", icon: PhoneForwarded, path: "/followups" },
   { label: "Repeat Orders", icon: RefreshCw, path: "/repeat-orders" },
+  { label: "Sales Executives", icon: BarChart3, path: "/sales-executives" },
   { label: "Products", icon: Package, path: "/products" },
   { label: "Delivery Methods", icon: Truck, path: "/delivery-methods" },
   { label: "Bulk Import", icon: Upload, path: "/bulk-import" },
