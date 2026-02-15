@@ -37,7 +37,7 @@ export default function AppSidebar() {
           <PhoneForwarded className="h-4 w-4 text-sidebar-primary-foreground" />
         </div>
         <span className="text-base font-semibold text-sidebar-primary-foreground tracking-tight">
-          SalesFlow
+          SalesBoss
         </span>
       </div>
 
