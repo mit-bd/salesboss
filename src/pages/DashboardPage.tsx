@@ -1,8 +1,11 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader, { KpiCard } from "@/components/layout/PageHeader";
 import { mockDashboardMetrics, mockFollowupSteps, mockSalesExecutives, mockOrders } from "@/data/mockData";
 import { ShoppingCart, DollarSign, TrendingUp, RefreshCw, PhoneForwarded, Zap } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import GlobalFilters, { FilterState, EMPTY_FILTERS } from "@/components/GlobalFilters";
 
 const m = mockDashboardMetrics;
 
@@ -41,19 +44,29 @@ const STEP_COLORS = [
 ];
 
 export default function DashboardPage() {
+  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const navigate = useNavigate();
   const todayFollowups = mockOrders.filter(o => o.followupDate === "2026-02-15").length;
 
   return (
     <AppLayout>
       <PageHeader title="Dashboard" description="Sales overview and followup performance" />
 
+      <GlobalFilters filters={filters} onChange={setFilters} />
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-        <KpiCard label="Total Orders" value={m.totalOrders} change="+12 this week" changeType="positive" icon={<ShoppingCart className="h-5 w-5" />} color="hsl(215,80%,52%)" />
-        <KpiCard label="Revenue" value={`₹${(m.revenue / 1000).toFixed(1)}K`} change="+8.2% vs last month" changeType="positive" icon={<DollarSign className="h-5 w-5" />} color="hsl(152,60%,42%)" />
+        <div className="cursor-pointer" onClick={() => navigate("/orders")}>
+          <KpiCard label="Total Orders" value={m.totalOrders} change="+12 this week" changeType="positive" icon={<ShoppingCart className="h-5 w-5" />} color="hsl(215,80%,52%)" />
+        </div>
+        <KpiCard label="Revenue" value={`৳${(m.revenue / 1000).toFixed(1)}K`} change="+8.2% vs last month" changeType="positive" icon={<DollarSign className="h-5 w-5" />} color="hsl(152,60%,42%)" />
         <KpiCard label="Conversion" value={`${m.conversionRate}%`} change="+2.1%" changeType="positive" icon={<TrendingUp className="h-5 w-5" />} color="hsl(280,60%,55%)" />
-        <KpiCard label="Repeat Rate" value={`${m.repeatOrderRate}%`} change="+4.5%" changeType="positive" icon={<RefreshCw className="h-5 w-5" />} color="hsl(38,92%,50%)" />
-        <KpiCard label="Followup Done" value={`${m.followupCompletion}%`} change={`${todayFollowups} due today`} changeType="neutral" icon={<PhoneForwarded className="h-5 w-5" />} color="hsl(199,89%,48%)" />
+        <div className="cursor-pointer" onClick={() => navigate("/repeat-orders")}>
+          <KpiCard label="Repeat Rate" value={`${m.repeatOrderRate}%`} change="+4.5%" changeType="positive" icon={<RefreshCw className="h-5 w-5" />} color="hsl(38,92%,50%)" />
+        </div>
+        <div className="cursor-pointer" onClick={() => navigate("/followups")}>
+          <KpiCard label="Followup Done" value={`${m.followupCompletion}%`} change={`${todayFollowups} due today`} changeType="neutral" icon={<PhoneForwarded className="h-5 w-5" />} color="hsl(199,89%,48%)" />
+        </div>
         <KpiCard label="Upsell Rate" value={`${m.upsellSuccessRate}%`} change="+1.8%" changeType="positive" icon={<Zap className="h-5 w-5" />} color="hsl(340,65%,52%)" />
       </div>
 
@@ -121,7 +134,7 @@ export default function DashboardPage() {
               const total = step.pending + step.completed;
               const pct = total > 0 ? (step.completed / total) * 100 : 0;
               return (
-                <div key={step.step} className="space-y-1.5">
+                <div key={step.step} className="space-y-1.5 cursor-pointer hover:bg-muted/30 rounded-lg p-1.5 -mx-1.5 transition-fast" onClick={() => navigate("/followups")}>
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium text-card-foreground">{step.label}</span>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
