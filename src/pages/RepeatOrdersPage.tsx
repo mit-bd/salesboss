@@ -1,0 +1,49 @@
+import AppLayout from "@/components/layout/AppLayout";
+import PageHeader from "@/components/layout/PageHeader";
+import { mockOrders } from "@/data/mockData";
+import { RefreshCw, ChevronRight } from "lucide-react";
+
+export default function RepeatOrdersPage() {
+  const repeatOrders = mockOrders.filter((o) => o.isRepeat);
+
+  return (
+    <AppLayout>
+      <PageHeader title="Repeat Orders" description="Track repeat purchases and customer retention" />
+
+      <div className="space-y-3 animate-fade-in">
+        {repeatOrders.length === 0 && (
+          <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground card-shadow">
+            No repeat orders yet
+          </div>
+        )}
+        {repeatOrders.map((order) => {
+          const parent = mockOrders.find((o) => o.id === order.parentOrderId);
+          return (
+            <div
+              key={order.id}
+              className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 card-shadow hover:card-shadow-hover transition-fast cursor-pointer"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/10">
+                <RefreshCw className="h-5 w-5 text-warning" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="font-semibold text-foreground">{order.customerName}</p>
+                  <span className="text-xs text-muted-foreground">#{order.id}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {order.productTitle} · ₹{order.price} 
+                  {parent && <span> · Parent: #{parent.id}</span>}
+                </p>
+              </div>
+              <div className="text-xs text-muted-foreground shrink-0">
+                Step {order.followupStep} · {order.followupDate}
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+            </div>
+          );
+        })}
+      </div>
+    </AppLayout>
+  );
+}
