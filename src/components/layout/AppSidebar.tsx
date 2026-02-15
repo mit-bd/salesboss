@@ -15,9 +15,12 @@ import {
   Download,
   Database,
   Target,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/contexts/RoleContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/", adminOnly: false },
@@ -44,8 +47,17 @@ const followupBadges: Record<string, number> = {
 export default function AppSidebar() {
   const location = useLocation();
   const { isAdmin } = useRole();
+  const { user, profile, role, signOut } = useAuth();
 
   const visibleItems = navItems.filter((item) => !item.adminOnly || isAdmin);
+
+  const displayName = profile?.full_name || user?.email?.split("@")[0] || "User";
+  const initials = displayName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 flex w-60 flex-col bg-sidebar border-r border-sidebar-border">
@@ -88,12 +100,21 @@ export default function AppSidebar() {
       <div className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
-            AD
+            {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-sidebar-accent-foreground truncate">Admin User</p>
-            <p className="text-xs text-sidebar-muted truncate">admin@salesboss.com</p>
+            <p className="text-sm font-medium text-sidebar-accent-foreground truncate">{displayName}</p>
+            <p className="text-xs text-sidebar-muted truncate capitalize">{role?.replace("_", " ") || "User"}</p>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-sidebar-muted hover:text-sidebar-accent-foreground"
+            onClick={signOut}
+            title="Sign out"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
     </aside>
