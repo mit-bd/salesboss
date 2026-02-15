@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Upload, Image } from "lucide-react";
+import { Plus, Upload, Image, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useProductStore } from "@/contexts/ProductStoreContext";
 import { Product } from "@/types/data";
@@ -28,6 +28,8 @@ export default function CreateProductDialog({ editProduct, onClose, trigger }: C
   const { products, addProduct, updateProduct } = useProductStore();
   const [errors, setErrors] = useState<ProductFormErrors>({});
   const [imagePreview, setImagePreview] = useState<string>("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     title: "",
     sku: "",
@@ -36,7 +38,6 @@ export default function CreateProductDialog({ editProduct, onClose, trigger }: C
     info: "",
   });
 
-  // Re-initialize form when editProduct changes
   useEffect(() => {
     if (editProduct) {
       setForm({
@@ -47,10 +48,12 @@ export default function CreateProductDialog({ editProduct, onClose, trigger }: C
         info: editProduct.info,
       });
       setImagePreview(editProduct.image || "");
+      setImageFile(null);
       setErrors({});
     } else {
       setForm({ title: "", sku: "", price: "", packageDuration: "30", info: "" });
       setImagePreview("");
+      setImageFile(null);
       setErrors({});
     }
   }, [editProduct]);
@@ -73,14 +76,16 @@ export default function CreateProductDialog({ editProduct, onClose, trigger }: C
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => setImagePreview(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
+    setSaving(true);
 
     const productData = {
       title: form.title.trim(),
@@ -88,23 +93,31 @@ export default function CreateProductDialog({ editProduct, onClose, trigger }: C
       price: Number(form.price),
       packageDuration: Number(form.packageDuration) as 15 | 30,
       info: form.info.trim(),
-      image: imagePreview,
+      image: editProduct?.image || "",
     };
 
-    if (editProduct) {
-      updateProduct({ ...productData, id: editProduct.id });
-      toast({ title: "Product Updated", description: `${productData.title} has been updated successfully.` });
-    } else {
-      addProduct(productData);
-      toast({ title: "Product Created", description: `${productData.title} has been added successfully.` });
+    try {
+      if (editProduct) {
+        await updateProduct({ ...productData, id: editProduct.id }, imageFile || undefined);
+        toast({ title: "Product Updated", description: `${productData.title} has been updated successfully.` });
+      } else {
+        await addProduct(productData, imageFile || undefined);
+        toast({ title: "Product Created", description: `${productData.title} has been added successfully.` });
+      }
+      handleClose();
+    } catch (err) {
+      console.error("Product save error:", err);
+      toast({ title: "Error", description: "Failed to save product.", variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
-    handleClose();
   };
 
   const handleClose = () => {
     setOpen(false);
     setForm({ title: "", sku: "", price: "", packageDuration: "30", info: "" });
     setImagePreview("");
+    setImageFile(null);
     setErrors({});
     onClose?.();
   };
@@ -130,7 +143,6 @@ export default function CreateProductDialog({ editProduct, onClose, trigger }: C
           <DialogTitle>{editProduct ? "Edit Product" : "Add Product"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-2">
-          {/* Image Upload */}
           <div>
             <Label className="text-xs">Product Image</Label>
             <div className="mt-1 flex items-center gap-4">
@@ -182,8 +194,11 @@ export default function CreateProductDialog({ editProduct, onClose, trigger }: C
             <Textarea value={form.info} onChange={(e) => update("info", e.target.value)} placeholder="Description..." className="mt-1" rows={2} />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={handleClose}>Cancel</Button>
-            <Button onClick={handleSubmit}>{editProduct ? "Update" : "Create"}</Button>
+            <Button variant="outline" onClick={handleClose} disabled={saving}>Cancel</Button>
+            <Button onClick={handleSubmit} disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {editProduct ? "Update" : "Create"}
+            </Button>
           </div>
         </div>
       </DialogContent>
