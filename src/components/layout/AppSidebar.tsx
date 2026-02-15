@@ -10,20 +10,27 @@ import {
   Settings,
   Truck,
   BarChart3,
+  Trash2,
+  Shield,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useRole } from "@/contexts/RoleContext";
 
 const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, path: "/" },
-  { label: "All Orders", icon: ShoppingCart, path: "/orders" },
-  { label: "Followups", icon: PhoneForwarded, path: "/followups" },
-  { label: "Repeat Orders", icon: RefreshCw, path: "/repeat-orders" },
-  { label: "Sales Executives", icon: BarChart3, path: "/sales-executives" },
-  { label: "Products", icon: Package, path: "/products" },
-  { label: "Delivery Methods", icon: Truck, path: "/delivery-methods" },
-  { label: "Bulk Import", icon: Upload, path: "/bulk-import" },
-  { label: "Team", icon: Users, path: "/team" },
-  { label: "Settings", icon: Settings, path: "/settings" },
+  { label: "Dashboard", icon: LayoutDashboard, path: "/", adminOnly: false },
+  { label: "All Orders", icon: ShoppingCart, path: "/orders", adminOnly: false },
+  { label: "Followups", icon: PhoneForwarded, path: "/followups", adminOnly: false },
+  { label: "Repeat Orders", icon: RefreshCw, path: "/repeat-orders", adminOnly: false },
+  { label: "Sales Executives", icon: BarChart3, path: "/sales-executives", adminOnly: false },
+  { label: "Products", icon: Package, path: "/products", adminOnly: false },
+  { label: "Delivery Methods", icon: Truck, path: "/delivery-methods", adminOnly: false },
+  { label: "Bulk Import", icon: Upload, path: "/bulk-import", adminOnly: false },
+  { label: "Team", icon: Users, path: "/team", adminOnly: false },
+  { label: "Deleted Orders", icon: Trash2, path: "/deleted-orders", adminOnly: true },
+  { label: "Audit Logs", icon: Shield, path: "/audit-logs", adminOnly: true },
+  { label: "Export & Backup", icon: Download, path: "/export", adminOnly: true },
+  { label: "Settings", icon: Settings, path: "/settings", adminOnly: false },
 ];
 
 const followupBadges: Record<string, number> = {
@@ -32,10 +39,12 @@ const followupBadges: Record<string, number> = {
 
 export default function AppSidebar() {
   const location = useLocation();
+  const { isAdmin } = useRole();
+
+  const visibleItems = navItems.filter((item) => !item.adminOnly || isAdmin);
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 flex w-60 flex-col bg-sidebar border-r border-sidebar-border">
-      {/* Logo */}
       <div className="flex h-16 items-center gap-2 px-5 border-b border-sidebar-border">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary">
           <PhoneForwarded className="h-4 w-4 text-sidebar-primary-foreground" />
@@ -45,9 +54,8 @@ export default function AppSidebar() {
         </span>
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const isActive = location.pathname === item.path;
           const badge = followupBadges[item.path];
           return (
@@ -73,7 +81,6 @@ export default function AppSidebar() {
         })}
       </nav>
 
-      {/* User */}
       <div className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">

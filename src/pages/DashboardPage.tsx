@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader, { KpiCard } from "@/components/layout/PageHeader";
-import { mockDashboardMetrics, mockFollowupSteps, mockSalesExecutives, mockOrders } from "@/data/mockData";
+import { mockDashboardMetrics, mockFollowupSteps, mockSalesExecutives } from "@/data/mockData";
+import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { ShoppingCart, DollarSign, TrendingUp, RefreshCw, PhoneForwarded, Zap, Search, X } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import GlobalFilters, { FilterState, EMPTY_FILTERS } from "@/components/GlobalFilters";
@@ -28,10 +29,11 @@ export default function DashboardPage() {
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const todayFollowups = mockOrders.filter(o => o.followupDate === "2026-02-15").length;
+  const { activeOrders } = useOrderStore();
+  const todayFollowups = activeOrders.filter(o => o.followupDate === "2026-02-15").length;
 
   const searchResults = search.trim()
-    ? mockOrders.filter(
+    ? activeOrders.filter(
         (o) =>
           o.customerName.toLowerCase().includes(search.toLowerCase()) ||
           o.mobile.includes(search)
@@ -50,16 +52,9 @@ export default function DashboardPage() {
     <AppLayout>
       <PageHeader title="Dashboard" description="Sales overview and followup performance" />
 
-      {/* Global Search */}
       <div ref={searchRef} className="relative mb-6 max-w-lg">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search by customer name or mobile..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setShowResults(true); }}
-          onFocus={() => setShowResults(true)}
-          className="pl-9 pr-8"
-        />
+        <Input placeholder="Search by customer name or mobile..." value={search} onChange={(e) => { setSearch(e.target.value); setShowResults(true); }} onFocus={() => setShowResults(true)} className="pl-9 pr-8" />
         {search && (
           <button onClick={() => { setSearch(""); setShowResults(false); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
             <X className="h-3.5 w-3.5" />
@@ -68,11 +63,7 @@ export default function DashboardPage() {
         {showResults && searchResults.length > 0 && (
           <div className="absolute z-50 mt-1 w-full rounded-xl border border-border bg-card card-shadow overflow-hidden animate-fade-in">
             {searchResults.slice(0, 8).map((order) => (
-              <div
-                key={order.id}
-                onClick={() => { navigate(`/orders/${order.id}`); setShowResults(false); setSearch(""); }}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-fast border-b border-border last:border-0"
-              >
+              <div key={order.id} onClick={() => { navigate(`/orders/${order.id}`); setShowResults(false); setSearch(""); }} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-fast border-b border-border last:border-0">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground">{order.customerName}</p>
                   <p className="text-xs text-muted-foreground">{order.mobile} · #{order.id}</p>
@@ -80,35 +71,22 @@ export default function DashboardPage() {
                 <span className="text-xs text-muted-foreground">৳{order.price}</span>
               </div>
             ))}
-            {searchResults.length > 8 && (
-              <div className="px-4 py-2 text-xs text-muted-foreground text-center bg-muted/30">
-                +{searchResults.length - 8} more results
-              </div>
-            )}
+            {searchResults.length > 8 && <div className="px-4 py-2 text-xs text-muted-foreground text-center bg-muted/30">+{searchResults.length - 8} more results</div>}
           </div>
         )}
         {showResults && search.trim() && searchResults.length === 0 && (
-          <div className="absolute z-50 mt-1 w-full rounded-xl border border-border bg-card card-shadow p-4 text-center text-sm text-muted-foreground animate-fade-in">
-            No orders found
-          </div>
+          <div className="absolute z-50 mt-1 w-full rounded-xl border border-border bg-card card-shadow p-4 text-center text-sm text-muted-foreground animate-fade-in">No orders found</div>
         )}
       </div>
 
       <GlobalFilters filters={filters} onChange={setFilters} />
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-        <div className="cursor-pointer" onClick={() => navigate("/orders")}>
-          <KpiCard label="Total Orders" value={m.totalOrders} change="+12 this week" changeType="positive" icon={<ShoppingCart className="h-5 w-5" />} color="hsl(215,80%,52%)" />
-        </div>
-        <KpiCard label="Revenue" value={`৳${(m.revenue / 1000).toFixed(1)}K`} change="+8.2% vs last month" changeType="positive" icon={<DollarSign className="h-5 w-5" />} color="hsl(152,60%,42%)" />
+        <div className="cursor-pointer" onClick={() => navigate("/orders")}><KpiCard label="Total Orders" value={activeOrders.length} change="+12 this week" changeType="positive" icon={<ShoppingCart className="h-5 w-5" />} color="hsl(215,80%,52%)" /></div>
+        <KpiCard label="Revenue" value={`৳${(activeOrders.reduce((s, o) => s + o.price, 0) / 1000).toFixed(1)}K`} change="+8.2% vs last month" changeType="positive" icon={<DollarSign className="h-5 w-5" />} color="hsl(152,60%,42%)" />
         <KpiCard label="Conversion" value={`${m.conversionRate}%`} change="+2.1%" changeType="positive" icon={<TrendingUp className="h-5 w-5" />} color="hsl(280,60%,55%)" />
-        <div className="cursor-pointer" onClick={() => navigate("/repeat-orders")}>
-          <KpiCard label="Repeat Rate" value={`${m.repeatOrderRate}%`} change="+4.5%" changeType="positive" icon={<RefreshCw className="h-5 w-5" />} color="hsl(38,92%,50%)" />
-        </div>
-        <div className="cursor-pointer" onClick={() => navigate("/followups")}>
-          <KpiCard label="Followup Done" value={`${m.followupCompletion}%`} change={`${todayFollowups} due today`} changeType="neutral" icon={<PhoneForwarded className="h-5 w-5" />} color="hsl(199,89%,48%)" />
-        </div>
+        <div className="cursor-pointer" onClick={() => navigate("/repeat-orders")}><KpiCard label="Repeat Rate" value={`${m.repeatOrderRate}%`} change="+4.5%" changeType="positive" icon={<RefreshCw className="h-5 w-5" />} color="hsl(38,92%,50%)" /></div>
+        <div className="cursor-pointer" onClick={() => navigate("/followups")}><KpiCard label="Followup Done" value={`${m.followupCompletion}%`} change={`${todayFollowups} due today`} changeType="neutral" icon={<PhoneForwarded className="h-5 w-5" />} color="hsl(199,89%,48%)" /></div>
         <KpiCard label="Upsell Rate" value={`${m.upsellSuccessRate}%`} change="+1.8%" changeType="positive" icon={<Zap className="h-5 w-5" />} color="hsl(340,65%,52%)" />
       </div>
 
@@ -171,10 +149,7 @@ export default function DashboardPage() {
                 <div key={step.step} className="space-y-1.5 cursor-pointer hover:bg-muted/30 rounded-lg p-1.5 -mx-1.5 transition-fast" onClick={() => navigate("/followups")}>
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium text-card-foreground">{step.label}</span>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span>{step.pending} pending</span>
-                      <span>{step.completed} done</span>
-                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground"><span>{step.pending} pending</span><span>{step.completed} done</span></div>
                   </div>
                   <div className="h-2 rounded-full bg-muted overflow-hidden">
                     <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: STEP_COLORS[i] }} />
