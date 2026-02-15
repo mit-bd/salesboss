@@ -1,9 +1,13 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { mockOrders, mockDeliveryPartners } from "@/data/mockData";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Phone, MapPin, Package, Calendar, RefreshCw, ShoppingCart, Zap, Truck } from "lucide-react";
+import { ArrowLeft, Phone, MapPin, Package, Calendar, RefreshCw, ShoppingCart, Zap, Truck, Edit2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useRole } from "@/contexts/RoleContext";
+import EditOrderDialog from "@/components/EditOrderDialog";
+import DeleteOrderDialog from "@/components/DeleteOrderDialog";
 
 const STEP_COLORS = [
   "bg-step-1 text-primary-foreground",
@@ -34,7 +38,10 @@ function getDeliveryName(id: string): string {
 export default function OrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isAdmin } = useRole();
   const order = mockOrders.find((o) => o.id === id);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   if (!order) {
     return (
@@ -88,9 +95,21 @@ export default function OrderDetailPage() {
   return (
     <AppLayout>
       <div className="max-w-4xl animate-fade-in">
-        <Button variant="ghost" size="sm" className="mb-4 gap-1.5 text-muted-foreground" onClick={() => navigate(-1)}>
-          <ArrowLeft className="h-4 w-4" /> Back
-        </Button>
+        <div className="mb-4 flex items-center justify-between">
+          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => navigate(-1)}>
+            <ArrowLeft className="h-4 w-4" /> Back
+          </Button>
+          {isAdmin && (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditOpen(true)}>
+                <Edit2 className="h-3.5 w-3.5" /> Edit
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+                <Trash2 className="h-3.5 w-3.5" /> Delete
+              </Button>
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Customer Info */}
@@ -134,7 +153,6 @@ export default function OrderDetailPage() {
                 </div>
               </div>
 
-              {/* New fields row */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4 border-t border-border mt-4">
                 <div>
                   <p className="text-xs text-muted-foreground">Order Date</p>
@@ -223,6 +241,31 @@ export default function OrderDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Admin-only dialogs */}
+      {isAdmin && (
+        <>
+          <EditOrderDialog
+            order={order}
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            onSave={(updated) => {
+              // In production this would update the database
+              setEditOpen(false);
+            }}
+          />
+          <DeleteOrderDialog
+            order={order}
+            open={deleteOpen}
+            onOpenChange={setDeleteOpen}
+            childCount={childOrders.length}
+            onConfirm={() => {
+              // In production this would delete from database
+              navigate("/orders");
+            }}
+          />
+        </>
+      )}
     </AppLayout>
   );
 }

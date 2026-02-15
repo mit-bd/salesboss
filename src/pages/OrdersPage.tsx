@@ -5,10 +5,13 @@ import PageHeader from "@/components/layout/PageHeader";
 import { mockOrders, mockDeliveryPartners } from "@/data/mockData";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, RefreshCw, Edit2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GlobalFilters, { FilterState, EMPTY_FILTERS } from "@/components/GlobalFilters";
 import CreateOrderDialog from "@/components/CreateOrderDialog";
+import EditOrderDialog from "@/components/EditOrderDialog";
+import { useRole } from "@/contexts/RoleContext";
 import { Order } from "@/types/data";
 
 const healthColors: Record<string, string> = {
@@ -46,7 +49,9 @@ function getDeliveryName(id: string): string {
 export default function OrdersPage() {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const [editOrder, setEditOrder] = useState<Order | null>(null);
   const navigate = useNavigate();
+  const { isAdmin } = useRole();
   const filtered = applyFilters(mockOrders, filters, search);
 
   return (
@@ -78,6 +83,7 @@ export default function OrdersPage() {
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Step</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Health</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
+                {isAdmin && <th className="px-4 py-3 text-left font-medium text-muted-foreground w-12"></th>}
               </tr>
             </thead>
             <tbody>
@@ -115,15 +121,42 @@ export default function OrdersPage() {
                       </Badge>
                     )}
                   </td>
+                  {isAdmin && (
+                    <td className="px-4 py-3">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditOrder(order);
+                        }}
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">No orders found</td></tr>
+                <tr><td colSpan={isAdmin ? 10 : 9} className="px-4 py-12 text-center text-muted-foreground">No orders found</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {editOrder && (
+        <EditOrderDialog
+          order={editOrder}
+          open={!!editOrder}
+          onOpenChange={(open) => !open && setEditOrder(null)}
+          onSave={(updated) => {
+            // In production this would update the database
+            setEditOrder(null);
+          }}
+        />
+      )}
     </AppLayout>
   );
 }
