@@ -182,8 +182,8 @@ export default function OrderDetailPage() {
 
       {isAdmin && (
         <>
-          <EditOrderDialog order={order} open={editOpen} onOpenChange={setEditOpen} onSave={(updated) => { updateOrder(updated); setEditOpen(false); }} />
-          <DeleteOrderDialog order={order} open={deleteOpen} onOpenChange={setDeleteOpen} childCount={childOrders.length} onConfirm={() => { softDelete(order.id); toast({ title: "Order Deleted", description: `Order #${order.id} moved to deleted orders.` }); navigate("/orders"); }} />
+          <EditOrderDialog order={order} open={editOpen} onOpenChange={setEditOpen} onSave={async (updated) => { await updateOrder(updated); setEditOpen(false); }} />
+          <DeleteOrderDialog order={order} open={deleteOpen} onOpenChange={setDeleteOpen} childCount={childOrders.length} onConfirm={async () => { await softDelete(order.id); toast({ title: "Order Deleted", description: `Order #${order.id} moved to deleted orders.` }); navigate("/orders"); }} />
         </>
       )}
     </AppLayout>

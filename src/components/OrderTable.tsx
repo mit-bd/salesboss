@@ -5,10 +5,10 @@ import { mockDeliveryPartners } from "@/data/mockData";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
+import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { cn } from "@/lib/utils";
 import {
   Copy,
@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Truck,
+  Loader2,
 } from "lucide-react";
 
 const stepLabels = ["1st Followup", "2nd Followup", "3rd Followup", "4th Followup", "5th Followup"];
@@ -49,10 +50,12 @@ interface OrderTableProps {
 export default function OrderTable({ orders, isAdmin, onEdit, pageSize = 20 }: OrderTableProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { updateOrder } = useOrderStore();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
   const [noteOrderId, setNoteOrderId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
 
   const totalPages = Math.max(1, Math.ceil(orders.length / pageSize));
   const pageOrders = orders.slice(page * pageSize, (page + 1) * pageSize);
@@ -79,10 +82,23 @@ export default function OrderTable({ orders, isAdmin, onEdit, pageSize = 20 }: O
   };
 
   const handleRowClick = (orderId: string, e: React.MouseEvent) => {
-    // Don't navigate if clicking action buttons
     const target = e.target as HTMLElement;
     if (target.closest("[data-action]")) return;
     navigate(`/orders/${orderId}`);
+  };
+
+  const handleSaveNote = async (order: Order) => {
+    setSavingNote(true);
+    try {
+      await updateOrder({ ...order, note: noteText });
+      toast({ title: "Note Saved", description: "Order note updated successfully." });
+      setNoteOrderId(null);
+    } catch (err) {
+      console.error("Note save error:", err);
+      toast({ title: "Error", description: "Failed to save note.", variant: "destructive" });
+    } finally {
+      setSavingNote(false);
+    }
   };
 
   const today = new Date().toISOString().slice(0, 10);
@@ -122,7 +138,8 @@ export default function OrderTable({ orders, isAdmin, onEdit, pageSize = 20 }: O
             )}
             {pageOrders.map((order) => {
               const isCompleted = order.followupDate <= today;
-              const due = order.price; // Placeholder: full price as due since no paid tracking yet
+              const paid = order.paidAmount || 0;
+              const due = order.price - paid;
 
               return (
                 <tr
@@ -165,7 +182,7 @@ export default function OrderTable({ orders, isAdmin, onEdit, pageSize = 20 }: O
                         </button>
                       </PopoverTrigger>
                       <PopoverContent className="w-64 p-3" data-action="true" onClick={(e) => e.stopPropagation()}>
-                        <p className="text-xs font-medium text-foreground mb-2">Quick Note — {order.id}</p>
+                        <p className="text-xs font-medium text-foreground mb-2">Quick Note — {order.invoiceId || order.id}</p>
                         <Textarea
                           value={noteText}
                           onChange={(e) => setNoteText(e.target.value)}
@@ -174,7 +191,13 @@ export default function OrderTable({ orders, isAdmin, onEdit, pageSize = 20 }: O
                           className="text-xs"
                         />
                         <div className="flex justify-end mt-2">
-                          <Button size="sm" className="h-7 text-xs" onClick={() => { setNoteOrderId(null); toast({ title: "Note Saved" }); }}>
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs"
+                            disabled={savingNote}
+                            onClick={() => handleSaveNote(order)}
+                          >
+                            {savingNote && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
                             Save
                           </Button>
                         </div>
@@ -184,7 +207,7 @@ export default function OrderTable({ orders, isAdmin, onEdit, pageSize = 20 }: O
 
                   {/* Invoice / Product */}
                   <td className="px-3 py-3">
-                    <p className="font-semibold text-primary text-xs">{order.id}</p>
+                    <p className="font-semibold text-primary text-xs">{order.invoiceId || order.id}</p>
                     <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{order.productTitle}</p>
                     {order.isRepeat && (
                       <Badge variant="outline" className="mt-1 gap-0.5 text-[9px] h-4 px-1 border-warning/30 text-warning">
@@ -273,8 +296,10 @@ export default function OrderTable({ orders, isAdmin, onEdit, pageSize = 20 }: O
                   <td className="px-3 py-3">
                     <div className="space-y-0.5">
                       <p className="text-xs font-semibold text-foreground">৳{order.price.toLocaleString()}</p>
-                      <p className="text-[10px] text-muted-foreground">Paid: ৳0</p>
-                      <p className="text-[10px] font-medium text-destructive">Due: ৳{order.price.toLocaleString()}</p>
+                      <p className="text-[10px] text-muted-foreground">Paid: ৳{paid.toLocaleString()}</p>
+                      {due > 0 && (
+                        <p className="text-[10px] font-medium text-destructive">Due: ৳{due.toLocaleString()}</p>
+                      )}
                     </div>
                   </td>
 

@@ -30,6 +30,9 @@ export interface Order {
   isRepeat: boolean;
   isUpsell?: boolean;
   health: "new" | "good" | "at-risk";
+  isDeleted?: boolean;
+  paidAmount?: number;
+  invoiceId?: string;
 }
 
 export interface FollowupStep {
@@ -102,7 +105,7 @@ export interface CommissionConfig {
   executiveId: string;
   enabled: boolean;
   type: "percentage" | "fixed";
-  rate: number; // percentage or fixed amount
+  rate: number;
 }
 
 export interface CommissionEntry {

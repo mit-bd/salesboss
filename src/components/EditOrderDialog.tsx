@@ -16,7 +16,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { mockProducts, mockDeliveryPartners } from "@/data/mockData";
+import { mockDeliveryPartners } from "@/data/mockData";
+import { useProductStore } from "@/contexts/ProductStoreContext";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Order } from "@/types/data";
 
@@ -47,7 +49,9 @@ export default function EditOrderDialog({
 }: EditOrderDialogProps) {
   const { toast } = useToast();
   const [errors, setErrors] = useState<FormErrors>({});
+  const [saving, setSaving] = useState(false);
   const activePartners = mockDeliveryPartners.filter((dp) => dp.active);
+  const { products } = useProductStore();
 
   const [form, setForm] = useState({
     customerName: order.customerName,
@@ -78,7 +82,7 @@ export default function EditOrderDialog({
   };
 
   const handleProductChange = (productId: string) => {
-    const product = mockProducts.find((p) => p.id === productId);
+    const product = products.find((p) => p.id === productId);
     setForm((f) => ({
       ...f,
       productId,
@@ -86,9 +90,10 @@ export default function EditOrderDialog({
     }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
-    const product = mockProducts.find((p) => p.id === form.productId);
+    setSaving(true);
+    const product = products.find((p) => p.id === form.productId);
     const updated: Order = {
       ...order,
       customerName: form.customerName.trim(),
@@ -103,12 +108,19 @@ export default function EditOrderDialog({
       deliveryDate: form.deliveryDate,
       deliveryMethod: form.deliveryMethod,
     };
-    onSave?.(updated);
-    toast({
-      title: "Order Updated",
-      description: `Order #${order.id} has been updated successfully.`,
-    });
-    onOpenChange(false);
+    try {
+      await onSave?.(updated);
+      toast({
+        title: "Order Updated",
+        description: `Order #${order.invoiceId || order.id} has been updated successfully.`,
+      });
+      onOpenChange(false);
+    } catch (err) {
+      console.error("Order update error:", err);
+      toast({ title: "Error", description: "Failed to update order.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const update = (key: string, value: string) => {
@@ -121,7 +133,7 @@ export default function EditOrderDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Order #{order.id}</DialogTitle>
+          <DialogTitle>Edit Order #{order.invoiceId || order.id}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-2">
           <div className="grid grid-cols-2 gap-4">
@@ -195,7 +207,7 @@ export default function EditOrderDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockProducts.map((p) => (
+                  {products.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.title} - ৳{p.price}
                     </SelectItem>
@@ -276,10 +288,13 @@ export default function EditOrderDialog({
             />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>Save Changes</Button>
+            <Button onClick={handleSubmit} disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Changes
+            </Button>
           </div>
         </div>
       </DialogContent>

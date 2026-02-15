@@ -5,8 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { mockProducts, mockSalesExecutives, mockDeliveryPartners } from "@/data/mockData";
-import { Plus } from "lucide-react";
+import { mockDeliveryPartners, mockSalesExecutives } from "@/data/mockData";
+import { useProductStore } from "@/contexts/ProductStoreContext";
+import { useOrderStore } from "@/contexts/OrderStoreContext";
+import { Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface FormErrors {
@@ -23,9 +25,13 @@ const ORDER_SOURCES = ["Website", "Phone Call", "Referral", "Social Media"];
 
 export default function CreateOrderDialog() {
   const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const { toast } = useToast();
   const [errors, setErrors] = useState<FormErrors>({});
   const activePartners = mockDeliveryPartners.filter((dp) => dp.active);
+  const { products } = useProductStore();
+  const { addOrder } = useOrderStore();
+
   const [form, setForm] = useState({
     customerName: "",
     mobile: "",
@@ -55,16 +61,49 @@ export default function CreateOrderDialog() {
   };
 
   const handleProductChange = (productId: string) => {
-    const product = mockProducts.find((p) => p.id === productId);
+    const product = products.find((p) => p.id === productId);
     setForm((f) => ({ ...f, productId, price: product ? String(product.price) : f.price }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
-    toast({ title: "Order Created", description: `Order for ${form.customerName} created successfully. Auto-assigned to Step 1.` });
-    setForm({ customerName: "", mobile: "", address: "", orderSource: "", productId: "", price: "", note: "", assignedTo: "", orderDate: new Date().toISOString().split("T")[0], deliveryDate: "", deliveryMethod: "" });
-    setErrors({});
-    setOpen(false);
+    setSaving(true);
+
+    const product = products.find((p) => p.id === form.productId);
+    const exec = mockSalesExecutives.find((se) => se.id === form.assignedTo);
+
+    try {
+      await addOrder({
+        customerName: form.customerName.trim(),
+        mobile: form.mobile.trim(),
+        address: form.address.trim(),
+        orderSource: form.orderSource,
+        productId: form.productId,
+        productTitle: product?.title || "",
+        price: Number(form.price) || 0,
+        note: form.note,
+        followupStep: 1,
+        followupDate: form.deliveryDate,
+        assignedTo: form.assignedTo,
+        assignedToName: exec?.name || "",
+        createdAt: new Date().toISOString().split("T")[0],
+        orderDate: form.orderDate,
+        deliveryDate: form.deliveryDate,
+        deliveryMethod: form.deliveryMethod,
+        parentOrderId: null,
+        isRepeat: false,
+        health: "new",
+      });
+      toast({ title: "Order Created", description: `Order for ${form.customerName} created successfully.` });
+      setForm({ customerName: "", mobile: "", address: "", orderSource: "", productId: "", price: "", note: "", assignedTo: "", orderDate: new Date().toISOString().split("T")[0], deliveryDate: "", deliveryMethod: "" });
+      setErrors({});
+      setOpen(false);
+    } catch (err) {
+      console.error("Order create error:", err);
+      toast({ title: "Error", description: "Failed to create order.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const update = (key: string, value: string) => {
@@ -117,7 +156,7 @@ export default function CreateOrderDialog() {
               <Select value={form.productId} onValueChange={handleProductChange}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select product" /></SelectTrigger>
                 <SelectContent>
-                  {mockProducts.map((p) => <SelectItem key={p.id} value={p.id}>{p.title} - ৳{p.price}</SelectItem>)}
+                  {products.map((p) => <SelectItem key={p.id} value={p.id}>{p.title} - ৳{p.price}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -164,8 +203,11 @@ export default function CreateOrderDialog() {
             <Textarea value={form.note} onChange={(e) => update("note", e.target.value)} placeholder="Any notes..." className="mt-1" rows={2} />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleSubmit}>Create Order</Button>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={handleSubmit} disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Order
+            </Button>
           </div>
         </div>
       </DialogContent>
