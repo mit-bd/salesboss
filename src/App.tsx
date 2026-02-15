@@ -21,6 +21,8 @@ import SalesExecutiveDetailPage from "./pages/SalesExecutiveDetailPage";
 import DeletedOrdersPage from "./pages/DeletedOrdersPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import ExportPage from "./pages/ExportPage";
+import BackupCenterPage from "./pages/BackupCenterPage";
+import CommissionPage from "./pages/CommissionPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -50,6 +52,8 @@ const App = () => (
           <Route path="/deleted-orders" element={<DeletedOrdersPage />} />
           <Route path="/audit-logs" element={<AuditLogsPage />} />
           <Route path="/export" element={<ExportPage />} />
+          <Route path="/backup-center" element={<BackupCenterPage />} />
+          <Route path="/commission" element={<CommissionPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

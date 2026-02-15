@@ -4,8 +4,19 @@ import PageHeader from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, User } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Upload, User, Mail, Bell } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { mockEmailReportConfig } from "@/data/mockData";
+import { EmailReportConfig } from "@/types/data";
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -14,6 +25,10 @@ export default function SettingsPage() {
     name: "Admin User",
     email: "admin@salesboss.com",
   });
+
+  // Email report state
+  const [emailConfig, setEmailConfig] = useState<EmailReportConfig>({ ...mockEmailReportConfig });
+  const [newRecipient, setNewRecipient] = useState("");
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -28,6 +43,29 @@ export default function SettingsPage() {
     toast({ title: "Profile Updated", description: "Your profile has been updated successfully." });
   };
 
+  const addRecipient = () => {
+    const email = newRecipient.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast({ title: "Invalid Email", description: "Please enter a valid email address.", variant: "destructive" });
+      return;
+    }
+    if (emailConfig.recipients.includes(email)) {
+      toast({ title: "Duplicate", description: "This email is already in the list.", variant: "destructive" });
+      return;
+    }
+    setEmailConfig((prev) => ({ ...prev, recipients: [...prev.recipients, email] }));
+    setNewRecipient("");
+    toast({ title: "Recipient Added", description: `${email} added to report recipients.` });
+  };
+
+  const removeRecipient = (email: string) => {
+    setEmailConfig((prev) => ({ ...prev, recipients: prev.recipients.filter((r) => r !== email) }));
+  };
+
+  const saveEmailConfig = () => {
+    toast({ title: "Email Reports Saved", description: `${emailConfig.frequency} reports ${emailConfig.enabled ? "enabled" : "disabled"}.` });
+  };
+
   return (
     <AppLayout>
       <PageHeader title="Settings" description="Application configuration" />
@@ -35,7 +73,9 @@ export default function SettingsPage() {
       <div className="max-w-2xl space-y-6 animate-fade-in">
         {/* Profile */}
         <div className="rounded-xl border border-border bg-card p-5 card-shadow">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Profile</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+            <User className="h-4 w-4" /> Profile
+          </h3>
           <div className="flex items-center gap-4 mb-6">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted overflow-hidden border-2 border-border">
               {profileImage ? (
@@ -66,10 +106,90 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Email Report Automation */}
         <div className="rounded-xl border border-border bg-card p-5 card-shadow">
-          <h3 className="text-sm font-semibold text-foreground mb-1">Notifications</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Mail className="h-4 w-4" /> Email Report Automation
+          </h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">Enable Automated Reports</p>
+                <p className="text-xs text-muted-foreground">Send performance reports to configured recipients</p>
+              </div>
+              <Switch
+                checked={emailConfig.enabled}
+                onCheckedChange={(checked) => setEmailConfig((prev) => ({ ...prev, enabled: checked }))}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Report Frequency</Label>
+              <Select
+                value={emailConfig.frequency}
+                onValueChange={(v) => setEmailConfig((prev) => ({ ...prev, frequency: v as EmailReportConfig["frequency"] }))}
+              >
+                <SelectTrigger className="h-9 w-48 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Report includes</Label>
+              <div className="flex flex-wrap gap-2">
+                {["Total Orders", "Repeat Orders", "Revenue (৳)", "Followup Completion %", "Sales Executive Summary"].map((item) => (
+                  <Badge key={item} variant="secondary" className="text-xs">{item}</Badge>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Recipients</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="Add email address"
+                  value={newRecipient}
+                  onChange={(e) => setNewRecipient(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addRecipient()}
+                  className="h-9 text-sm"
+                />
+                <Button size="sm" variant="outline" onClick={addRecipient} className="h-9">Add</Button>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {emailConfig.recipients.map((email) => (
+                  <Badge key={email} variant="secondary" className="text-xs gap-1">
+                    {email}
+                    <button
+                      onClick={() => removeRecipient(email)}
+                      className="ml-1 text-muted-foreground hover:text-foreground"
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button size="sm" onClick={saveEmailConfig}>Save Email Settings</Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Notifications */}
+        <div className="rounded-xl border border-border bg-card p-5 card-shadow">
+          <h3 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
+            <Bell className="h-4 w-4" /> Notifications
+          </h3>
           <p className="text-sm text-muted-foreground">Configure followup reminders and alert preferences.</p>
         </div>
+
+        {/* Roles */}
         <div className="rounded-xl border border-border bg-card p-5 card-shadow">
           <h3 className="text-sm font-semibold text-foreground mb-1">Roles & Permissions</h3>
           <p className="text-sm text-muted-foreground">Manage admin, sub-admin, and sales executive roles.</p>
