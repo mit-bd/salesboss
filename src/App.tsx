@@ -9,6 +9,7 @@ import OrderDetailPage from "./pages/OrderDetailPage";
 import FollowupsPage from "./pages/FollowupsPage";
 import RepeatOrdersPage from "./pages/RepeatOrdersPage";
 import ProductsPage from "./pages/ProductsPage";
+import DeliveryMethodPage from "./pages/DeliveryMethodPage";
 import BulkImportPage from "./pages/BulkImportPage";
 import TeamPage from "./pages/TeamPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/followups" element={<FollowupsPage />} />
           <Route path="/repeat-orders" element={<RepeatOrdersPage />} />
           <Route path="/products" element={<ProductsPage />} />
+          <Route path="/delivery-methods" element={<DeliveryMethodPage />} />
           <Route path="/bulk-import" element={<BulkImportPage />} />
           <Route path="/team" element={<TeamPage />} />
           <Route path="/settings" element={<SettingsPage />} />
