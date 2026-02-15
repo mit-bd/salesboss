@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { mockFollowupSteps } from "@/data/mockData";
 import { cn } from "@/lib/utils";
-import { Calendar, MessageSquare, ChevronRight, CheckCircle, Clock } from "lucide-react";
+import { CheckCircle, Clock } from "lucide-react";
 import GlobalFilters, { FilterState, EMPTY_FILTERS } from "@/components/GlobalFilters";
+import OrderTable from "@/components/OrderTable";
+import { useRole } from "@/contexts/RoleContext";
 import { Order } from "@/types/data";
 
 const STEP_COLORS = [
@@ -33,7 +34,7 @@ export default function FollowupsPage() {
   const [activeStep, setActiveStep] = useState(1);
   const [activeTab, setActiveTab] = useState<"pending" | "completed">("pending");
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
-  const navigate = useNavigate();
+  const { isAdmin } = useRole();
   const { activeOrders } = useOrderStore();
 
   const filteredOrders = applyFilters(activeOrders, filters);
@@ -73,28 +74,8 @@ export default function FollowupsPage() {
         </button>
       </div>
 
-      <div className="space-y-3 animate-fade-in">
-        {displayOrders.length === 0 && (
-          <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground card-shadow">No {activeTab} orders in Step {activeStep}</div>
-        )}
-        {displayOrders.map((order) => (
-          <div key={order.id} onClick={() => navigate(`/orders/${order.id}`)} className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 card-shadow hover:card-shadow-hover transition-fast cursor-pointer group">
-            <div className={cn("h-10 w-1 rounded-full", STEP_COLORS[activeStep - 1].dot)} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <p className="font-semibold text-foreground">{order.customerName}</p>
-                <span className="text-xs text-muted-foreground">#{order.id}</span>
-                {order.isRepeat && <span className="text-[10px] font-medium rounded px-1.5 py-0.5 bg-warning/10 text-warning">REPEAT</span>}
-              </div>
-              <p className="text-sm text-muted-foreground">{order.productTitle} · ৳{order.price}</p>
-            </div>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground shrink-0">
-              <div className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /><span className="text-xs">{order.followupDate}</span></div>
-              <div className="flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" /><span className="text-xs">{order.assignedToName}</span></div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-foreground transition-fast" />
-            </div>
-          </div>
-        ))}
+      <div className="animate-fade-in">
+        <OrderTable orders={displayOrders} isAdmin={isAdmin} />
       </div>
     </AppLayout>
   );
