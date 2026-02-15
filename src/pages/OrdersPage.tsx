@@ -1,12 +1,15 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
 import { mockOrders } from "@/data/mockData";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, RefreshCw } from "lucide-react";
+import { Search, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import GlobalFilters, { FilterState, EMPTY_FILTERS } from "@/components/GlobalFilters";
+import CreateOrderDialog from "@/components/CreateOrderDialog";
+import { Order } from "@/types/data";
 
 const healthColors: Record<string, string> = {
   new: "bg-info/10 text-info border-info/20",
@@ -22,37 +25,40 @@ const stepColors = [
   "bg-step-5/10 text-step-5",
 ];
 
+function applyFilters(orders: Order[], filters: FilterState, search: string): Order[] {
+  return orders.filter((o) => {
+    if (search && !o.customerName.toLowerCase().includes(search.toLowerCase()) && !o.id.toLowerCase().includes(search.toLowerCase()) && !o.mobile.includes(search)) return false;
+    if (filters.dateFrom && o.createdAt < filters.dateFrom) return false;
+    if (filters.dateTo && o.createdAt > filters.dateTo) return false;
+    if (filters.salesExecutive && o.assignedTo !== filters.salesExecutive) return false;
+    if (filters.product && o.productId !== filters.product) return false;
+    if (filters.orderSource && o.orderSource !== filters.orderSource) return false;
+    if (filters.followupStep && o.followupStep !== Number(filters.followupStep)) return false;
+    return true;
+  });
+}
+
 export default function OrdersPage() {
   const [search, setSearch] = useState("");
-  const filtered = mockOrders.filter(
-    (o) =>
-      o.customerName.toLowerCase().includes(search.toLowerCase()) ||
-      o.id.toLowerCase().includes(search.toLowerCase()) ||
-      o.mobile.includes(search)
-  );
+  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const navigate = useNavigate();
+  const filtered = applyFilters(mockOrders, filters, search);
 
   return (
     <AppLayout>
       <PageHeader title="Orders" description="Manage all customer orders">
-        <Button size="sm" className="gap-1.5">
-          <Plus className="h-4 w-4" /> New Order
-        </Button>
+        <CreateOrderDialog />
       </PageHeader>
 
-      {/* Search */}
+      <GlobalFilters filters={filters} onChange={setFilters} />
+
       <div className="mb-4 flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name, ID, or mobile..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+          <Input placeholder="Search by name, ID, or mobile..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
       </div>
 
-      {/* Table */}
       <div className="rounded-xl border border-border bg-card card-shadow overflow-hidden animate-fade-in">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -72,6 +78,7 @@ export default function OrdersPage() {
               {filtered.map((order) => (
                 <tr
                   key={order.id}
+                  onClick={() => navigate(`/orders/${order.id}`)}
                   className="border-b border-border last:border-0 hover:bg-muted/30 transition-fast cursor-pointer"
                 >
                   <td className="px-4 py-3 font-medium text-foreground">{order.id}</td>
@@ -82,7 +89,7 @@ export default function OrdersPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{order.productTitle}</td>
-                  <td className="px-4 py-3 font-medium text-foreground">₹{order.price}</td>
+                  <td className="px-4 py-3 font-medium text-foreground">৳{order.price}</td>
                   <td className="px-4 py-3">
                     <span className={cn("inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium", stepColors[order.followupStep - 1])}>
                       Step {order.followupStep}
@@ -103,6 +110,9 @@ export default function OrdersPage() {
                   </td>
                 </tr>
               ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">No orders found</td></tr>
+              )}
             </tbody>
           </table>
         </div>

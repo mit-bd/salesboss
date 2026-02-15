@@ -77,7 +77,7 @@ export default function AppSidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-sidebar-accent-foreground truncate">Admin User</p>
-            <p className="text-xs text-sidebar-muted truncate">admin@salesflow.com</p>
+            <p className="text-xs text-sidebar-muted truncate">admin@salesboss.com</p>
           </div>
         </div>
       </div>
