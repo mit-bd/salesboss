@@ -8,7 +8,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useToast } from "@/hooks/use-toast";
 import { Order } from "@/types/data";
 
 interface DeleteOrderDialogProps {
@@ -26,15 +25,8 @@ export default function DeleteOrderDialog({
   onConfirm,
   childCount = 0,
 }: DeleteOrderDialogProps) {
-  const { toast } = useToast();
-
   const handleDelete = () => {
     onConfirm?.();
-    toast({
-      title: "Order Deleted",
-      description: `Order #${order.id}${childCount > 0 ? ` and ${childCount} child order(s)` : ""} deleted.`,
-      variant: "destructive",
-    });
     onOpenChange(false);
   };
 
@@ -44,8 +36,8 @@ export default function DeleteOrderDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete Order #{order.id}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete order <strong>#{order.id}</strong> for{" "}
-            <strong>{order.customerName}</strong>.
+            This will soft-delete order <strong>#{order.id}</strong> for{" "}
+            <strong>{order.customerName}</strong>. The order can be restored from the Deleted Orders section.
             {childCount > 0 && (
               <>
                 {" "}
@@ -53,9 +45,6 @@ export default function DeleteOrderDialog({
                 will also be removed.
               </>
             )}
-            <br />
-            <br />
-            This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

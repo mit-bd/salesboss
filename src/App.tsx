@@ -3,6 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RoleProvider } from "@/contexts/RoleContext";
+import { AuditLogProvider } from "@/contexts/AuditLogContext";
+import { OrderStoreProvider } from "@/contexts/OrderStoreContext";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import DashboardPage from "./pages/DashboardPage";
 import OrdersPage from "./pages/OrdersPage";
@@ -16,6 +18,9 @@ import TeamPage from "./pages/TeamPage";
 import SettingsPage from "./pages/SettingsPage";
 import SalesExecutivesPage from "./pages/SalesExecutivesPage";
 import SalesExecutiveDetailPage from "./pages/SalesExecutiveDetailPage";
+import DeletedOrdersPage from "./pages/DeletedOrdersPage";
+import AuditLogsPage from "./pages/AuditLogsPage";
+import ExportPage from "./pages/ExportPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -23,6 +28,8 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <RoleProvider role="admin">
+    <AuditLogProvider>
+    <OrderStoreProvider>
     <TooltipProvider>
       <Toaster />
       <Sonner />
@@ -40,10 +47,15 @@ const App = () => (
           <Route path="/bulk-import" element={<BulkImportPage />} />
           <Route path="/team" element={<TeamPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/deleted-orders" element={<DeletedOrdersPage />} />
+          <Route path="/audit-logs" element={<AuditLogsPage />} />
+          <Route path="/export" element={<ExportPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
+    </OrderStoreProvider>
+    </AuditLogProvider>
     </RoleProvider>
   </QueryClientProvider>
 );

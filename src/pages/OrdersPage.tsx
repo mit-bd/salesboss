@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
-import { mockOrders, mockDeliveryPartners } from "@/data/mockData";
+import { mockDeliveryPartners } from "@/data/mockData";
+import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,8 @@ export default function OrdersPage() {
   const [editOrder, setEditOrder] = useState<Order | null>(null);
   const navigate = useNavigate();
   const { isAdmin } = useRole();
-  const filtered = applyFilters(mockOrders, filters, search);
+  const { activeOrders, updateOrder } = useOrderStore();
+  const filtered = applyFilters(activeOrders, filters, search);
 
   return (
     <AppLayout>
@@ -88,74 +90,33 @@ export default function OrdersPage() {
             </thead>
             <tbody>
               {filtered.map((order) => (
-                <tr
-                  key={order.id}
-                  onClick={() => navigate(`/orders/${order.id}`)}
-                  className="border-b border-border last:border-0 hover:bg-muted/30 transition-fast cursor-pointer"
-                >
+                <tr key={order.id} onClick={() => navigate(`/orders/${order.id}`)} className="border-b border-border last:border-0 hover:bg-muted/30 transition-fast cursor-pointer">
                   <td className="px-4 py-3 font-medium text-foreground">{order.id}</td>
-                  <td className="px-4 py-3">
-                    <div>
-                      <p className="font-medium text-foreground">{order.customerName}</p>
-                      <p className="text-xs text-muted-foreground">{order.mobile}</p>
-                    </div>
-                  </td>
+                  <td className="px-4 py-3"><div><p className="font-medium text-foreground">{order.customerName}</p><p className="text-xs text-muted-foreground">{order.mobile}</p></div></td>
                   <td className="px-4 py-3 text-muted-foreground">{order.productTitle}</td>
                   <td className="px-4 py-3 font-medium text-foreground">৳{order.price}</td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{order.orderDate}</td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{getDeliveryName(order.deliveryMethod)}</td>
-                  <td className="px-4 py-3">
-                    <span className={cn("inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium", stepColors[order.followupStep - 1])}>
-                      Step {order.followupStep}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium capitalize", healthColors[order.health])}>
-                      {order.health}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {order.isRepeat && (
-                      <Badge variant="outline" className="gap-1 text-xs border-warning/30 text-warning">
-                        <RefreshCw className="h-3 w-3" /> Repeat
-                      </Badge>
-                    )}
-                  </td>
+                  <td className="px-4 py-3"><span className={cn("inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium", stepColors[order.followupStep - 1])}>Step {order.followupStep}</span></td>
+                  <td className="px-4 py-3"><span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium capitalize", healthColors[order.health])}>{order.health}</span></td>
+                  <td className="px-4 py-3">{order.isRepeat && <Badge variant="outline" className="gap-1 text-xs border-warning/30 text-warning"><RefreshCw className="h-3 w-3" /> Repeat</Badge>}</td>
                   {isAdmin && (
                     <td className="px-4 py-3">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditOrder(order);
-                        }}
-                      >
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setEditOrder(order); }}>
                         <Edit2 className="h-3.5 w-3.5" />
                       </Button>
                     </td>
                   )}
                 </tr>
               ))}
-              {filtered.length === 0 && (
-                <tr><td colSpan={isAdmin ? 10 : 9} className="px-4 py-12 text-center text-muted-foreground">No orders found</td></tr>
-              )}
+              {filtered.length === 0 && <tr><td colSpan={isAdmin ? 10 : 9} className="px-4 py-12 text-center text-muted-foreground">No orders found</td></tr>}
             </tbody>
           </table>
         </div>
       </div>
 
       {editOrder && (
-        <EditOrderDialog
-          order={editOrder}
-          open={!!editOrder}
-          onOpenChange={(open) => !open && setEditOrder(null)}
-          onSave={(updated) => {
-            // In production this would update the database
-            setEditOrder(null);
-          }}
-        />
+        <EditOrderDialog order={editOrder} open={!!editOrder} onOpenChange={(open) => !open && setEditOrder(null)} onSave={(updated) => { updateOrder(updated); setEditOrder(null); }} />
       )}
     </AppLayout>
   );
