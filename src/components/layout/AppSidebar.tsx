@@ -8,15 +8,17 @@ import {
   RefreshCw,
   Upload,
   Settings,
+  Truck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/" },
-  { label: "Orders", icon: ShoppingCart, path: "/orders" },
+  { label: "All Orders", icon: ShoppingCart, path: "/orders" },
   { label: "Followups", icon: PhoneForwarded, path: "/followups" },
   { label: "Repeat Orders", icon: RefreshCw, path: "/repeat-orders" },
   { label: "Products", icon: Package, path: "/products" },
+  { label: "Delivery Methods", icon: Truck, path: "/delivery-methods" },
   { label: "Bulk Import", icon: Upload, path: "/bulk-import" },
   { label: "Team", icon: Users, path: "/team" },
   { label: "Settings", icon: Settings, path: "/settings" },

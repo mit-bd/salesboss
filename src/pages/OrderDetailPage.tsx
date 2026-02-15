@@ -1,8 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
-import { mockOrders } from "@/data/mockData";
+import { mockOrders, mockDeliveryPartners } from "@/data/mockData";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Phone, MapPin, Package, Calendar, MessageSquare, RefreshCw, ShoppingCart, Zap } from "lucide-react";
+import { ArrowLeft, Phone, MapPin, Package, Calendar, RefreshCw, ShoppingCart, Zap, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STEP_COLORS = [
@@ -25,6 +25,10 @@ interface TimelineEvent {
   description: string;
   date: string;
   color: string;
+}
+
+function getDeliveryName(id: string): string {
+  return mockDeliveryPartners.find((dp) => dp.id === id)?.name || id;
 }
 
 export default function OrderDetailPage() {
@@ -129,6 +133,22 @@ export default function OrderDetailPage() {
                   <p className="text-sm font-medium text-foreground">{order.assignedToName}</p>
                 </div>
               </div>
+
+              {/* New fields row */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4 border-t border-border mt-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Order Date</p>
+                  <p className="text-sm font-medium text-foreground flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {order.orderDate}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Delivery Date</p>
+                  <p className="text-sm font-medium text-foreground flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {order.deliveryDate}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Delivery Method</p>
+                  <p className="text-sm font-medium text-foreground flex items-center gap-1"><Truck className="h-3.5 w-3.5" /> {getDeliveryName(order.deliveryMethod)}</p>
+                </div>
+              </div>
             </div>
 
             {/* Followup Step Progress */}
@@ -148,7 +168,6 @@ export default function OrderDetailPage() {
                       {step}
                     </div>
                     <p className="text-[10px] text-muted-foreground">Step {step}</p>
-                    {step < 5 && <div className="hidden" />}
                   </div>
                 ))}
               </div>
@@ -185,7 +204,6 @@ export default function OrderDetailPage() {
               ))}
             </div>
 
-            {/* Child Orders */}
             {childOrders.length > 0 && (
               <div className="mt-4 pt-4 border-t border-border">
                 <h3 className="text-xs font-semibold text-foreground mb-2">Repeat Orders ({childOrders.length})</h3>

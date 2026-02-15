@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
-import { mockOrders } from "@/data/mockData";
+import { mockOrders, mockDeliveryPartners } from "@/data/mockData";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Search, RefreshCw } from "lucide-react";
@@ -28,14 +28,19 @@ const stepColors = [
 function applyFilters(orders: Order[], filters: FilterState, search: string): Order[] {
   return orders.filter((o) => {
     if (search && !o.customerName.toLowerCase().includes(search.toLowerCase()) && !o.id.toLowerCase().includes(search.toLowerCase()) && !o.mobile.includes(search)) return false;
-    if (filters.dateFrom && o.createdAt < filters.dateFrom) return false;
-    if (filters.dateTo && o.createdAt > filters.dateTo) return false;
+    if (filters.dateFrom && o.orderDate < filters.dateFrom) return false;
+    if (filters.dateTo && o.orderDate > filters.dateTo) return false;
     if (filters.salesExecutive && o.assignedTo !== filters.salesExecutive) return false;
     if (filters.product && o.productId !== filters.product) return false;
     if (filters.orderSource && o.orderSource !== filters.orderSource) return false;
     if (filters.followupStep && o.followupStep !== Number(filters.followupStep)) return false;
+    if (filters.deliveryMethod && o.deliveryMethod !== filters.deliveryMethod) return false;
     return true;
   });
+}
+
+function getDeliveryName(id: string): string {
+  return mockDeliveryPartners.find((dp) => dp.id === id)?.name || id;
 }
 
 export default function OrdersPage() {
@@ -46,7 +51,7 @@ export default function OrdersPage() {
 
   return (
     <AppLayout>
-      <PageHeader title="Orders" description="Manage all customer orders">
+      <PageHeader title="All Orders" description="View and manage all customer orders">
         <CreateOrderDialog />
       </PageHeader>
 
@@ -68,8 +73,9 @@ export default function OrdersPage() {
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Customer</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Product</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Price</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Order Date</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Delivery</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Step</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Assigned</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Health</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
               </tr>
@@ -90,12 +96,13 @@ export default function OrdersPage() {
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{order.productTitle}</td>
                   <td className="px-4 py-3 font-medium text-foreground">৳{order.price}</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground">{order.orderDate}</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground">{getDeliveryName(order.deliveryMethod)}</td>
                   <td className="px-4 py-3">
                     <span className={cn("inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium", stepColors[order.followupStep - 1])}>
                       Step {order.followupStep}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{order.assignedToName}</td>
                   <td className="px-4 py-3">
                     <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium capitalize", healthColors[order.health])}>
                       {order.health}
@@ -111,7 +118,7 @@ export default function OrdersPage() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">No orders found</td></tr>
+                <tr><td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">No orders found</td></tr>
               )}
             </tbody>
           </table>

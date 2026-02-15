@@ -23,6 +23,9 @@ export interface Order {
   assignedTo: string;
   assignedToName: string;
   createdAt: string;
+  orderDate: string;
+  deliveryDate: string;
+  deliveryMethod: string;
   parentOrderId: string | null;
   isRepeat: boolean;
   health: "new" | "good" | "at-risk";
@@ -50,6 +53,14 @@ export interface SalesExecutive {
   email: string;
   assignedOrders: number;
   completedFollowups: number;
+}
+
+export interface DeliveryPartner {
+  id: string;
+  name: string;
+  contactInfo: string;
+  notes: string;
+  active: boolean;
 }
 
 export type UserRole = "admin" | "sub_admin" | "sales_executive";

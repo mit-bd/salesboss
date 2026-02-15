@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { mockSalesExecutives, mockProducts } from "@/data/mockData";
+import { mockSalesExecutives, mockProducts, mockDeliveryPartners } from "@/data/mockData";
 import { Filter, X } from "lucide-react";
 
 export interface FilterState {
@@ -12,6 +12,7 @@ export interface FilterState {
   product: string;
   orderSource: string;
   followupStep: string;
+  deliveryMethod: string;
 }
 
 const EMPTY_FILTERS: FilterState = {
@@ -21,6 +22,7 @@ const EMPTY_FILTERS: FilterState = {
   product: "",
   orderSource: "",
   followupStep: "",
+  deliveryMethod: "",
 };
 
 const ORDER_SOURCES = ["Website", "Phone Call", "Referral", "Social Media"];
@@ -29,9 +31,10 @@ interface GlobalFiltersProps {
   filters: FilterState;
   onChange: (filters: FilterState) => void;
   showStepFilter?: boolean;
+  showDeliveryFilter?: boolean;
 }
 
-export default function GlobalFilters({ filters, onChange, showStepFilter = true }: GlobalFiltersProps) {
+export default function GlobalFilters({ filters, onChange, showStepFilter = true, showDeliveryFilter = true }: GlobalFiltersProps) {
   const [open, setOpen] = useState(false);
 
   const hasActiveFilters = Object.values(filters).some((v) => v !== "");
@@ -42,15 +45,12 @@ export default function GlobalFilters({ filters, onChange, showStepFilter = true
 
   const reset = () => onChange({ ...EMPTY_FILTERS });
 
+  const activePartners = mockDeliveryPartners.filter((dp) => dp.active);
+
   return (
     <div className="mb-4">
       <div className="flex items-center gap-2 mb-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5"
-          onClick={() => setOpen(!open)}
-        >
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setOpen(!open)}>
           <Filter className="h-3.5 w-3.5" />
           Filters
           {hasActiveFilters && (
@@ -67,7 +67,7 @@ export default function GlobalFilters({ filters, onChange, showStepFilter = true
       </div>
 
       {open && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 p-4 rounded-xl border border-border bg-card card-shadow animate-fade-in">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 p-4 rounded-xl border border-border bg-card card-shadow animate-fade-in">
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">From</label>
             <Input type="date" value={filters.dateFrom} onChange={(e) => update("dateFrom", e.target.value)} className="h-9 text-xs" />
@@ -112,6 +112,20 @@ export default function GlobalFilters({ filters, onChange, showStepFilter = true
               </SelectContent>
             </Select>
           </div>
+          {showDeliveryFilter && (
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Delivery</label>
+              <Select value={filters.deliveryMethod} onValueChange={(v) => update("deliveryMethod", v === "all" ? "" : v)}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="All" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {activePartners.map((dp) => (
+                    <SelectItem key={dp.id} value={dp.id}>{dp.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {showStepFilter && (
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Step</label>
