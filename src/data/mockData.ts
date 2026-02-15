@@ -1,4 +1,4 @@
-import { Order, Product, FollowupStep, DashboardMetrics, SalesExecutive, DeliveryPartner } from "@/types/data";
+import { Order, Product, FollowupStep, DashboardMetrics, SalesExecutive, DeliveryPartner, BackupEntry, SalesTarget, CommissionConfig, CommissionEntry, EmailReportConfig } from "@/types/data";
 
 export const mockDeliveryPartners: DeliveryPartner[] = [
   { id: "dp1", name: "Sundarban Courier", contactInfo: "01711-000001", notes: "Nationwide coverage", active: true },
@@ -32,6 +32,7 @@ export const mockOrders: Order[] = [
   { id: "ORD-006", customerName: "Deepak Verma", mobile: "9876543214", address: "90 Anna Nagar, Chennai", orderSource: "Website", productId: "p5", productTitle: "Joint Care Plus", price: 1899, note: "Needs consultation", followupStep: 3, followupDate: "2026-02-19", assignedTo: "se4", assignedToName: "Neha Singh", createdAt: "2026-01-28", orderDate: "2026-01-28", deliveryDate: "2026-02-01", deliveryMethod: "dp2", parentOrderId: null, isRepeat: false, health: "good" },
   { id: "ORD-007", customerName: "Kavita Nair", mobile: "9876543215", address: "56 Indiranagar, Bangalore", orderSource: "Phone Call", productId: "p3", productTitle: "Premium Health Bundle", price: 4999, note: "", followupStep: 5, followupDate: "2026-02-16", assignedTo: "se2", assignedToName: "Priya Patel", createdAt: "2026-01-10", orderDate: "2026-01-10", deliveryDate: "2026-01-14", deliveryMethod: "dp3", parentOrderId: null, isRepeat: false, health: "good" },
   { id: "ORD-008", customerName: "Mohan Das", mobile: "9876543216", address: "34 Salt Lake, Kolkata", orderSource: "Referral", productId: "p2", productTitle: "Daily Nutrition Pack", price: 1299, note: "Budget conscious", followupStep: 2, followupDate: "2026-02-18", assignedTo: "se3", assignedToName: "Amit Kumar", createdAt: "2026-02-05", orderDate: "2026-02-05", deliveryDate: "2026-02-09", deliveryMethod: "dp4", parentOrderId: null, isRepeat: false, health: "at-risk" },
+  { id: "ORD-009", customerName: "Deepak Verma", mobile: "9876543214", address: "90 Anna Nagar, Chennai", orderSource: "Website", productId: "p5", productTitle: "Joint Care Plus", price: 1899, note: "Upsell from followup", followupStep: 1, followupDate: "2026-02-22", assignedTo: "se4", assignedToName: "Neha Singh", createdAt: "2026-02-10", orderDate: "2026-02-10", deliveryDate: "2026-02-14", deliveryMethod: "dp2", parentOrderId: "ORD-006", isRepeat: true, isUpsell: true, health: "good" },
 ];
 
 export const mockFollowupSteps: FollowupStep[] = [
@@ -49,4 +50,43 @@ export const mockDashboardMetrics: DashboardMetrics = {
   repeatOrderRate: 22.8,
   followupCompletion: 78.5,
   upsellSuccessRate: 15.3,
+};
+
+// Backup mock data
+export const mockBackups: BackupEntry[] = [
+  { id: "bk-001", date: "2026-02-15T06:00:00Z", triggerType: "auto", triggeredBy: "System", status: "completed", recordCount: 156, size: "2.4 MB" },
+  { id: "bk-002", date: "2026-02-14T06:00:00Z", triggerType: "auto", triggeredBy: "System", status: "completed", recordCount: 152, size: "2.3 MB" },
+  { id: "bk-003", date: "2026-02-13T14:22:00Z", triggerType: "manual", triggeredBy: "Admin User", status: "completed", recordCount: 148, size: "2.2 MB" },
+  { id: "bk-004", date: "2026-02-13T06:00:00Z", triggerType: "auto", triggeredBy: "System", status: "completed", recordCount: 148, size: "2.2 MB" },
+  { id: "bk-005", date: "2026-02-12T06:00:00Z", triggerType: "auto", triggeredBy: "System", status: "failed", recordCount: 0, size: "0 B" },
+  { id: "bk-006", date: "2026-02-11T06:00:00Z", triggerType: "auto", triggeredBy: "System", status: "completed", recordCount: 140, size: "2.1 MB" },
+];
+
+// Sales targets mock data
+export const mockSalesTargets: SalesTarget[] = [
+  { id: "st-001", executiveId: "se1", type: "monthly", startDate: "2026-02-01", endDate: "2026-02-28", targetRepeatOrders: 10, targetRevenue: 50000, targetUpsellCount: 5 },
+  { id: "st-002", executiveId: "se2", type: "monthly", startDate: "2026-02-01", endDate: "2026-02-28", targetRepeatOrders: 12, targetRevenue: 60000, targetUpsellCount: 6 },
+  { id: "st-003", executiveId: "se3", type: "monthly", startDate: "2026-02-01", endDate: "2026-02-28", targetRepeatOrders: 8, targetRevenue: 35000, targetUpsellCount: 4 },
+  { id: "st-004", executiveId: "se4", type: "monthly", startDate: "2026-02-01", endDate: "2026-02-28", targetRepeatOrders: 10, targetRevenue: 45000, targetUpsellCount: 5 },
+];
+
+// Commission config mock data
+export const mockCommissionConfigs: CommissionConfig[] = [
+  { executiveId: "se1", enabled: true, type: "percentage", rate: 5 },
+  { executiveId: "se2", enabled: true, type: "percentage", rate: 6 },
+  { executiveId: "se3", enabled: false, type: "percentage", rate: 5 },
+  { executiveId: "se4", enabled: true, type: "fixed", rate: 200 },
+];
+
+// Commission entries mock data
+export const mockCommissionEntries: CommissionEntry[] = [
+  { id: "cm-001", executiveId: "se1", orderId: "ORD-005", orderDate: "2026-02-14", amount: 125, status: "pending" },
+  { id: "cm-002", executiveId: "se4", orderId: "ORD-009", orderDate: "2026-02-10", amount: 200, status: "paid", paidDate: "2026-02-12", paymentNote: "Bank transfer" },
+];
+
+// Email report config
+export const mockEmailReportConfig: EmailReportConfig = {
+  enabled: false,
+  frequency: "daily",
+  recipients: ["admin@salesboss.com"],
 };

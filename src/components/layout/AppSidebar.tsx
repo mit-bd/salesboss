@@ -13,6 +13,8 @@ import {
   Trash2,
   Shield,
   Download,
+  Database,
+  Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/contexts/RoleContext";
@@ -23,10 +25,12 @@ const navItems = [
   { label: "Followups", icon: PhoneForwarded, path: "/followups", adminOnly: false },
   { label: "Repeat Orders", icon: RefreshCw, path: "/repeat-orders", adminOnly: false },
   { label: "Sales Executives", icon: BarChart3, path: "/sales-executives", adminOnly: false },
+  { label: "Targets & Commission", icon: Target, path: "/commission", adminOnly: true },
   { label: "Products", icon: Package, path: "/products", adminOnly: false },
   { label: "Delivery Methods", icon: Truck, path: "/delivery-methods", adminOnly: false },
   { label: "Bulk Import", icon: Upload, path: "/bulk-import", adminOnly: false },
   { label: "Team", icon: Users, path: "/team", adminOnly: false },
+  { label: "Backup Center", icon: Database, path: "/backup-center", adminOnly: true },
   { label: "Deleted Orders", icon: Trash2, path: "/deleted-orders", adminOnly: true },
   { label: "Audit Logs", icon: Shield, path: "/audit-logs", adminOnly: true },
   { label: "Export & Backup", icon: Download, path: "/export", adminOnly: true },

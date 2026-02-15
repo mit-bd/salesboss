@@ -28,6 +28,7 @@ export interface Order {
   deliveryMethod: string;
   parentOrderId: string | null;
   isRepeat: boolean;
+  isUpsell?: boolean;
   health: "new" | "good" | "at-risk";
 }
 
@@ -64,3 +65,53 @@ export interface DeliveryPartner {
 }
 
 export type UserRole = "admin" | "sub_admin" | "sales_executive";
+
+// Backup types
+export interface BackupEntry {
+  id: string;
+  date: string;
+  triggerType: "auto" | "manual";
+  triggeredBy: string;
+  status: "completed" | "in_progress" | "failed";
+  recordCount: number;
+  size: string;
+}
+
+// Email report types
+export interface EmailReportConfig {
+  enabled: boolean;
+  frequency: "daily" | "weekly" | "monthly";
+  recipients: string[];
+  lastSent?: string;
+}
+
+// Sales target types
+export interface SalesTarget {
+  id: string;
+  executiveId: string;
+  type: "monthly" | "custom";
+  startDate: string;
+  endDate: string;
+  targetRepeatOrders: number;
+  targetRevenue: number;
+  targetUpsellCount: number;
+}
+
+// Commission types
+export interface CommissionConfig {
+  executiveId: string;
+  enabled: boolean;
+  type: "percentage" | "fixed";
+  rate: number; // percentage or fixed amount
+}
+
+export interface CommissionEntry {
+  id: string;
+  executiveId: string;
+  orderId: string;
+  orderDate: string;
+  amount: number;
+  status: "pending" | "paid";
+  paidDate?: string;
+  paymentNote?: string;
+}
