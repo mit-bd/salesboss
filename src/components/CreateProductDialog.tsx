@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Plus, Upload, Image } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { mockProducts } from "@/data/mockData";
+import { useProductStore } from "@/contexts/ProductStoreContext";
+import { Product } from "@/types/data";
 
 interface ProductFormErrors {
   title?: string;
@@ -16,7 +17,7 @@ interface ProductFormErrors {
 }
 
 interface CreateProductDialogProps {
-  editProduct?: { id: string; title: string; sku: string; price: number; packageDuration: 15 | 30; image: string; info: string } | null;
+  editProduct?: Product | null;
   onClose?: () => void;
   trigger?: React.ReactNode;
 }
@@ -24,24 +25,46 @@ interface CreateProductDialogProps {
 export default function CreateProductDialog({ editProduct, onClose, trigger }: CreateProductDialogProps) {
   const [open, setOpen] = useState(!!editProduct);
   const { toast } = useToast();
+  const { products, addProduct, updateProduct } = useProductStore();
   const [errors, setErrors] = useState<ProductFormErrors>({});
-  const [imagePreview, setImagePreview] = useState<string>(editProduct?.image || "");
+  const [imagePreview, setImagePreview] = useState<string>("");
   const [form, setForm] = useState({
-    title: editProduct?.title || "",
-    sku: editProduct?.sku || "",
-    price: editProduct ? String(editProduct.price) : "",
-    packageDuration: editProduct ? String(editProduct.packageDuration) : "30",
-    info: editProduct?.info || "",
+    title: "",
+    sku: "",
+    price: "",
+    packageDuration: "30",
+    info: "",
   });
+
+  // Re-initialize form when editProduct changes
+  useEffect(() => {
+    if (editProduct) {
+      setForm({
+        title: editProduct.title,
+        sku: editProduct.sku,
+        price: String(editProduct.price),
+        packageDuration: String(editProduct.packageDuration),
+        info: editProduct.info,
+      });
+      setImagePreview(editProduct.image || "");
+      setErrors({});
+    } else {
+      setForm({ title: "", sku: "", price: "", packageDuration: "30", info: "" });
+      setImagePreview("");
+      setErrors({});
+    }
+  }, [editProduct]);
 
   const validate = (): boolean => {
     const e: ProductFormErrors = {};
     if (!form.title.trim()) e.title = "Title is required";
     if (!form.price || Number(form.price) <= 0) e.price = "Valid price required";
     if (!form.sku.trim()) e.sku = "SKU is required";
-    else if (!editProduct) {
-      const exists = mockProducts.some((p) => p.sku.toLowerCase() === form.sku.trim().toLowerCase());
-      if (exists) e.sku = "SKU already exists";
+    else {
+      const duplicate = products.some(
+        (p) => p.sku.toLowerCase() === form.sku.trim().toLowerCase() && p.id !== editProduct?.id
+      );
+      if (duplicate) e.sku = "SKU already exists";
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -58,15 +81,31 @@ export default function CreateProductDialog({ editProduct, onClose, trigger }: C
 
   const handleSubmit = () => {
     if (!validate()) return;
-    toast({
-      title: editProduct ? "Product Updated" : "Product Created",
-      description: `${form.title} has been ${editProduct ? "updated" : "added"} successfully.`,
-    });
+
+    const productData = {
+      title: form.title.trim(),
+      sku: form.sku.trim(),
+      price: Number(form.price),
+      packageDuration: Number(form.packageDuration) as 15 | 30,
+      info: form.info.trim(),
+      image: imagePreview,
+    };
+
+    if (editProduct) {
+      updateProduct({ ...productData, id: editProduct.id });
+      toast({ title: "Product Updated", description: `${productData.title} has been updated successfully.` });
+    } else {
+      addProduct(productData);
+      toast({ title: "Product Created", description: `${productData.title} has been added successfully.` });
+    }
     handleClose();
   };
 
   const handleClose = () => {
     setOpen(false);
+    setForm({ title: "", sku: "", price: "", packageDuration: "30", info: "" });
+    setImagePreview("");
+    setErrors({});
     onClose?.();
   };
 

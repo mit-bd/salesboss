@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RoleProvider } from "@/contexts/RoleContext";
 import { AuditLogProvider } from "@/contexts/AuditLogContext";
 import { OrderStoreProvider } from "@/contexts/OrderStoreContext";
+import { ProductStoreProvider } from "@/contexts/ProductStoreContext";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import DashboardPage from "./pages/DashboardPage";
 import OrdersPage from "./pages/OrdersPage";
@@ -32,6 +33,7 @@ const App = () => (
     <RoleProvider role="admin">
     <AuditLogProvider>
     <OrderStoreProvider>
+    <ProductStoreProvider>
     <TooltipProvider>
       <Toaster />
       <Sonner />
@@ -58,6 +60,7 @@ const App = () => (
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
+    </ProductStoreProvider>
     </OrderStoreProvider>
     </AuditLogProvider>
     </RoleProvider>
