@@ -13,6 +13,8 @@ import DeliveryMethodPage from "./pages/DeliveryMethodPage";
 import BulkImportPage from "./pages/BulkImportPage";
 import TeamPage from "./pages/TeamPage";
 import SettingsPage from "./pages/SettingsPage";
+import SalesExecutivesPage from "./pages/SalesExecutivesPage";
+import SalesExecutiveDetailPage from "./pages/SalesExecutiveDetailPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +31,8 @@ const App = () => (
           <Route path="/orders/:id" element={<OrderDetailPage />} />
           <Route path="/followups" element={<FollowupsPage />} />
           <Route path="/repeat-orders" element={<RepeatOrdersPage />} />
+          <Route path="/sales-executives" element={<SalesExecutivesPage />} />
+          <Route path="/sales-executives/:id" element={<SalesExecutiveDetailPage />} />
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/delivery-methods" element={<DeliveryMethodPage />} />
           <Route path="/bulk-import" element={<BulkImportPage />} />
