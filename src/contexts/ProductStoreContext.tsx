@@ -1,54 +1,167 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
 import { Product } from "@/types/data";
-import { mockProducts as initialProducts } from "@/data/mockData";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuditLog } from "./AuditLogContext";
+import { useAuth } from "./AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProductStoreContextType {
   products: Product[];
-  addProduct: (product: Omit<Product, "id">) => void;
-  updateProduct: (updated: Product) => void;
+  loading: boolean;
+  addProduct: (product: Omit<Product, "id">, imageFile?: File) => Promise<void>;
+  updateProduct: (updated: Product, imageFile?: File) => Promise<void>;
+  refreshProducts: () => Promise<void>;
 }
 
 const ProductStoreContext = createContext<ProductStoreContextType | null>(null);
 
-let productCounter = initialProducts.length;
+function mapRow(row: any): Product {
+  return {
+    id: row.id,
+    title: row.title,
+    sku: row.sku,
+    price: Number(row.price),
+    packageDuration: row.package_duration as 15 | 30,
+    info: row.info || "",
+    image: row.image_url || "",
+  };
+}
+
+async function uploadImage(bucket: string, file: File, folder: string): Promise<string | null> {
+  const ext = file.name.split(".").pop();
+  const path = `${folder}/${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from(bucket).upload(path, file);
+  if (error) {
+    console.error("Image upload error:", error);
+    return null;
+  }
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return data.publicUrl;
+}
 
 export function ProductStoreProvider({ children }: { children: ReactNode }) {
-  const [products, setProducts] = useState<Product[]>(initialProducts.map((p) => ({ ...p })));
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const { addLog } = useAuditLog();
+  const { user, profile, role } = useAuth();
+  const { toast } = useToast();
+
+  const fetchProducts = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Failed to fetch products:", error);
+      return;
+    }
+    setProducts((data || []).map(mapRow));
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchProducts();
+
+    // Realtime subscription
+    const channel = supabase
+      .channel("products-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () => {
+        fetchProducts();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchProducts]);
+
+  const userName = profile?.full_name || user?.email || "Unknown";
 
   const addProduct = useCallback(
-    (product: Omit<Product, "id">) => {
-      productCounter++;
-      const newProduct: Product = { ...product, id: `p${productCounter}` };
-      setProducts((prev) => [...prev, newProduct]);
+    async (product: Omit<Product, "id">, imageFile?: File) => {
+      let imageUrl = product.image || "";
+
+      if (imageFile) {
+        const url = await uploadImage("product-images", imageFile, "products");
+        if (url) imageUrl = url;
+        else {
+          toast({ title: "Image Upload Failed", description: "Could not upload product image.", variant: "destructive" });
+        }
+      }
+
+      const { data, error } = await supabase
+        .from("products")
+        .insert({
+          title: product.title,
+          sku: product.sku,
+          price: product.price,
+          package_duration: product.packageDuration,
+          info: product.info,
+          image_url: imageUrl,
+          created_by: user?.id,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Failed to create product:", error);
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+        return;
+      }
+
       addLog({
         actionType: "Product Created",
-        userName: "Admin User",
-        role: "admin",
-        entity: newProduct.title,
-        details: `SKU: ${newProduct.sku}, Price: ৳${newProduct.price}`,
+        userName,
+        role: role || "unknown",
+        entity: product.title,
+        details: `SKU: ${product.sku}, Price: ৳${product.price}`,
       });
     },
-    [addLog]
+    [addLog, user, userName, role, toast]
   );
 
   const updateProduct = useCallback(
-    (updated: Product) => {
-      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    async (updated: Product, imageFile?: File) => {
+      let imageUrl = updated.image || "";
+
+      if (imageFile) {
+        const url = await uploadImage("product-images", imageFile, "products");
+        if (url) imageUrl = url;
+        else {
+          toast({ title: "Image Upload Failed", description: "Could not upload product image.", variant: "destructive" });
+        }
+      }
+
+      const { error } = await supabase
+        .from("products")
+        .update({
+          title: updated.title,
+          sku: updated.sku,
+          price: updated.price,
+          package_duration: updated.packageDuration,
+          info: updated.info,
+          image_url: imageUrl,
+        })
+        .eq("id", updated.id);
+
+      if (error) {
+        console.error("Failed to update product:", error);
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+        return;
+      }
+
       addLog({
         actionType: "Product Updated",
-        userName: "Admin User",
-        role: "admin",
+        userName,
+        role: role || "unknown",
         entity: updated.title,
         details: `SKU: ${updated.sku}, Price: ৳${updated.price}`,
       });
     },
-    [addLog]
+    [addLog, userName, role, toast]
   );
 
   return (
-    <ProductStoreContext.Provider value={{ products, addProduct, updateProduct }}>
+    <ProductStoreContext.Provider value={{ products, loading, addProduct, updateProduct, refreshProducts: fetchProducts }}>
       {children}
     </ProductStoreContext.Provider>
   );

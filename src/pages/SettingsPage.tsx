@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -13,34 +13,89 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Upload, User, Mail, Bell } from "lucide-react";
+import { Upload, User, Mail, Bell, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { mockEmailReportConfig } from "@/data/mockData";
 import { EmailReportConfig } from "@/types/data";
 
 export default function SettingsPage() {
   const { toast } = useToast();
+  const { user, profile, refreshProfile } = useAuth();
   const [profileImage, setProfileImage] = useState<string>("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    name: "Admin User",
-    email: "admin@salesboss.com",
+    name: "",
+    phone: "",
   });
 
   // Email report state
   const [emailConfig, setEmailConfig] = useState<EmailReportConfig>({ ...mockEmailReportConfig });
   const [newRecipient, setNewRecipient] = useState("");
 
+  // Hydrate from DB profile
+  useEffect(() => {
+    if (profile) {
+      setForm({
+        name: profile.full_name || "",
+        phone: profile.phone || "",
+      });
+      setProfileImage(profile.avatar_url || "");
+    }
+  }, [profile]);
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => setProfileImage(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
 
-  const handleSave = () => {
-    toast({ title: "Profile Updated", description: "Your profile has been updated successfully." });
+  const handleSave = async () => {
+    if (!user) return;
+    setSaving(true);
+
+    let avatarUrl = profile?.avatar_url || "";
+
+    // Upload avatar if new file selected
+    if (imageFile) {
+      const ext = imageFile.name.split(".").pop();
+      const path = `${user.id}/${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from("avatars").upload(path, imageFile);
+      if (uploadError) {
+        console.error("Avatar upload error:", uploadError);
+        toast({ title: "Upload Failed", description: uploadError.message, variant: "destructive" });
+        setSaving(false);
+        return;
+      }
+      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+      avatarUrl = data.publicUrl;
+    }
+
+    // Update profile in DB
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        full_name: form.name.trim(),
+        phone: form.phone.trim(),
+        avatar_url: avatarUrl,
+      })
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Profile update error:", error);
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      await refreshProfile();
+      setImageFile(null);
+      toast({ title: "Profile Updated", description: "Your profile has been saved." });
+    }
+    setSaving(false);
   };
 
   const addRecipient = () => {
@@ -97,12 +152,16 @@ export default function SettingsPage() {
               <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="mt-1" />
             </div>
             <div>
-              <Label className="text-xs">Email</Label>
-              <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} className="mt-1" />
+              <Label className="text-xs">Phone</Label>
+              <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="+880..." className="mt-1" />
             </div>
           </div>
+          <p className="text-xs text-muted-foreground mt-2">Email: {user?.email}</p>
           <div className="flex justify-end mt-4">
-            <Button size="sm" onClick={handleSave}>Save Changes</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Changes
+            </Button>
           </div>
         </div>
 
