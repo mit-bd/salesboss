@@ -148,13 +148,13 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchUpsells = useCallback(async () => {
-    const { data, error } = await supabase.from("upsell_records").select("*").order("created_at", { ascending: true });
+    const { data, error } = await (supabase.from as any)("upsell_records").select("*").order("created_at", { ascending: true });
     if (error) { console.error("[OrderStore] Upsell fetch error:", error); return; }
     if (isMounted.current) setUpsellRecords((data || []).map(mapUpsellRow));
   }, []);
 
   const fetchRepeats = useCallback(async () => {
-    const { data, error } = await supabase.from("repeat_order_records").select("*").order("created_at", { ascending: true });
+    const { data, error } = await (supabase.from as any)("repeat_order_records").select("*").order("created_at", { ascending: true });
     if (error) { console.error("[OrderStore] Repeat fetch error:", error); return; }
     if (isMounted.current) setRepeatOrderRecords((data || []).map(mapRepeatRow));
   }, []);
@@ -349,7 +349,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
           note: e.note,
           added_by: user?.id || null,
         }));
-        const { error: upsellError } = await supabase.from("upsell_records").insert(upsellRows);
+        const { error: upsellError } = await (supabase.from as any)("upsell_records").insert(upsellRows);
         if (upsellError) console.error("[OrderStore] Upsell insert error:", upsellError);
       }
 
@@ -388,7 +388,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
         }
 
         // Insert repeat_order_record
-        await supabase.from("repeat_order_records").insert({
+        await (supabase.from as any)("repeat_order_records").insert({
           followup_id: followupId,
           product_id: entry.productId || null,
           product_name: entry.productName,
@@ -435,15 +435,12 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
   const editFollowup = useCallback(
     async (data: { followupId: string; note: string; problemsDiscussed: string }) => {
-      const { error } = await supabase
-        .from("followup_history")
-        .update({
+      const { error } = await (supabase.from("followup_history").update as any)({
           note: data.note,
           problems_discussed: data.problemsDiscussed,
           edited_by: user?.id || null,
           edited_at: new Date().toISOString(),
-        })
-        .eq("id", data.followupId);
+        }).eq("id", data.followupId);
 
       if (error) {
         console.error("[OrderStore] Edit followup error:", error);
