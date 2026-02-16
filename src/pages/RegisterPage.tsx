@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -16,8 +16,26 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [adminExists, setAdminExists] = useState(false);
 
-  if (authLoading) {
+  useEffect(() => {
+    const checkAdmin = async () => {
+      try {
+        const { data } = await supabase.functions.invoke("manage-team", {
+          body: { action: "check_admin_exists" },
+        });
+        setAdminExists(data?.adminExists || false);
+      } catch {
+        // If edge function fails, allow registration as fallback
+        setAdminExists(false);
+      }
+      setChecking(false);
+    };
+    checkAdmin();
+  }, []);
+
+  if (authLoading || checking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -26,6 +44,28 @@ export default function RegisterPage() {
   }
 
   if (session) return <Navigate to="/" replace />;
+
+  // If admin already exists, block self-registration
+  if (adminExists) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="w-full max-w-sm space-y-6 text-center">
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
+              <PhoneForwarded className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <h1 className="text-xl font-semibold text-foreground">Registration Closed</h1>
+            <p className="text-sm text-muted-foreground">
+              New accounts are created by your Admin. Please contact your administrator for access.
+            </p>
+          </div>
+          <Link to="/login">
+            <Button variant="outline" className="w-full">Back to Login</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,8 +99,8 @@ export default function RegisterPage() {
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
             <PhoneForwarded className="h-5 w-5 text-primary-foreground" />
           </div>
-          <h1 className="text-xl font-semibold text-foreground">Create your account</h1>
-          <p className="text-sm text-muted-foreground">The first registered user becomes Admin</p>
+          <h1 className="text-xl font-semibold text-foreground">Create Admin Account</h1>
+          <p className="text-sm text-muted-foreground">Set up the first administrator account</p>
         </div>
 
         <form onSubmit={handleRegister} className="space-y-4">
@@ -99,7 +139,7 @@ export default function RegisterPage() {
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create Account
+            Create Admin Account
           </Button>
         </form>
 

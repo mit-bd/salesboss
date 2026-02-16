@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,21 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [adminExists, setAdminExists] = useState(true);
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      try {
+        const { data } = await supabase.functions.invoke("manage-team", {
+          body: { action: "check_admin_exists" },
+        });
+        setAdminExists(data?.adminExists ?? true);
+      } catch {
+        setAdminExists(true);
+      }
+    };
+    checkAdmin();
+  }, []);
 
   if (authLoading) {
     return (
@@ -83,12 +98,14 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <p className="text-center text-sm text-muted-foreground">
-          Don't have an account?{" "}
-          <Link to="/register" className="text-primary font-medium hover:underline">
-            Register
-          </Link>
-        </p>
+        {!adminExists && (
+          <p className="text-center text-sm text-muted-foreground">
+            First time?{" "}
+            <Link to="/register" className="text-primary font-medium hover:underline">
+              Set up Admin account
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );
