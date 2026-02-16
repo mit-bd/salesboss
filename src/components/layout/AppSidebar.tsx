@@ -41,6 +41,7 @@ const navItems: NavItem[] = [
   { label: "Targets & Commission", icon: Target, path: "/commission", permission: "commission.view" },
   { label: "Products", icon: Package, path: "/products", permission: "products.view" },
   { label: "Delivery Methods", icon: Truck, path: "/delivery-methods", permission: "delivery.view" },
+  { label: "Order Sources", icon: ShoppingCart, path: "/order-sources" },
   { label: "Bulk Import", icon: Upload, path: "/bulk-import", permission: "orders.create" },
   { label: "Team", icon: Users, path: "/team" },
   { label: "Roles", icon: KeyRound, path: "/roles", permission: "roles.manage" },

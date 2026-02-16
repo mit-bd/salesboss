@@ -103,6 +103,30 @@ export type Database = {
           },
         ]
       }
+      order_sources: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          is_system: boolean
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          name?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           address: string

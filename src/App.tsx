@@ -32,6 +32,7 @@ import ExportPage from "./pages/ExportPage";
 import BackupCenterPage from "./pages/BackupCenterPage";
 import CommissionPage from "./pages/CommissionPage";
 import RolesPage from "./pages/RolesPage";
+import OrderSourcesPage from "./pages/OrderSourcesPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -74,6 +75,7 @@ const App = () => (
                       <Route path="/export" element={<ProtectedRoute requiredPermission="backup.export"><ExportPage /></ProtectedRoute>} />
                       <Route path="/backup-center" element={<ProtectedRoute requiredPermission="backup.view"><BackupCenterPage /></ProtectedRoute>} />
                       <Route path="/commission" element={<ProtectedRoute requiredPermission="commission.view"><CommissionPage /></ProtectedRoute>} />
+                      <Route path="/order-sources" element={<ProtectedRoute><OrderSourcesPage /></ProtectedRoute>} />
 
                       <Route path="*" element={<NotFound />} />
                     </Routes>

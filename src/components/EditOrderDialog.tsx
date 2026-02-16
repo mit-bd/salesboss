@@ -7,11 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useProductStore } from "@/contexts/ProductStoreContext";
 import { useDeliveryMethods } from "@/hooks/useDeliveryMethods";
+import { useOrderSources } from "@/hooks/useOrderSources";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Order } from "@/types/data";
 
-const ORDER_SOURCES = ["Website", "Phone Call", "Referral", "Social Media"];
+
 
 interface EditOrderDialogProps {
   order: Order;
@@ -35,6 +36,7 @@ export default function EditOrderDialog({ order, open, onOpenChange, onSave }: E
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
   const { methods: activePartners } = useDeliveryMethods({ activeOnly: true });
+  const { sources: allSources } = useOrderSources();
   const { products } = useProductStore();
 
   // Include the current order's method even if inactive, so it shows in dropdown
@@ -137,7 +139,7 @@ export default function EditOrderDialog({ order, open, onOpenChange, onSave }: E
               <Select value={form.orderSource} onValueChange={(v) => update("orderSource", v)}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {ORDER_SOURCES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  {allSources.map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
               {errors.orderSource && <p className="text-xs text-destructive mt-1">{errors.orderSource}</p>}
