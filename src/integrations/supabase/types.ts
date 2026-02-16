@@ -20,6 +20,8 @@ export type Database = {
           completed_by: string | null
           completed_by_name: string
           created_at: string
+          edited_at: string | null
+          edited_by: string | null
           id: string
           next_followup_date: string | null
           note: string
@@ -34,6 +36,8 @@ export type Database = {
           completed_by?: string | null
           completed_by_name?: string
           created_at?: string
+          edited_at?: string | null
+          edited_by?: string | null
           id?: string
           next_followup_date?: string | null
           note?: string
@@ -48,6 +52,8 @@ export type Database = {
           completed_by?: string | null
           completed_by_name?: string
           created_at?: string
+          edited_at?: string | null
+          edited_by?: string | null
           id?: string
           next_followup_date?: string | null
           note?: string
@@ -240,6 +246,112 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      repeat_order_records: {
+        Row: {
+          added_by: string | null
+          child_order_id: string | null
+          created_at: string
+          followup_id: string
+          id: string
+          note: string
+          price: number
+          product_id: string | null
+          product_name: string
+        }
+        Insert: {
+          added_by?: string | null
+          child_order_id?: string | null
+          created_at?: string
+          followup_id: string
+          id?: string
+          note?: string
+          price?: number
+          product_id?: string | null
+          product_name?: string
+        }
+        Update: {
+          added_by?: string | null
+          child_order_id?: string | null
+          created_at?: string
+          followup_id?: string
+          id?: string
+          note?: string
+          price?: number
+          product_id?: string | null
+          product_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repeat_order_records_child_order_id_fkey"
+            columns: ["child_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "repeat_order_records_followup_id_fkey"
+            columns: ["followup_id"]
+            isOneToOne: false
+            referencedRelation: "followup_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "repeat_order_records_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      upsell_records: {
+        Row: {
+          added_by: string | null
+          created_at: string
+          followup_id: string
+          id: string
+          note: string
+          price: number
+          product_id: string | null
+          product_name: string
+        }
+        Insert: {
+          added_by?: string | null
+          created_at?: string
+          followup_id: string
+          id?: string
+          note?: string
+          price?: number
+          product_id?: string | null
+          product_name?: string
+        }
+        Update: {
+          added_by?: string | null
+          created_at?: string
+          followup_id?: string
+          id?: string
+          note?: string
+          price?: number
+          product_id?: string | null
+          product_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upsell_records_followup_id_fkey"
+            columns: ["followup_id"]
+            isOneToOne: false
+            referencedRelation: "followup_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "upsell_records_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {

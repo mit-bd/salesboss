@@ -55,6 +55,45 @@ export interface FollowupHistoryEntry {
   completedBy: string | null;
   completedByName: string;
   completedAt: string;
+  editedBy?: string | null;
+  editedAt?: string | null;
+}
+
+export interface UpsellRecord {
+  id: string;
+  followupId: string;
+  productId: string | null;
+  productName: string;
+  price: number;
+  note: string;
+  addedBy: string | null;
+  createdAt: string;
+}
+
+export interface RepeatOrderRecord {
+  id: string;
+  followupId: string;
+  productId: string | null;
+  productName: string;
+  price: number;
+  note: string;
+  childOrderId: string | null;
+  addedBy: string | null;
+  createdAt: string;
+}
+
+export interface UpsellEntry {
+  productId: string;
+  productName: string;
+  price: number;
+  note: string;
+}
+
+export interface RepeatOrderEntry {
+  productId: string;
+  productName: string;
+  price: number;
+  note: string;
 }
 
 export interface DashboardMetrics {
