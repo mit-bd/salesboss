@@ -4,8 +4,12 @@ import PageHeader from "@/components/layout/PageHeader";
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { mockSalesExecutives } from "@/data/mockData";
 
 interface ParsedRow {
   customerName: string;
@@ -42,6 +46,13 @@ export default function BulkImportPage() {
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
   const [rawHeaders, setRawHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<string[][]>([]);
+  const [assignToExec, setAssignToExec] = useState("");
+  const { members } = useTeamMembers();
+
+  const allExecutives = [
+    ...members.map((m) => ({ id: m.userId, name: m.name })),
+    ...mockSalesExecutives.filter((se) => !members.some((m) => m.userId === se.id)).map((se) => ({ id: se.id, name: se.name })),
+  ];
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -167,6 +178,20 @@ export default function BulkImportPage() {
                     </select>
                   </div>
                 ))}
+              </div>
+              <div className="mt-4 pt-4 border-t border-border">
+                <Label className="text-xs font-medium text-muted-foreground">Assign all imported orders to (optional)</Label>
+                <Select value={assignToExec} onValueChange={setAssignToExec}>
+                  <SelectTrigger className="mt-1 h-8 text-xs w-64">
+                    <SelectValue placeholder="No assignment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No assignment</SelectItem>
+                    {allExecutives.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex justify-end mt-4">
                 <Button size="sm" onClick={handlePreview}>Preview Data</Button>

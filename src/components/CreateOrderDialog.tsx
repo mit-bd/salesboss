@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { mockDeliveryPartners, mockSalesExecutives } from "@/data/mockData";
 import { useProductStore } from "@/contexts/ProductStoreContext";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -31,6 +32,13 @@ export default function CreateOrderDialog() {
   const activePartners = mockDeliveryPartners.filter((dp) => dp.active);
   const { products } = useProductStore();
   const { addOrder } = useOrderStore();
+  const { members } = useTeamMembers();
+
+  // Combine DB team with mock for backward compatibility
+  const allExecutives = [
+    ...members.map((m) => ({ id: m.userId, name: m.name })),
+    ...mockSalesExecutives.filter((se) => !members.some((m) => m.userId === se.id)).map((se) => ({ id: se.id, name: se.name })),
+  ];
 
   const [form, setForm] = useState({
     customerName: "",
@@ -70,7 +78,7 @@ export default function CreateOrderDialog() {
     setSaving(true);
 
     const product = products.find((p) => p.id === form.productId);
-    const exec = mockSalesExecutives.find((se) => se.id === form.assignedTo);
+    const exec = allExecutives.find((se) => se.id === form.assignedTo);
 
     try {
       await addOrder({
@@ -193,7 +201,7 @@ export default function CreateOrderDialog() {
               <Select value={form.assignedTo} onValueChange={(v) => update("assignedTo", v)}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select executive" /></SelectTrigger>
                 <SelectContent>
-                  {mockSalesExecutives.map((se) => <SelectItem key={se.id} value={se.id}>{se.name}</SelectItem>)}
+                  {allExecutives.map((se) => <SelectItem key={se.id} value={se.id}>{se.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
