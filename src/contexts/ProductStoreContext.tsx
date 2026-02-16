@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
 import { Product } from "@/types/data";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuditLog } from "./AuditLogContext";
@@ -45,6 +45,12 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
   const { addLog } = useAuditLog();
   const { user, profile, role } = useAuth();
   const { toast } = useToast();
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
 
   const fetchProducts = useCallback(async () => {
     const { data, error } = await supabase
@@ -56,18 +62,34 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
       console.error("Failed to fetch products:", error);
       return;
     }
-    setProducts((data || []).map(mapRow));
-    setLoading(false);
+    if (isMounted.current) {
+      setProducts((data || []).map(mapRow));
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     fetchProducts();
 
-    // Realtime subscription
     const channel = supabase
       .channel("products-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () => {
-        fetchProducts();
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "products" }, (payload) => {
+        if (!isMounted.current) return;
+        const p = mapRow(payload.new);
+        setProducts((prev) => {
+          if (prev.some((x) => x.id === p.id)) return prev;
+          return [p, ...prev];
+        });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "products" }, (payload) => {
+        if (!isMounted.current) return;
+        const p = mapRow(payload.new);
+        setProducts((prev) => prev.map((x) => (x.id === p.id ? p : x)));
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "products" }, (payload) => {
+        if (!isMounted.current) return;
+        const id = (payload.old as any).id;
+        setProducts((prev) => prev.filter((x) => x.id !== id));
       })
       .subscribe();
 
@@ -108,6 +130,14 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Immediate local state update
+      const newProduct = mapRow(data);
+      setProducts((prev) => {
+        if (prev.some((x) => x.id === newProduct.id)) return prev;
+        return [newProduct, ...prev];
+      });
+
+      toast({ title: "Product created" });
       addLog({
         actionType: "Product Created",
         userName,
@@ -131,7 +161,12 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      const { error } = await supabase
+      // Optimistic update
+      const prev = products.find((p) => p.id === updated.id);
+      const optimistic = { ...updated, image: imageUrl };
+      setProducts((list) => list.map((p) => (p.id === updated.id ? optimistic : p)));
+
+      const { data, error } = await supabase
         .from("products")
         .update({
           title: updated.title,
@@ -141,14 +176,25 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
           info: updated.info,
           image_url: imageUrl,
         })
-        .eq("id", updated.id);
+        .eq("id", updated.id)
+        .select()
+        .single();
 
       if (error) {
         console.error("Failed to update product:", error);
         toast({ title: "Error", description: error.message, variant: "destructive" });
+        // Rollback
+        if (prev) setProducts((list) => list.map((p) => (p.id === updated.id ? prev : p)));
         return;
       }
 
+      // Replace with confirmed DB data
+      if (data) {
+        const confirmed = mapRow(data);
+        setProducts((list) => list.map((p) => (p.id === confirmed.id ? confirmed : p)));
+      }
+
+      toast({ title: "Product updated" });
       addLog({
         actionType: "Product Updated",
         userName,
@@ -157,7 +203,7 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
         details: `SKU: ${updated.sku}, Price: ৳${updated.price}`,
       });
     },
-    [addLog, userName, role, toast]
+    [products, addLog, userName, role, toast]
   );
 
   return (
