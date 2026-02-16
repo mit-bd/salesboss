@@ -17,6 +17,7 @@ import OrdersPage from "./pages/OrdersPage";
 import OrderDetailPage from "./pages/OrderDetailPage";
 import FollowupsPage from "./pages/FollowupsPage";
 import RepeatOrdersPage from "./pages/RepeatOrdersPage";
+import UpsellPage from "./pages/UpsellPage";
 import ProductsPage from "./pages/ProductsPage";
 import DeliveryMethodPage from "./pages/DeliveryMethodPage";
 import BulkImportPage from "./pages/BulkImportPage";
@@ -56,6 +57,7 @@ const App = () => (
                     <Route path="/orders/:id" element={<ProtectedRoute><OrderDetailPage /></ProtectedRoute>} />
                     <Route path="/followups" element={<ProtectedRoute><FollowupsPage /></ProtectedRoute>} />
                     <Route path="/repeat-orders" element={<ProtectedRoute><RepeatOrdersPage /></ProtectedRoute>} />
+                    <Route path="/upsell" element={<ProtectedRoute><UpsellPage /></ProtectedRoute>} />
                     <Route path="/sales-executives" element={<ProtectedRoute><SalesExecutivesPage /></ProtectedRoute>} />
                     <Route path="/sales-executives/:id" element={<ProtectedRoute><SalesExecutiveDetailPage /></ProtectedRoute>} />
                     <Route path="/products" element={<ProtectedRoute><ProductsPage /></ProtectedRoute>} />
