@@ -161,11 +161,6 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Optimistic update
-      const prev = products.find((p) => p.id === updated.id);
-      const optimistic = { ...updated, image: imageUrl };
-      setProducts((list) => list.map((p) => (p.id === updated.id ? optimistic : p)));
-
       const { data, error } = await supabase
         .from("products")
         .update({
@@ -183,12 +178,10 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error("Failed to update product:", error);
         toast({ title: "Error", description: error.message, variant: "destructive" });
-        // Rollback
-        if (prev) setProducts((list) => list.map((p) => (p.id === updated.id ? prev : p)));
-        return;
+        throw error;
       }
 
-      // Replace with confirmed DB data
+      // Replace local state with confirmed DB data
       if (data) {
         const confirmed = mapRow(data);
         setProducts((list) => list.map((p) => (p.id === confirmed.id ? confirmed : p)));
@@ -203,7 +196,7 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
         details: `SKU: ${updated.sku}, Price: ৳${updated.price}`,
       });
     },
-    [products, addLog, userName, role, toast]
+    [addLog, userName, role, toast]
   );
 
   return (
