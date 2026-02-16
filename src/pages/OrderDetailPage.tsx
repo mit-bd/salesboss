@@ -10,7 +10,9 @@ import { useRole } from "@/contexts/RoleContext";
 import EditOrderDialog from "@/components/EditOrderDialog";
 import DeleteOrderDialog from "@/components/DeleteOrderDialog";
 import CompleteFollowupDialog from "@/components/CompleteFollowupDialog";
+import EditFollowupDialog from "@/components/EditFollowupDialog";
 import { useToast } from "@/hooks/use-toast";
+import { FollowupHistoryEntry } from "@/types/data";
 
 const STEP_COLORS = [
   "bg-step-1 text-primary-foreground",
@@ -39,12 +41,14 @@ export default function OrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAdmin } = useRole();
-  const { activeOrders, softDelete, updateOrder, completeFollowup, getOrderHistory } = useOrderStore();
+  const { activeOrders, softDelete, updateOrder, completeFollowup, editFollowup, getOrderHistory, getUpsellsForFollowup, getRepeatOrdersForFollowup } = useOrderStore();
   const { toast } = useToast();
   const order = activeOrders.find((o) => o.id === id);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [followupOpen, setFollowupOpen] = useState(false);
+  const [editFollowupOpen, setEditFollowupOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<FollowupHistoryEntry | null>(null);
 
   if (!order) {
     return (
@@ -62,6 +66,11 @@ export default function OrderDetailPage() {
   const history = getOrderHistory(order.id);
   const currentStatus = order.currentStatus || "pending";
   const canComplete = currentStatus === "pending";
+
+  const handleEditFollowup = (entry: FollowupHistoryEntry) => {
+    setEditingEntry(entry);
+    setEditFollowupOpen(true);
+  };
 
   return (
     <AppLayout>
@@ -172,46 +181,84 @@ export default function OrderDetailPage() {
                 <p className="text-sm text-muted-foreground">No followup history yet. Complete the first followup to start tracking.</p>
               ) : (
                 <div className="space-y-0">
-                  {history.map((entry, i) => (
-                    <div key={entry.id} className="flex gap-3">
-                      <div className="flex flex-col items-center">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-success/10 text-success">
-                          <CheckCircle className="h-4 w-4" />
+                  {history.map((entry, i) => {
+                    const upsells = getUpsellsForFollowup(entry.id);
+                    const repeats = getRepeatOrdersForFollowup(entry.id);
+                    return (
+                      <div key={entry.id} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-success/10 text-success">
+                            <CheckCircle className="h-4 w-4" />
+                          </div>
+                          {i < history.length - 1 && <div className="w-px flex-1 bg-border my-1" />}
                         </div>
-                        {i < history.length - 1 && <div className="w-px flex-1 bg-border my-1" />}
-                      </div>
-                      <div className="pb-4 flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-foreground">Step {entry.stepNumber} Completed</p>
-                          <p className="text-[10px] text-muted-foreground">{entry.completedAt?.split("T")[0]}</p>
+                        <div className="pb-4 flex-1">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-foreground">Step {entry.stepNumber} Completed</p>
+                            <div className="flex items-center gap-1.5">
+                              {entry.editedAt && <span className="text-[10px] text-muted-foreground italic">edited</span>}
+                              <p className="text-[10px] text-muted-foreground">{entry.completedAt?.split("T")[0]}</p>
+                              {isAdmin && (
+                                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleEditFollowup(entry)}>
+                                  <Edit2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">By {entry.completedByName || "Unknown"}</p>
+                          {entry.note && (
+                            <div className="mt-2 rounded-lg bg-muted/50 p-2">
+                              <p className="text-xs text-foreground flex items-center gap-1 mb-1"><MessageSquare className="h-3 w-3" /> Note</p>
+                              <p className="text-xs text-muted-foreground">{entry.note}</p>
+                            </div>
+                          )}
+                          {entry.problemsDiscussed && (
+                            <div className="mt-1.5 rounded-lg bg-warning/5 p-2">
+                              <p className="text-xs text-warning font-medium mb-0.5">Problems Discussed</p>
+                              <p className="text-xs text-muted-foreground">{entry.problemsDiscussed}</p>
+                            </div>
+                          )}
+                          {/* Upsell Records */}
+                          {upsells.length > 0 && (
+                            <div className="mt-1.5 rounded-lg bg-info/5 p-2">
+                              <p className="text-xs text-info font-medium mb-1 flex items-center gap-1"><ShoppingCart className="h-3 w-3" /> Upsells ({upsells.length})</p>
+                              {upsells.map((u) => (
+                                <div key={u.id} className="flex items-center justify-between text-xs text-muted-foreground py-0.5">
+                                  <span>{u.productName}</span>
+                                  <span className="font-medium">৳{u.price}</span>
+                                </div>
+                              ))}
+                              <div className="flex justify-end pt-1 border-t border-info/10 mt-1">
+                                <span className="text-xs font-semibold text-info">Total: ৳{upsells.reduce((s, u) => s + u.price, 0)}</span>
+                              </div>
+                            </div>
+                          )}
+                          {/* Repeat Order Records */}
+                          {repeats.length > 0 && (
+                            <div className="mt-1.5 rounded-lg bg-warning/5 p-2">
+                              <p className="text-xs text-warning font-medium mb-1 flex items-center gap-1"><RefreshCw className="h-3 w-3" /> Repeat Orders ({repeats.length})</p>
+                              {repeats.map((r) => (
+                                <div key={r.id} className="flex items-center justify-between text-xs text-muted-foreground py-0.5">
+                                  <span className="cursor-pointer hover:text-foreground" onClick={() => r.childOrderId && navigate(`/orders/${r.childOrderId}`)}>
+                                    {r.productName}
+                                  </span>
+                                  <span className="font-medium">৳{r.price}</span>
+                                </div>
+                              ))}
+                              <div className="flex justify-end pt-1 border-t border-warning/10 mt-1">
+                                <span className="text-xs font-semibold text-warning">Total: ৳{repeats.reduce((s, r) => s + r.price, 0)}</span>
+                              </div>
+                            </div>
+                          )}
+                          {entry.nextFollowupDate && (
+                            <p className="text-[11px] text-muted-foreground/60 flex items-center gap-1 mt-1.5">
+                              <Clock className="h-3 w-3" /> Next followup: {entry.nextFollowupDate}
+                            </p>
+                          )}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">By {entry.completedByName || "Unknown"}</p>
-                        {entry.note && (
-                          <div className="mt-2 rounded-lg bg-muted/50 p-2">
-                            <p className="text-xs text-foreground flex items-center gap-1 mb-1"><MessageSquare className="h-3 w-3" /> Note</p>
-                            <p className="text-xs text-muted-foreground">{entry.note}</p>
-                          </div>
-                        )}
-                        {entry.problemsDiscussed && (
-                          <div className="mt-1.5 rounded-lg bg-warning/5 p-2">
-                            <p className="text-xs text-warning font-medium mb-0.5">Problems Discussed</p>
-                            <p className="text-xs text-muted-foreground">{entry.problemsDiscussed}</p>
-                          </div>
-                        )}
-                        {entry.upsellAttempted && (
-                          <div className="mt-1.5 rounded-lg bg-info/5 p-2">
-                            <p className="text-xs text-info font-medium mb-0.5">Upsell Attempted</p>
-                            <p className="text-xs text-muted-foreground">{entry.upsellDetails || "Yes"}</p>
-                          </div>
-                        )}
-                        {entry.nextFollowupDate && (
-                          <p className="text-[11px] text-muted-foreground/60 flex items-center gap-1 mt-1.5">
-                            <Clock className="h-3 w-3" /> Next followup: {entry.nextFollowupDate}
-                          </p>
-                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -227,7 +274,6 @@ export default function OrderDetailPage() {
 
           {/* Sidebar */}
           <div className="space-y-4">
-            {/* Quick Info */}
             <div className="rounded-xl border border-border bg-card p-5 card-shadow">
               <h2 className="text-sm font-semibold text-foreground mb-4">Quick Info</h2>
               <div className="space-y-3">
@@ -256,7 +302,6 @@ export default function OrderDetailPage() {
               </div>
             </div>
 
-            {/* Activity Timeline */}
             <div className="rounded-xl border border-border bg-card p-5 card-shadow">
               <h2 className="text-sm font-semibold text-foreground mb-4">Activity Timeline</h2>
               <div className="space-y-0">
@@ -350,6 +395,15 @@ export default function OrderDetailPage() {
         onOpenChange={setFollowupOpen}
         onComplete={completeFollowup}
       />
+
+      {isAdmin && (
+        <EditFollowupDialog
+          entry={editingEntry}
+          open={editFollowupOpen}
+          onOpenChange={setEditFollowupOpen}
+          onSave={editFollowup}
+        />
+      )}
     </AppLayout>
   );
 }

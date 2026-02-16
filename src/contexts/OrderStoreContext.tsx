@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
-import { Order, FollowupHistoryEntry } from "@/types/data";
+import { Order, FollowupHistoryEntry, UpsellEntry, RepeatOrderEntry, UpsellRecord, RepeatOrderRecord } from "@/types/data";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuditLog } from "./AuditLogContext";
 import { useAuth } from "./AuthContext";
@@ -10,6 +10,8 @@ interface OrderStoreContextType {
   deletedOrders: Order[];
   activeOrders: Order[];
   followupHistory: FollowupHistoryEntry[];
+  upsellRecords: UpsellRecord[];
+  repeatOrderRecords: RepeatOrderRecord[];
   loading: boolean;
   softDelete: (orderId: string) => Promise<void>;
   restoreOrder: (orderId: string) => Promise<void>;
@@ -24,8 +26,17 @@ interface OrderStoreContextType {
     upsellAttempted: boolean;
     upsellDetails: string;
     nextFollowupDate: string | null;
+    upsellEntries: UpsellEntry[];
+    repeatOrderEntries: RepeatOrderEntry[];
+  }) => Promise<void>;
+  editFollowup: (data: {
+    followupId: string;
+    note: string;
+    problemsDiscussed: string;
   }) => Promise<void>;
   getOrderHistory: (orderId: string) => FollowupHistoryEntry[];
+  getUpsellsForFollowup: (followupId: string) => UpsellRecord[];
+  getRepeatOrdersForFollowup: (followupId: string) => RepeatOrderRecord[];
   refreshOrders: () => Promise<void>;
 }
 
@@ -74,12 +85,43 @@ function mapHistoryRow(row: any): FollowupHistoryEntry {
     completedBy: row.completed_by || null,
     completedByName: row.completed_by_name || "",
     completedAt: row.completed_at || "",
+    editedBy: row.edited_by || null,
+    editedAt: row.edited_at || null,
+  };
+}
+
+function mapUpsellRow(row: any): UpsellRecord {
+  return {
+    id: row.id,
+    followupId: row.followup_id,
+    productId: row.product_id,
+    productName: row.product_name || "",
+    price: Number(row.price) || 0,
+    note: row.note || "",
+    addedBy: row.added_by || null,
+    createdAt: row.created_at || "",
+  };
+}
+
+function mapRepeatRow(row: any): RepeatOrderRecord {
+  return {
+    id: row.id,
+    followupId: row.followup_id,
+    productId: row.product_id,
+    productName: row.product_name || "",
+    price: Number(row.price) || 0,
+    note: row.note || "",
+    childOrderId: row.child_order_id || null,
+    addedBy: row.added_by || null,
+    createdAt: row.created_at || "",
   };
 }
 
 export function OrderStoreProvider({ children }: { children: ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [followupHistory, setFollowupHistory] = useState<FollowupHistoryEntry[]>([]);
+  const [upsellRecords, setUpsellRecords] = useState<UpsellRecord[]>([]);
+  const [repeatOrderRecords, setRepeatOrderRecords] = useState<RepeatOrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const { addLog } = useAuditLog();
   const { user, profile, role } = useAuth();
@@ -94,50 +136,42 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
   const userName = profile?.full_name || user?.email || "Admin User";
 
   const fetchOrders = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("[OrderStore] Fetch error:", error);
-      return;
-    }
-    if (isMounted.current) {
-      setOrders((data || []).map(mapRow));
-      setLoading(false);
-    }
+    const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
+    if (error) { console.error("[OrderStore] Fetch error:", error); return; }
+    if (isMounted.current) { setOrders((data || []).map(mapRow)); setLoading(false); }
   }, []);
 
   const fetchHistory = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("followup_history")
-      .select("*")
-      .order("step_number", { ascending: true });
+    const { data, error } = await supabase.from("followup_history").select("*").order("step_number", { ascending: true });
+    if (error) { console.error("[OrderStore] History fetch error:", error); return; }
+    if (isMounted.current) setFollowupHistory((data || []).map(mapHistoryRow));
+  }, []);
 
-    if (error) {
-      console.error("[OrderStore] History fetch error:", error);
-      return;
-    }
-    if (isMounted.current) {
-      setFollowupHistory((data || []).map(mapHistoryRow));
-    }
+  const fetchUpsells = useCallback(async () => {
+    const { data, error } = await supabase.from("upsell_records").select("*").order("created_at", { ascending: true });
+    if (error) { console.error("[OrderStore] Upsell fetch error:", error); return; }
+    if (isMounted.current) setUpsellRecords((data || []).map(mapUpsellRow));
+  }, []);
+
+  const fetchRepeats = useCallback(async () => {
+    const { data, error } = await supabase.from("repeat_order_records").select("*").order("created_at", { ascending: true });
+    if (error) { console.error("[OrderStore] Repeat fetch error:", error); return; }
+    if (isMounted.current) setRepeatOrderRecords((data || []).map(mapRepeatRow));
   }, []);
 
   // Realtime subscriptions
   useEffect(() => {
     fetchOrders();
     fetchHistory();
+    fetchUpsells();
+    fetchRepeats();
 
     const ordersChannel = supabase
       .channel("orders-changes")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
         if (!isMounted.current) return;
         const newOrder = mapRow(payload.new);
-        setOrders((prev) => {
-          if (prev.some((o) => o.id === newOrder.id)) return prev;
-          return [newOrder, ...prev];
-        });
+        setOrders((prev) => { if (prev.some((o) => o.id === newOrder.id)) return prev; return [newOrder, ...prev]; });
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
         if (!isMounted.current) return;
@@ -146,38 +180,65 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" }, (payload) => {
         if (!isMounted.current) return;
-        const deletedId = (payload.old as any).id;
-        setOrders((prev) => prev.filter((o) => o.id !== deletedId));
+        setOrders((prev) => prev.filter((o) => o.id !== (payload.old as any).id));
       })
       .subscribe();
 
     const historyChannel = supabase
       .channel("followup-history-changes")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "followup_history" }, (payload) => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "followup_history" }, (payload) => {
         if (!isMounted.current) return;
-        const entry = mapHistoryRow(payload.new);
-        setFollowupHistory((prev) => {
-          if (prev.some((h) => h.id === entry.id)) return prev;
-          return [...prev, entry];
-        });
+        if (payload.eventType === "INSERT") {
+          const entry = mapHistoryRow(payload.new);
+          setFollowupHistory((prev) => { if (prev.some((h) => h.id === entry.id)) return prev; return [...prev, entry]; });
+        } else if (payload.eventType === "UPDATE") {
+          const updated = mapHistoryRow(payload.new);
+          setFollowupHistory((prev) => prev.map((h) => (h.id === updated.id ? updated : h)));
+        } else if (payload.eventType === "DELETE") {
+          setFollowupHistory((prev) => prev.filter((h) => h.id !== (payload.old as any).id));
+        }
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "followup_history" }, (payload) => {
+      .subscribe();
+
+    const upsellChannel = supabase
+      .channel("upsell-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "upsell_records" }, (payload) => {
         if (!isMounted.current) return;
-        const updated = mapHistoryRow(payload.new);
-        setFollowupHistory((prev) => prev.map((h) => (h.id === updated.id ? updated : h)));
+        if (payload.eventType === "INSERT") {
+          const rec = mapUpsellRow(payload.new);
+          setUpsellRecords((prev) => { if (prev.some((r) => r.id === rec.id)) return prev; return [...prev, rec]; });
+        } else if (payload.eventType === "UPDATE") {
+          const rec = mapUpsellRow(payload.new);
+          setUpsellRecords((prev) => prev.map((r) => (r.id === rec.id ? rec : r)));
+        } else if (payload.eventType === "DELETE") {
+          setUpsellRecords((prev) => prev.filter((r) => r.id !== (payload.old as any).id));
+        }
       })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "followup_history" }, (payload) => {
+      .subscribe();
+
+    const repeatChannel = supabase
+      .channel("repeat-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "repeat_order_records" }, (payload) => {
         if (!isMounted.current) return;
-        const deletedId = (payload.old as any).id;
-        setFollowupHistory((prev) => prev.filter((h) => h.id !== deletedId));
+        if (payload.eventType === "INSERT") {
+          const rec = mapRepeatRow(payload.new);
+          setRepeatOrderRecords((prev) => { if (prev.some((r) => r.id === rec.id)) return prev; return [...prev, rec]; });
+        } else if (payload.eventType === "UPDATE") {
+          const rec = mapRepeatRow(payload.new);
+          setRepeatOrderRecords((prev) => prev.map((r) => (r.id === rec.id ? rec : r)));
+        } else if (payload.eventType === "DELETE") {
+          setRepeatOrderRecords((prev) => prev.filter((r) => r.id !== (payload.old as any).id));
+        }
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(ordersChannel);
       supabase.removeChannel(historyChannel);
+      supabase.removeChannel(upsellChannel);
+      supabase.removeChannel(repeatChannel);
     };
-  }, [fetchOrders, fetchHistory]);
+  }, [fetchOrders, fetchHistory, fetchUpsells, fetchRepeats]);
 
   const activeOrders = orders.filter((o) => !o.isDeleted);
   const deletedOrders = orders.filter((o) => o.isDeleted);
@@ -185,6 +246,16 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
   const getOrderHistory = useCallback(
     (orderId: string) => followupHistory.filter((h) => h.orderId === orderId).sort((a, b) => a.stepNumber - b.stepNumber),
     [followupHistory]
+  );
+
+  const getUpsellsForFollowup = useCallback(
+    (followupId: string) => upsellRecords.filter((r) => r.followupId === followupId),
+    [upsellRecords]
+  );
+
+  const getRepeatOrdersForFollowup = useCallback(
+    (followupId: string) => repeatOrderRecords.filter((r) => r.followupId === followupId),
+    [repeatOrderRecords]
   );
 
   const addOrder = useCallback(
@@ -224,19 +295,9 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       }
 
       const newOrder = mapRow(data);
-      setOrders((prev) => {
-        if (prev.some((o) => o.id === newOrder.id)) return prev;
-        return [newOrder, ...prev];
-      });
-
+      setOrders((prev) => { if (prev.some((o) => o.id === newOrder.id)) return prev; return [newOrder, ...prev]; });
       toast({ title: "Order created" });
-      addLog({
-        actionType: "Order Created",
-        userName,
-        role: role || "unknown",
-        entity: `Order #${data.invoice_id}`,
-        details: `Customer: ${order.customerName}`,
-      });
+      addLog({ actionType: "Order Created", userName, role: role || "unknown", entity: `Order #${data.invoice_id}`, details: `Customer: ${order.customerName}` });
     },
     [addLog, user, userName, role, toast]
   );
@@ -250,6 +311,8 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       upsellAttempted: boolean;
       upsellDetails: string;
       nextFollowupDate: string | null;
+      upsellEntries: UpsellEntry[];
+      repeatOrderEntries: RepeatOrderEntry[];
     }) => {
       // 1. Insert followup history record
       const { data: historyData, error: historyError } = await supabase
@@ -274,17 +337,75 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
         throw historyError;
       }
 
-      // 2. Update order status to completed
+      const followupId = historyData.id;
+
+      // 2. Insert upsell records
+      if (data.upsellEntries.length > 0) {
+        const upsellRows = data.upsellEntries.map((e) => ({
+          followup_id: followupId,
+          product_id: e.productId || null,
+          product_name: e.productName,
+          price: e.price,
+          note: e.note,
+          added_by: user?.id || null,
+        }));
+        const { error: upsellError } = await supabase.from("upsell_records").insert(upsellRows);
+        if (upsellError) console.error("[OrderStore] Upsell insert error:", upsellError);
+      }
+
+      // 3. Create repeat child orders and records
+      const parentOrder = orders.find((o) => o.id === data.orderId);
+      for (const entry of data.repeatOrderEntries) {
+        // Create child order inheriting customer info
+        const { data: childData, error: childError } = await supabase
+          .from("orders")
+          .insert({
+            customer_name: parentOrder?.customerName || "",
+            mobile: parentOrder?.mobile || "",
+            address: parentOrder?.address || "",
+            order_source: parentOrder?.orderSource || "Website",
+            product_id: entry.productId || null,
+            product_title: entry.productName,
+            price: entry.price,
+            note: entry.note,
+            followup_step: 1,
+            current_status: "pending",
+            assigned_to: parentOrder?.assignedTo || null,
+            assigned_to_name: parentOrder?.assignedToName || "",
+            order_date: new Date().toISOString().split("T")[0],
+            delivery_method: parentOrder?.deliveryMethod || "",
+            parent_order_id: data.orderId,
+            is_repeat: true,
+            health: "new",
+            created_by: user?.id,
+          })
+          .select()
+          .single();
+
+        if (childError) {
+          console.error("[OrderStore] Repeat child order error:", childError);
+          continue;
+        }
+
+        // Insert repeat_order_record
+        await supabase.from("repeat_order_records").insert({
+          followup_id: followupId,
+          product_id: entry.productId || null,
+          product_name: entry.productName,
+          price: entry.price,
+          note: entry.note,
+          child_order_id: childData.id,
+          added_by: user?.id || null,
+        });
+      }
+
+      // 4. Update order status to completed
       const isFinalStep = data.stepNumber === 5;
       const updatePayload: any = {
         current_status: "completed",
         followup_date: data.nextFollowupDate || null,
       };
-
-      // If final step, mark health as good
-      if (isFinalStep) {
-        updatePayload.health = "good";
-      }
+      if (isFinalStep) updatePayload.health = "good";
 
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
@@ -301,22 +422,45 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
       // Optimistic local updates
       const newHistoryEntry = mapHistoryRow(historyData);
-      setFollowupHistory((prev) => {
-        if (prev.some((h) => h.id === newHistoryEntry.id)) return prev;
-        return [...prev, newHistoryEntry];
-      });
+      setFollowupHistory((prev) => { if (prev.some((h) => h.id === newHistoryEntry.id)) return prev; return [...prev, newHistoryEntry]; });
 
       const updatedOrder = mapRow(orderData);
       setOrders((prev) => prev.map((o) => (o.id === updatedOrder.id ? updatedOrder : o)));
 
       toast({ title: `Step ${data.stepNumber} completed`, description: isFinalStep ? "Followup lifecycle fully completed!" : `Next followup on ${data.nextFollowupDate}` });
-      addLog({
-        actionType: "Followup Completed",
-        userName,
-        role: role || "unknown",
-        entity: `Order #${data.orderId}`,
-        details: `Step ${data.stepNumber} completed`,
-      });
+      addLog({ actionType: "Followup Completed", userName, role: role || "unknown", entity: `Order #${data.orderId}`, details: `Step ${data.stepNumber} completed${data.upsellEntries.length > 0 ? ` with ${data.upsellEntries.length} upsell(s)` : ""}${data.repeatOrderEntries.length > 0 ? `, ${data.repeatOrderEntries.length} repeat order(s)` : ""}` });
+    },
+    [user, userName, role, toast, addLog, orders]
+  );
+
+  const editFollowup = useCallback(
+    async (data: { followupId: string; note: string; problemsDiscussed: string }) => {
+      const { error } = await supabase
+        .from("followup_history")
+        .update({
+          note: data.note,
+          problems_discussed: data.problemsDiscussed,
+          edited_by: user?.id || null,
+          edited_at: new Date().toISOString(),
+        })
+        .eq("id", data.followupId);
+
+      if (error) {
+        console.error("[OrderStore] Edit followup error:", error);
+        toast({ title: "Error editing followup", description: error.message, variant: "destructive" });
+        throw error;
+      }
+
+      setFollowupHistory((prev) =>
+        prev.map((h) =>
+          h.id === data.followupId
+            ? { ...h, note: data.note, problemsDiscussed: data.problemsDiscussed, editedBy: user?.id || null, editedAt: new Date().toISOString() }
+            : h
+        )
+      );
+
+      toast({ title: "Followup record updated" });
+      addLog({ actionType: "Followup Edited", userName, role: role || "unknown", entity: `Followup #${data.followupId}`, details: "Admin edited followup record" });
     },
     [user, userName, role, toast, addLog]
   );
@@ -325,21 +469,14 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
     async (orderId: string) => {
       const childIds = orders.filter((o) => o.parentOrderId === orderId).map((o) => o.id);
       const idsToDelete = [orderId, ...childIds];
-
       setOrders((prev) => prev.map((o) => idsToDelete.includes(o.id) ? { ...o, isDeleted: true } : o));
-
-      const { error } = await supabase
-        .from("orders")
-        .update({ is_deleted: true })
-        .in("id", idsToDelete);
-
+      const { error } = await supabase.from("orders").update({ is_deleted: true }).in("id", idsToDelete);
       if (error) {
         console.error("[OrderStore] Soft delete error:", error);
         toast({ title: "Error deleting order", description: error.message, variant: "destructive" });
         setOrders((prev) => prev.map((o) => idsToDelete.includes(o.id) ? { ...o, isDeleted: false } : o));
         return;
       }
-
       toast({ title: "Order deleted" });
       addLog({ actionType: "Order Soft Deleted", userName, role: role || "unknown", entity: `Order #${orderId}` });
     },
@@ -352,21 +489,14 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       const childIds = orders.filter((o) => o.parentOrderId === orderId).map((o) => o.id);
       const idsToRestore = [orderId, ...childIds];
       if (order?.parentOrderId) idsToRestore.push(order.parentOrderId);
-
       setOrders((prev) => prev.map((o) => idsToRestore.includes(o.id) ? { ...o, isDeleted: false } : o));
-
-      const { error } = await supabase
-        .from("orders")
-        .update({ is_deleted: false })
-        .in("id", idsToRestore);
-
+      const { error } = await supabase.from("orders").update({ is_deleted: false }).in("id", idsToRestore);
       if (error) {
         console.error("[OrderStore] Restore error:", error);
         toast({ title: "Error restoring order", description: error.message, variant: "destructive" });
         setOrders((prev) => prev.map((o) => idsToRestore.includes(o.id) ? { ...o, isDeleted: true } : o));
         return;
       }
-
       toast({ title: "Order restored" });
       addLog({ actionType: "Order Restored", userName, role: role || "unknown", entity: `Order #${orderId}` });
     },
@@ -377,22 +507,15 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
     async (orderId: string) => {
       const childIds = orders.filter((o) => o.parentOrderId === orderId).map((o) => o.id);
       const idsToDelete = [orderId, ...childIds];
-
       const backup = orders.filter((o) => idsToDelete.includes(o.id));
       setOrders((prev) => prev.filter((o) => !idsToDelete.includes(o.id)));
-
-      const { error } = await supabase
-        .from("orders")
-        .delete()
-        .in("id", idsToDelete);
-
+      const { error } = await supabase.from("orders").delete().in("id", idsToDelete);
       if (error) {
         console.error("[OrderStore] Hard delete error:", error);
         toast({ title: "Error deleting order", description: error.message, variant: "destructive" });
         setOrders((prev) => [...backup, ...prev]);
         return;
       }
-
       toast({ title: "Order permanently deleted" });
       addLog({ actionType: "Order Permanently Deleted", userName, role: role || "unknown", entity: `Order #${orderId}` });
     },
@@ -403,53 +526,33 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
     async (updated: Order) => {
       const prev = orders.find((o) => o.id === updated.id);
       setOrders((list) => list.map((o) => (o.id === updated.id ? updated : o)));
-
       const { data, error } = await supabase
         .from("orders")
         .update({
-          customer_name: updated.customerName,
-          mobile: updated.mobile,
-          address: updated.address,
-          order_source: updated.orderSource,
-          product_id: updated.productId || null,
-          product_title: updated.productTitle,
-          price: updated.price,
-          note: updated.note,
-          followup_step: updated.followupStep,
-          followup_date: updated.followupDate || null,
-          assigned_to: updated.assignedTo || null,
-          assigned_to_name: updated.assignedToName,
-          order_date: updated.orderDate,
-          delivery_date: updated.deliveryDate || null,
-          delivery_method: updated.deliveryMethod,
-          health: updated.health,
-          paid_amount: updated.paidAmount || 0,
-          current_status: updated.currentStatus || "pending",
+          customer_name: updated.customerName, mobile: updated.mobile, address: updated.address,
+          order_source: updated.orderSource, product_id: updated.productId || null,
+          product_title: updated.productTitle, price: updated.price, note: updated.note,
+          followup_step: updated.followupStep, followup_date: updated.followupDate || null,
+          assigned_to: updated.assignedTo || null, assigned_to_name: updated.assignedToName,
+          order_date: updated.orderDate, delivery_date: updated.deliveryDate || null,
+          delivery_method: updated.deliveryMethod, health: updated.health,
+          paid_amount: updated.paidAmount || 0, current_status: updated.currentStatus || "pending",
         })
         .eq("id", updated.id)
         .select()
         .single();
-
       if (error) {
         console.error("[OrderStore] Update error:", error);
         toast({ title: "Error updating order", description: error.message, variant: "destructive" });
         if (prev) setOrders((list) => list.map((o) => (o.id === updated.id ? prev : o)));
         return;
       }
-
       if (data) {
         const confirmed = mapRow(data);
         setOrders((list) => list.map((o) => (o.id === confirmed.id ? confirmed : o)));
       }
-
       toast({ title: "Order updated" });
-      addLog({
-        actionType: "Order Edited",
-        userName,
-        role: role || "unknown",
-        entity: `Order #${updated.id}`,
-        details: `Updated order for ${updated.customerName}`,
-      });
+      addLog({ actionType: "Order Edited", userName, role: role || "unknown", entity: `Order #${updated.id}`, details: `Updated order for ${updated.customerName}` });
     },
     [orders, addLog, userName, role, toast]
   );
@@ -457,18 +560,11 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
   return (
     <OrderStoreContext.Provider
       value={{
-        orders,
-        deletedOrders,
-        activeOrders,
-        followupHistory,
-        loading,
-        softDelete,
-        restoreOrder,
-        hardDelete,
-        updateOrder,
-        addOrder,
-        completeFollowup,
-        getOrderHistory,
+        orders, deletedOrders, activeOrders, followupHistory,
+        upsellRecords, repeatOrderRecords, loading,
+        softDelete, restoreOrder, hardDelete, updateOrder, addOrder,
+        completeFollowup, editFollowup, getOrderHistory,
+        getUpsellsForFollowup, getRepeatOrdersForFollowup,
         refreshOrders: fetchOrders,
       }}
     >
