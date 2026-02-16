@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { useDeliveryMethods } from "@/hooks/useDeliveryMethods";
 import { mockSalesExecutives } from "@/data/mockData";
 
 interface ParsedRow {
@@ -47,7 +48,9 @@ export default function BulkImportPage() {
   const [rawHeaders, setRawHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<string[][]>([]);
   const [assignToExec, setAssignToExec] = useState("");
+  const [assignDeliveryMethod, setAssignDeliveryMethod] = useState("");
   const { members } = useTeamMembers();
+  const { methods: activeDeliveryMethods } = useDeliveryMethods({ activeOnly: true });
 
   const allExecutives = [
     ...members.map((m) => ({ id: m.userId, name: m.name })),
@@ -179,19 +182,35 @@ export default function BulkImportPage() {
                   </div>
                 ))}
               </div>
-              <div className="mt-4 pt-4 border-t border-border">
-                <Label className="text-xs font-medium text-muted-foreground">Assign all imported orders to (optional)</Label>
-                <Select value={assignToExec} onValueChange={setAssignToExec}>
-                  <SelectTrigger className="mt-1 h-8 text-xs w-64">
-                    <SelectValue placeholder="No assignment" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No assignment</SelectItem>
-                    {allExecutives.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground">Assign to executive (optional)</Label>
+                  <Select value={assignToExec} onValueChange={setAssignToExec}>
+                    <SelectTrigger className="mt-1 h-8 text-xs">
+                      <SelectValue placeholder="No assignment" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No assignment</SelectItem>
+                      {allExecutives.map((e) => (
+                        <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground">Delivery method (optional)</Label>
+                  <Select value={assignDeliveryMethod} onValueChange={setAssignDeliveryMethod}>
+                    <SelectTrigger className="mt-1 h-8 text-xs">
+                      <SelectValue placeholder="No default method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No default method</SelectItem>
+                      {activeDeliveryMethods.map((dm) => (
+                        <SelectItem key={dm.id} value={dm.id}>{dm.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="flex justify-end mt-4">
                 <Button size="sm" onClick={handlePreview}>Preview Data</Button>

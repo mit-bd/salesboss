@@ -1,23 +1,12 @@
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { mockDeliveryPartners } from "@/data/mockData";
 import { useProductStore } from "@/contexts/ProductStoreContext";
+import { useDeliveryMethods } from "@/hooks/useDeliveryMethods";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Order } from "@/types/data";
@@ -41,17 +30,15 @@ interface FormErrors {
   deliveryMethod?: string;
 }
 
-export default function EditOrderDialog({
-  order,
-  open,
-  onOpenChange,
-  onSave,
-}: EditOrderDialogProps) {
+export default function EditOrderDialog({ order, open, onOpenChange, onSave }: EditOrderDialogProps) {
   const { toast } = useToast();
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
-  const activePartners = mockDeliveryPartners.filter((dp) => dp.active);
+  const { methods: activePartners } = useDeliveryMethods({ activeOnly: true });
   const { products } = useProductStore();
+
+  // Include the current order's method even if inactive, so it shows in dropdown
+  const currentMethodInList = activePartners.some((dp) => dp.id === order.deliveryMethod);
 
   const [form, setForm] = useState({
     customerName: order.customerName,
@@ -70,8 +57,7 @@ export default function EditOrderDialog({
     const e: FormErrors = {};
     if (!form.customerName.trim()) e.customerName = "Name is required";
     if (!form.mobile.trim()) e.mobile = "Mobile is required";
-    else if (!/^\d{10,15}$/.test(form.mobile.replace(/\s/g, "")))
-      e.mobile = "Invalid mobile number";
+    else if (!/^\d{10,15}$/.test(form.mobile.replace(/\s/g, ""))) e.mobile = "Invalid mobile number";
     if (!form.address.trim()) e.address = "Address is required";
     if (!form.orderSource) e.orderSource = "Order source is required";
     if (!form.orderDate) e.orderDate = "Order date is required";
@@ -83,11 +69,7 @@ export default function EditOrderDialog({
 
   const handleProductChange = (productId: string) => {
     const product = products.find((p) => p.id === productId);
-    setForm((f) => ({
-      ...f,
-      productId,
-      price: product ? String(product.price) : f.price,
-    }));
+    setForm((f) => ({ ...f, productId, price: product ? String(product.price) : f.price }));
   };
 
   const handleSubmit = async () => {
@@ -110,10 +92,7 @@ export default function EditOrderDialog({
     };
     try {
       await onSave?.(updated);
-      toast({
-        title: "Order Updated",
-        description: `Order #${order.invoiceId || order.id} has been updated successfully.`,
-      });
+      toast({ title: "Order Updated", description: `Order #${order.invoiceId || order.id} has been updated successfully.` });
       onOpenChange(false);
     } catch (err) {
       console.error("Order update error:", err);
@@ -125,8 +104,7 @@ export default function EditOrderDialog({
 
   const update = (key: string, value: string) => {
     setForm((f) => ({ ...f, [key]: value }));
-    if (errors[key as keyof FormErrors])
-      setErrors((e) => ({ ...e, [key]: undefined }));
+    if (errors[key as keyof FormErrors]) setErrors((e) => ({ ...e, [key]: undefined }));
   };
 
   return (
@@ -139,79 +117,37 @@ export default function EditOrderDialog({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-xs">Customer Name *</Label>
-              <Input
-                value={form.customerName}
-                onChange={(e) => update("customerName", e.target.value)}
-                className="mt-1"
-              />
-              {errors.customerName && (
-                <p className="text-xs text-destructive mt-1">
-                  {errors.customerName}
-                </p>
-              )}
+              <Input value={form.customerName} onChange={(e) => update("customerName", e.target.value)} className="mt-1" />
+              {errors.customerName && <p className="text-xs text-destructive mt-1">{errors.customerName}</p>}
             </div>
             <div>
               <Label className="text-xs">Mobile Number *</Label>
-              <Input
-                value={form.mobile}
-                onChange={(e) => update("mobile", e.target.value)}
-                className="mt-1"
-              />
-              {errors.mobile && (
-                <p className="text-xs text-destructive mt-1">{errors.mobile}</p>
-              )}
+              <Input value={form.mobile} onChange={(e) => update("mobile", e.target.value)} className="mt-1" />
+              {errors.mobile && <p className="text-xs text-destructive mt-1">{errors.mobile}</p>}
             </div>
           </div>
           <div>
             <Label className="text-xs">Address *</Label>
-            <Input
-              value={form.address}
-              onChange={(e) => update("address", e.target.value)}
-              className="mt-1"
-            />
-            {errors.address && (
-              <p className="text-xs text-destructive mt-1">{errors.address}</p>
-            )}
+            <Input value={form.address} onChange={(e) => update("address", e.target.value)} className="mt-1" />
+            {errors.address && <p className="text-xs text-destructive mt-1">{errors.address}</p>}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-xs">Order Source *</Label>
-              <Select
-                value={form.orderSource}
-                onValueChange={(v) => update("orderSource", v)}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={form.orderSource} onValueChange={(v) => update("orderSource", v)}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {ORDER_SOURCES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
+                  {ORDER_SOURCES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
-              {errors.orderSource && (
-                <p className="text-xs text-destructive mt-1">
-                  {errors.orderSource}
-                </p>
-              )}
+              {errors.orderSource && <p className="text-xs text-destructive mt-1">{errors.orderSource}</p>}
             </div>
             <div>
               <Label className="text-xs">Product</Label>
-              <Select
-                value={form.productId}
-                onValueChange={handleProductChange}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={form.productId} onValueChange={handleProductChange}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {products.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.title} - ৳{p.price}
-                    </SelectItem>
-                  ))}
+                  {products.map((p) => <SelectItem key={p.id} value={p.id}>{p.title} - ৳{p.price}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -219,78 +155,40 @@ export default function EditOrderDialog({
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label className="text-xs">Order Date *</Label>
-              <Input
-                type="date"
-                value={form.orderDate}
-                onChange={(e) => update("orderDate", e.target.value)}
-                className="mt-1"
-              />
-              {errors.orderDate && (
-                <p className="text-xs text-destructive mt-1">
-                  {errors.orderDate}
-                </p>
-              )}
+              <Input type="date" value={form.orderDate} onChange={(e) => update("orderDate", e.target.value)} className="mt-1" />
+              {errors.orderDate && <p className="text-xs text-destructive mt-1">{errors.orderDate}</p>}
             </div>
             <div>
               <Label className="text-xs">Delivery Date *</Label>
-              <Input
-                type="date"
-                value={form.deliveryDate}
-                onChange={(e) => update("deliveryDate", e.target.value)}
-                className="mt-1"
-              />
-              {errors.deliveryDate && (
-                <p className="text-xs text-destructive mt-1">
-                  {errors.deliveryDate}
-                </p>
-              )}
+              <Input type="date" value={form.deliveryDate} onChange={(e) => update("deliveryDate", e.target.value)} className="mt-1" />
+              {errors.deliveryDate && <p className="text-xs text-destructive mt-1">{errors.deliveryDate}</p>}
             </div>
             <div>
               <Label className="text-xs">Delivery Method *</Label>
-              <Select
-                value={form.deliveryMethod}
-                onValueChange={(v) => update("deliveryMethod", v)}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select" />
-                </SelectTrigger>
+              <Select value={form.deliveryMethod} onValueChange={(v) => update("deliveryMethod", v)}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select" /></SelectTrigger>
                 <SelectContent>
-                  {activePartners.map((dp) => (
-                    <SelectItem key={dp.id} value={dp.id}>
-                      {dp.name}
+                  {activePartners.map((dp) => <SelectItem key={dp.id} value={dp.id}>{dp.name}</SelectItem>)}
+                  {!currentMethodInList && form.deliveryMethod && (
+                    <SelectItem key={form.deliveryMethod} value={form.deliveryMethod} disabled>
+                      {form.deliveryMethod} (inactive)
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
-              {errors.deliveryMethod && (
-                <p className="text-xs text-destructive mt-1">
-                  {errors.deliveryMethod}
-                </p>
-              )}
+              {errors.deliveryMethod && <p className="text-xs text-destructive mt-1">{errors.deliveryMethod}</p>}
             </div>
           </div>
           <div>
             <Label className="text-xs">Price (৳)</Label>
-            <Input
-              type="number"
-              value={form.price}
-              onChange={(e) => update("price", e.target.value)}
-              className="mt-1"
-            />
+            <Input type="number" value={form.price} onChange={(e) => update("price", e.target.value)} className="mt-1" />
           </div>
           <div>
             <Label className="text-xs">Order Note</Label>
-            <Textarea
-              value={form.note}
-              onChange={(e) => update("note", e.target.value)}
-              className="mt-1"
-              rows={2}
-            />
+            <Textarea value={form.note} onChange={(e) => update("note", e.target.value)} className="mt-1" rows={2} />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
             <Button onClick={handleSubmit} disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save Changes
