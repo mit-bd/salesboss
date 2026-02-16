@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -26,10 +26,8 @@ export default function SettingsPage() {
   const [profileImage, setProfileImage] = useState<string>("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-  });
+  const [form, setForm] = useState({ name: "", phone: "" });
+  const [originalForm, setOriginalForm] = useState({ name: "", phone: "" });
 
   // Email report state
   const [emailConfig, setEmailConfig] = useState<EmailReportConfig>({ ...mockEmailReportConfig });
@@ -38,13 +36,28 @@ export default function SettingsPage() {
   // Hydrate from DB profile
   useEffect(() => {
     if (profile) {
-      setForm({
+      const initial = {
         name: profile.full_name || "",
         phone: profile.phone || "",
-      });
+      };
+      setForm(initial);
+      setOriginalForm(initial);
       setProfileImage(profile.avatar_url || "");
     }
   }, [profile]);
+
+  const isDirty = useMemo(() => {
+    return form.name !== originalForm.name || form.phone !== originalForm.phone || imageFile !== null;
+  }, [form, originalForm, imageFile]);
+
+  // Warn on navigation with unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) { e.preventDefault(); e.returnValue = ""; }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -62,7 +75,6 @@ export default function SettingsPage() {
 
     let avatarUrl = profile?.avatar_url || "";
 
-    // Upload avatar if new file selected
     if (imageFile) {
       const ext = imageFile.name.split(".").pop();
       const path = `${user.id}/${Date.now()}.${ext}`;
@@ -77,7 +89,6 @@ export default function SettingsPage() {
       avatarUrl = data.publicUrl;
     }
 
-    // Update profile in DB
     const { error } = await supabase
       .from("profiles")
       .update({
@@ -93,6 +104,7 @@ export default function SettingsPage() {
     } else {
       await refreshProfile();
       setImageFile(null);
+      setOriginalForm({ name: form.name.trim(), phone: form.phone.trim() });
       toast({ title: "Profile Updated", description: "Your profile has been saved." });
     }
     setSaving(false);
@@ -157,10 +169,11 @@ export default function SettingsPage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-2">Email: {user?.email}</p>
-          <div className="flex justify-end mt-4">
-            <Button size="sm" onClick={handleSave} disabled={saving}>
+          <div className="flex items-center justify-end gap-3 mt-4">
+            {isDirty && <span className="text-xs text-muted-foreground">Unsaved changes</span>}
+            <Button size="sm" onClick={handleSave} disabled={saving || !isDirty}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Changes
+              Update Profile
             </Button>
           </div>
         </div>
@@ -223,12 +236,7 @@ export default function SettingsPage() {
                 {emailConfig.recipients.map((email) => (
                   <Badge key={email} variant="secondary" className="text-xs gap-1">
                     {email}
-                    <button
-                      onClick={() => removeRecipient(email)}
-                      className="ml-1 text-muted-foreground hover:text-foreground"
-                    >
-                      ×
-                    </button>
+                    <button onClick={() => removeRecipient(email)} className="ml-1 text-muted-foreground hover:text-foreground">×</button>
                   </Badge>
                 ))}
               </div>

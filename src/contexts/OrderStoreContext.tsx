@@ -466,14 +466,13 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
     async (orderId: string) => {
       const childIds = orders.filter((o) => o.parentOrderId === orderId).map((o) => o.id);
       const idsToDelete = [orderId, ...childIds];
-      setOrders((prev) => prev.map((o) => idsToDelete.includes(o.id) ? { ...o, isDeleted: true } : o));
       const { error } = await supabase.from("orders").update({ is_deleted: true }).in("id", idsToDelete);
       if (error) {
         console.error("[OrderStore] Soft delete error:", error);
         toast({ title: "Error deleting order", description: error.message, variant: "destructive" });
-        setOrders((prev) => prev.map((o) => idsToDelete.includes(o.id) ? { ...o, isDeleted: false } : o));
         return;
       }
+      setOrders((prev) => prev.map((o) => idsToDelete.includes(o.id) ? { ...o, isDeleted: true } : o));
       toast({ title: "Order deleted" });
       addLog({ actionType: "Order Soft Deleted", userName, role: role || "unknown", entity: `Order #${orderId}` });
     },
@@ -486,14 +485,13 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       const childIds = orders.filter((o) => o.parentOrderId === orderId).map((o) => o.id);
       const idsToRestore = [orderId, ...childIds];
       if (order?.parentOrderId) idsToRestore.push(order.parentOrderId);
-      setOrders((prev) => prev.map((o) => idsToRestore.includes(o.id) ? { ...o, isDeleted: false } : o));
       const { error } = await supabase.from("orders").update({ is_deleted: false }).in("id", idsToRestore);
       if (error) {
         console.error("[OrderStore] Restore error:", error);
         toast({ title: "Error restoring order", description: error.message, variant: "destructive" });
-        setOrders((prev) => prev.map((o) => idsToRestore.includes(o.id) ? { ...o, isDeleted: true } : o));
         return;
       }
+      setOrders((prev) => prev.map((o) => idsToRestore.includes(o.id) ? { ...o, isDeleted: false } : o));
       toast({ title: "Order restored" });
       addLog({ actionType: "Order Restored", userName, role: role || "unknown", entity: `Order #${orderId}` });
     },
@@ -504,15 +502,13 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
     async (orderId: string) => {
       const childIds = orders.filter((o) => o.parentOrderId === orderId).map((o) => o.id);
       const idsToDelete = [orderId, ...childIds];
-      const backup = orders.filter((o) => idsToDelete.includes(o.id));
-      setOrders((prev) => prev.filter((o) => !idsToDelete.includes(o.id)));
       const { error } = await supabase.from("orders").delete().in("id", idsToDelete);
       if (error) {
         console.error("[OrderStore] Hard delete error:", error);
         toast({ title: "Error deleting order", description: error.message, variant: "destructive" });
-        setOrders((prev) => [...backup, ...prev]);
         return;
       }
+      setOrders((prev) => prev.filter((o) => !idsToDelete.includes(o.id)));
       toast({ title: "Order permanently deleted" });
       addLog({ actionType: "Order Permanently Deleted", userName, role: role || "unknown", entity: `Order #${orderId}` });
     },
@@ -521,8 +517,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
   const updateOrder = useCallback(
     async (updated: Order) => {
-      const prev = orders.find((o) => o.id === updated.id);
-      setOrders((list) => list.map((o) => (o.id === updated.id ? updated : o)));
       const { data, error } = await supabase
         .from("orders")
         .update({
@@ -541,8 +535,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error("[OrderStore] Update error:", error);
         toast({ title: "Error updating order", description: error.message, variant: "destructive" });
-        if (prev) setOrders((list) => list.map((o) => (o.id === updated.id ? prev : o)));
-        return;
+        throw error;
       }
       if (data) {
         const confirmed = mapRow(data);
@@ -551,7 +544,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       toast({ title: "Order updated" });
       addLog({ actionType: "Order Edited", userName, role: role || "unknown", entity: `Order #${updated.id}`, details: `Updated order for ${updated.customerName}` });
     },
-    [orders, addLog, userName, role, toast]
+    [addLog, userName, role, toast]
   );
 
   return (
