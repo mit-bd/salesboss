@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      delivery_methods: {
+        Row: {
+          contact_info: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string
+        }
+        Insert: {
+          contact_info?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string
+        }
+        Update: {
+          contact_info?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string
+        }
+        Relationships: []
+      }
       followup_history: {
         Row: {
           completed_at: string

@@ -5,10 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { mockDeliveryPartners, mockSalesExecutives } from "@/data/mockData";
+import { mockSalesExecutives } from "@/data/mockData";
 import { useProductStore } from "@/contexts/ProductStoreContext";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { useDeliveryMethods } from "@/hooks/useDeliveryMethods";
 import { Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -29,12 +30,11 @@ export default function CreateOrderDialog() {
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
   const [errors, setErrors] = useState<FormErrors>({});
-  const activePartners = mockDeliveryPartners.filter((dp) => dp.active);
+  const { methods: activePartners } = useDeliveryMethods({ activeOnly: true });
   const { products } = useProductStore();
   const { addOrder } = useOrderStore();
   const { members } = useTeamMembers();
 
-  // Combine DB team with mock for backward compatibility
   const allExecutives = [
     ...members.map((m) => ({ id: m.userId, name: m.name })),
     ...mockSalesExecutives.filter((se) => !members.some((m) => m.userId === se.id)).map((se) => ({ id: se.id, name: se.name })),
