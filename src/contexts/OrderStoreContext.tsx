@@ -34,6 +34,11 @@ interface OrderStoreContextType {
     note: string;
     problemsDiscussed: string;
   }) => Promise<void>;
+  updateUpsellRecord: (id: string, data: { productId: string | null; productName: string; price: number; note: string }) => Promise<void>;
+  deleteUpsellRecord: (id: string) => Promise<void>;
+  addUpsellRecord: (followupId: string, data: { productId: string | null; productName: string; price: number; note: string }) => Promise<void>;
+  updateRepeatOrderRecord: (id: string, data: { productId: string | null; productName: string; price: number; note: string }) => Promise<void>;
+  deleteRepeatOrderRecord: (id: string) => Promise<void>;
   getOrderHistory: (orderId: string) => FollowupHistoryEntry[];
   getUpsellsForFollowup: (followupId: string) => UpsellRecord[];
   getRepeatOrdersForFollowup: (followupId: string) => RepeatOrderRecord[];
@@ -547,6 +552,93 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
     [addLog, userName, role, toast]
   );
 
+  const updateUpsellRecord = useCallback(
+    async (id: string, data: { productId: string | null; productName: string; price: number; note: string }) => {
+      const { error } = await (supabase.from as any)("upsell_records").update({
+        product_id: data.productId,
+        product_name: data.productName,
+        price: data.price,
+        note: data.note,
+      }).eq("id", id);
+      if (error) { toast({ title: "Error updating upsell", description: error.message, variant: "destructive" }); throw error; }
+      setUpsellRecords((prev) => prev.map((r) => r.id === id ? { ...r, ...data } : r));
+      toast({ title: "Upsell record updated" });
+      addLog({ actionType: "Upsell Edited", userName, role: role || "unknown", entity: `Upsell #${id}`, details: `Product: ${data.productName}` });
+    },
+    [toast, addLog, userName, role]
+  );
+
+  const deleteUpsellRecord = useCallback(
+    async (id: string) => {
+      const { error } = await (supabase.from as any)("upsell_records").delete().eq("id", id);
+      if (error) { toast({ title: "Error deleting upsell", description: error.message, variant: "destructive" }); throw error; }
+      setUpsellRecords((prev) => prev.filter((r) => r.id !== id));
+      toast({ title: "Upsell record deleted" });
+      addLog({ actionType: "Upsell Deleted", userName, role: role || "unknown", entity: `Upsell #${id}` });
+    },
+    [toast, addLog, userName, role]
+  );
+
+  const addUpsellRecord = useCallback(
+    async (followupId: string, data: { productId: string | null; productName: string; price: number; note: string }) => {
+      const { data: newRec, error } = await (supabase.from as any)("upsell_records").insert({
+        followup_id: followupId,
+        product_id: data.productId,
+        product_name: data.productName,
+        price: data.price,
+        note: data.note,
+        added_by: user?.id || null,
+      }).select().single();
+      if (error) { toast({ title: "Error adding upsell", description: error.message, variant: "destructive" }); throw error; }
+      setUpsellRecords((prev) => [...prev, mapUpsellRow(newRec)]);
+      toast({ title: "Upsell record added" });
+      addLog({ actionType: "Upsell Added", userName, role: role || "unknown", entity: `Followup #${followupId}`, details: `Product: ${data.productName}` });
+    },
+    [user, toast, addLog, userName, role]
+  );
+
+  const updateRepeatOrderRecord = useCallback(
+    async (id: string, data: { productId: string | null; productName: string; price: number; note: string }) => {
+      const record = repeatOrderRecords.find((r) => r.id === id);
+      const { error } = await (supabase.from as any)("repeat_order_records").update({
+        product_id: data.productId,
+        product_name: data.productName,
+        price: data.price,
+        note: data.note,
+      }).eq("id", id);
+      if (error) { toast({ title: "Error updating repeat order", description: error.message, variant: "destructive" }); throw error; }
+      // Also update the child order if it exists
+      if (record?.childOrderId) {
+        await supabase.from("orders").update({
+          product_id: data.productId || null,
+          product_title: data.productName,
+          price: data.price,
+          note: data.note,
+        }).eq("id", record.childOrderId);
+      }
+      setRepeatOrderRecords((prev) => prev.map((r) => r.id === id ? { ...r, ...data } : r));
+      toast({ title: "Repeat order record updated" });
+      addLog({ actionType: "Repeat Order Edited", userName, role: role || "unknown", entity: `Repeat #${id}`, details: `Product: ${data.productName}` });
+    },
+    [repeatOrderRecords, toast, addLog, userName, role]
+  );
+
+  const deleteRepeatOrderRecord = useCallback(
+    async (id: string) => {
+      const record = repeatOrderRecords.find((r) => r.id === id);
+      const { error } = await (supabase.from as any)("repeat_order_records").delete().eq("id", id);
+      if (error) { toast({ title: "Error deleting repeat order", description: error.message, variant: "destructive" }); throw error; }
+      // Soft-delete the child order if it exists
+      if (record?.childOrderId) {
+        await supabase.from("orders").update({ is_deleted: true }).eq("id", record.childOrderId);
+      }
+      setRepeatOrderRecords((prev) => prev.filter((r) => r.id !== id));
+      toast({ title: "Repeat order record deleted" });
+      addLog({ actionType: "Repeat Order Deleted", userName, role: role || "unknown", entity: `Repeat #${id}` });
+    },
+    [repeatOrderRecords, toast, addLog, userName, role]
+  );
+
   return (
     <OrderStoreContext.Provider
       value={{
@@ -555,6 +647,8 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
         softDelete, restoreOrder, hardDelete, updateOrder, addOrder,
         completeFollowup, editFollowup, getOrderHistory,
         getUpsellsForFollowup, getRepeatOrdersForFollowup,
+        updateUpsellRecord, deleteUpsellRecord, addUpsellRecord,
+        updateRepeatOrderRecord, deleteRepeatOrderRecord,
         refreshOrders: fetchOrders,
       }}
     >
