@@ -17,41 +17,49 @@ import {
   Database,
   Target,
   LogOut,
+  KeyRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useRole } from "@/contexts/RoleContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/contexts/PermissionContext";
 import { Button } from "@/components/ui/button";
 
-const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, path: "/", adminOnly: false },
-  { label: "All Orders", icon: ShoppingCart, path: "/orders", adminOnly: false },
-  { label: "Followups", icon: PhoneForwarded, path: "/followups", adminOnly: false },
-  { label: "Repeat Orders", icon: RefreshCw, path: "/repeat-orders", adminOnly: false },
-  { label: "Upsell", icon: ArrowUpRight, path: "/upsell", adminOnly: false },
-  { label: "Sales Executives", icon: BarChart3, path: "/sales-executives", adminOnly: false },
-  { label: "Targets & Commission", icon: Target, path: "/commission", adminOnly: true },
-  { label: "Products", icon: Package, path: "/products", adminOnly: false },
-  { label: "Delivery Methods", icon: Truck, path: "/delivery-methods", adminOnly: false },
-  { label: "Bulk Import", icon: Upload, path: "/bulk-import", adminOnly: false },
-  { label: "Team", icon: Users, path: "/team", adminOnly: false },
-  { label: "Backup Center", icon: Database, path: "/backup-center", adminOnly: true },
-  { label: "Deleted Orders", icon: Trash2, path: "/deleted-orders", adminOnly: true },
-  { label: "Audit Logs", icon: Shield, path: "/audit-logs", adminOnly: true },
-  { label: "Export & Backup", icon: Download, path: "/export", adminOnly: true },
-  { label: "Settings", icon: Settings, path: "/settings", adminOnly: false },
-];
+interface NavItem {
+  label: string;
+  icon: any;
+  path: string;
+  permission?: string; // required permission key
+}
 
-const followupBadges: Record<string, number> = {
-  "/followups": 7,
-};
+const navItems: NavItem[] = [
+  { label: "Dashboard", icon: LayoutDashboard, path: "/" },
+  { label: "All Orders", icon: ShoppingCart, path: "/orders", permission: "orders.view" },
+  { label: "Followups", icon: PhoneForwarded, path: "/followups", permission: "followups.view" },
+  { label: "Repeat Orders", icon: RefreshCw, path: "/repeat-orders", permission: "orders.view" },
+  { label: "Upsell", icon: ArrowUpRight, path: "/upsell", permission: "followups.view" },
+  { label: "Sales Executives", icon: BarChart3, path: "/sales-executives", permission: "sales.view_performance" },
+  { label: "Targets & Commission", icon: Target, path: "/commission", permission: "commission.view" },
+  { label: "Products", icon: Package, path: "/products", permission: "products.view" },
+  { label: "Delivery Methods", icon: Truck, path: "/delivery-methods", permission: "delivery.view" },
+  { label: "Bulk Import", icon: Upload, path: "/bulk-import", permission: "orders.create" },
+  { label: "Team", icon: Users, path: "/team" },
+  { label: "Roles", icon: KeyRound, path: "/roles", permission: "roles.manage" },
+  { label: "Backup Center", icon: Database, path: "/backup-center", permission: "backup.view" },
+  { label: "Deleted Orders", icon: Trash2, path: "/deleted-orders", permission: "orders.delete" },
+  { label: "Audit Logs", icon: Shield, path: "/audit-logs", permission: "audit.view" },
+  { label: "Export & Backup", icon: Download, path: "/export", permission: "backup.export" },
+  { label: "Settings", icon: Settings, path: "/settings" },
+];
 
 export default function AppSidebar() {
   const location = useLocation();
-  const { isAdmin } = useRole();
   const { user, profile, role, signOut } = useAuth();
+  const { hasPermission } = usePermissions();
 
-  const visibleItems = navItems.filter((item) => !item.adminOnly || isAdmin);
+  const visibleItems = navItems.filter((item) => {
+    if (!item.permission) return true;
+    return hasPermission(item.permission);
+  });
 
   const displayName = profile?.full_name || user?.email?.split("@")[0] || "User";
   const initials = displayName
@@ -75,7 +83,6 @@ export default function AppSidebar() {
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {visibleItems.map((item) => {
           const isActive = location.pathname === item.path;
-          const badge = followupBadges[item.path];
           return (
             <Link
               key={item.path}
@@ -89,11 +96,6 @@ export default function AppSidebar() {
             >
               <item.icon className="h-4 w-4 shrink-0" />
               <span className="flex-1">{item.label}</span>
-              {badge && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-[11px] font-semibold text-sidebar-primary-foreground">
-                  {badge}
-                </span>
-              )}
             </Link>
           );
         })}

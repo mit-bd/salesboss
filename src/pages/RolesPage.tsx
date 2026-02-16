@@ -1,0 +1,241 @@
+import { useState, useEffect, useCallback } from "react";
+import AppLayout from "@/components/layout/AppLayout";
+import { supabase } from "@/integrations/supabase/client";
+import { useRole } from "@/contexts/RoleContext";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Shield, Save } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/contexts/AuditLogContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { cn } from "@/lib/utils";
+
+interface Permission {
+  key: string;
+  category: string;
+  label: string;
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Admin",
+  sub_admin: "Sub Admin",
+  sales_executive: "Sales Executive",
+};
+
+const SYSTEM_ROLES = ["admin", "sub_admin", "sales_executive"];
+
+export default function RolesPage() {
+  const { isAdmin } = useRole();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { addLog } = useAuditLog();
+  const { profile, role: userRole } = useAuth();
+  const userName = profile?.full_name || "Admin User";
+
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [selectedRole, setSelectedRole] = useState("sub_admin");
+  const [dirty, setDirty] = useState(false);
+  const [originalPerms, setOriginalPerms] = useState<string[]>([]);
+
+  const fetchData = useCallback(async () => {
+    const [permsRes, rpRes] = await Promise.all([
+      (supabase.from as any)("permissions").select("*").order("category"),
+      (supabase.from as any)("role_permissions").select("*"),
+    ]);
+
+    if (permsRes.error) { console.error(permsRes.error); return; }
+    if (rpRes.error) { console.error(rpRes.error); return; }
+
+    setPermissions(permsRes.data.map((r: any) => ({ key: r.key, category: r.category, label: r.label })));
+
+    const grouped: Record<string, string[]> = {};
+    for (const rp of rpRes.data) {
+      if (!grouped[rp.role]) grouped[rp.role] = [];
+      grouped[rp.role].push(rp.permission_key);
+    }
+    setRolePermissions(grouped);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    const current = rolePermissions[selectedRole] || [];
+    setOriginalPerms([...current]);
+    setDirty(false);
+  }, [selectedRole, rolePermissions]);
+
+  if (!isAdmin) {
+    navigate("/");
+    return null;
+  }
+
+  // Group permissions by category
+  const categories = permissions.reduce<Record<string, Permission[]>>((acc, p) => {
+    if (!acc[p.category]) acc[p.category] = [];
+    acc[p.category].push(p);
+    return acc;
+  }, {});
+
+  const currentPerms = rolePermissions[selectedRole] || [];
+
+  const togglePermission = (key: string) => {
+    if (selectedRole === "admin") return; // Admin cannot be modified
+    const updated = currentPerms.includes(key)
+      ? currentPerms.filter((k) => k !== key)
+      : [...currentPerms, key];
+    setRolePermissions((prev) => ({ ...prev, [selectedRole]: updated }));
+    setDirty(JSON.stringify(updated.sort()) !== JSON.stringify(originalPerms.sort()));
+  };
+
+  const toggleCategory = (category: string) => {
+    if (selectedRole === "admin") return;
+    const catKeys = categories[category].map((p) => p.key);
+    const allChecked = catKeys.every((k) => currentPerms.includes(k));
+    let updated: string[];
+    if (allChecked) {
+      updated = currentPerms.filter((k) => !catKeys.includes(k));
+    } else {
+      updated = [...new Set([...currentPerms, ...catKeys])];
+    }
+    setRolePermissions((prev) => ({ ...prev, [selectedRole]: updated }));
+    setDirty(JSON.stringify(updated.sort()) !== JSON.stringify(originalPerms.sort()));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Delete existing permissions for this role
+      await (supabase.from as any)("role_permissions").delete().eq("role", selectedRole);
+      // Insert new ones
+      if (currentPerms.length > 0) {
+        const rows = currentPerms.map((key) => ({ role: selectedRole, permission_key: key }));
+        const { error } = await (supabase.from as any)("role_permissions").insert(rows);
+        if (error) throw error;
+      }
+      setOriginalPerms([...currentPerms]);
+      setDirty(false);
+      toast({ title: "Permissions saved", description: `Updated permissions for ${ROLE_LABELS[selectedRole] || selectedRole}.` });
+      addLog({ actionType: "Role Permissions Updated", userName, role: userRole || "unknown", entity: ROLE_LABELS[selectedRole] || selectedRole, details: `${currentPerms.length} permissions assigned` });
+    } catch (err: any) {
+      toast({ title: "Error saving permissions", description: err.message, variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  return (
+    <AppLayout>
+      <div className="max-w-4xl animate-fade-in">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground flex items-center gap-2">
+              <Shield className="h-5 w-5" /> Roles & Permissions
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">Manage permission sets for each role</p>
+          </div>
+          {dirty && (
+            <Button onClick={handleSave} disabled={saving} className="gap-1.5">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save Changes
+            </Button>
+          )}
+        </div>
+
+        {/* Role Tabs */}
+        <div className="flex gap-2 mb-6">
+          {SYSTEM_ROLES.map((r) => (
+            <button
+              key={r}
+              onClick={() => setSelectedRole(r)}
+              className={cn(
+                "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                selectedRole === r
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              )}
+            >
+              {ROLE_LABELS[r]}
+              {r === "admin" && <Badge variant="outline" className="ml-2 text-[9px] h-4 px-1">Locked</Badge>}
+            </button>
+          ))}
+        </div>
+
+        {selectedRole === "admin" && (
+          <div className="rounded-xl border border-border bg-info/5 p-4 mb-4">
+            <p className="text-sm text-info font-medium">Admin role has full access to all permissions. This cannot be modified.</p>
+          </div>
+        )}
+
+        {/* Permission Matrix */}
+        <div className="space-y-4">
+          {Object.entries(categories).map(([category, perms]) => {
+            const allChecked = perms.every((p) => currentPerms.includes(p.key));
+            const someChecked = perms.some((p) => currentPerms.includes(p.key));
+            return (
+              <div key={category} className="rounded-xl border border-border bg-card p-4 card-shadow">
+                <div className="flex items-center gap-3 mb-3 pb-3 border-b border-border">
+                  <Checkbox
+                    checked={allChecked}
+                    // @ts-ignore
+                    indeterminate={someChecked && !allChecked}
+                    onCheckedChange={() => toggleCategory(category)}
+                    disabled={selectedRole === "admin"}
+                  />
+                  <h3 className="text-sm font-semibold text-foreground">{category}</h3>
+                  <span className="text-xs text-muted-foreground">
+                    {perms.filter((p) => currentPerms.includes(p.key)).length}/{perms.length}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {perms.map((p) => (
+                    <label
+                      key={p.key}
+                      className={cn(
+                        "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm cursor-pointer transition-all duration-200",
+                        currentPerms.includes(p.key) ? "bg-primary/5" : "hover:bg-muted/50",
+                        selectedRole === "admin" && "opacity-60 cursor-not-allowed"
+                      )}
+                    >
+                      <Checkbox
+                        checked={currentPerms.includes(p.key)}
+                        onCheckedChange={() => togglePermission(p.key)}
+                        disabled={selectedRole === "admin"}
+                      />
+                      <span className="text-foreground">{p.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {dirty && (
+          <div className="sticky bottom-4 mt-6">
+            <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 flex items-center justify-between">
+              <p className="text-sm text-warning font-medium">You have unsaved permission changes</p>
+              <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5">
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Save
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </AppLayout>
+  );
+}

@@ -208,6 +208,30 @@ export type Database = {
           },
         ]
       }
+      permissions: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          key: string
+          label: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          key: string
+          label: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          key?: string
+          label?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           created_at: string
@@ -335,6 +359,35 @@ export type Database = {
           },
         ]
       }
+      role_permissions: {
+        Row: {
+          created_at: string
+          id: string
+          permission_key: string
+          role: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          permission_key: string
+          role: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          permission_key?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_permission_key_fkey"
+            columns: ["permission_key"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
       upsell_records: {
         Row: {
           added_by: string | null
@@ -413,6 +466,10 @@ export type Database = {
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      has_permission: {
+        Args: { _permission: string; _user_id: string }
+        Returns: boolean
       }
       has_role: {
         Args: {
