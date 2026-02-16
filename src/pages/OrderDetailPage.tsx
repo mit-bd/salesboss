@@ -4,15 +4,22 @@ import AppLayout from "@/components/layout/AppLayout";
 import { mockDeliveryPartners } from "@/data/mockData";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Phone, MapPin, Package, Calendar, RefreshCw, ShoppingCart, Zap, Truck, Edit2, Trash2, CheckCircle, Clock, MessageSquare } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Phone, MapPin, Package, Calendar, RefreshCw, ShoppingCart, Zap, Truck, Edit2, Trash2, CheckCircle, Clock, MessageSquare, User, UserPlus, UserX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/contexts/RoleContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useAuditLog } from "@/contexts/AuditLogContext";
 import EditOrderDialog from "@/components/EditOrderDialog";
 import DeleteOrderDialog from "@/components/DeleteOrderDialog";
 import CompleteFollowupDialog from "@/components/CompleteFollowupDialog";
 import EditFollowupDialog from "@/components/EditFollowupDialog";
 import { useToast } from "@/hooks/use-toast";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { FollowupHistoryEntry } from "@/types/data";
+import { supabase } from "@/integrations/supabase/client";
+import { mockSalesExecutives } from "@/data/mockData";
 
 const STEP_COLORS = [
   "bg-step-1 text-primary-foreground",
@@ -41,14 +48,55 @@ export default function OrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAdmin } = useRole();
-  const { activeOrders, softDelete, updateOrder, completeFollowup, editFollowup, getOrderHistory, getUpsellsForFollowup, getRepeatOrdersForFollowup } = useOrderStore();
+  const { activeOrders, softDelete, updateOrder, completeFollowup, editFollowup, getOrderHistory, getUpsellsForFollowup, getRepeatOrdersForFollowup, refreshOrders } = useOrderStore();
   const { toast } = useToast();
+  const { addLog } = useAuditLog();
+  const { profile, role } = useAuth();
+  const { members } = useTeamMembers();
   const order = activeOrders.find((o) => o.id === id);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [followupOpen, setFollowupOpen] = useState(false);
   const [editFollowupOpen, setEditFollowupOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<FollowupHistoryEntry | null>(null);
+  const userName = profile?.full_name || "Admin User";
+
+  // Combine DB members with mock for dropdown
+  const allExecutives = [
+    ...members.map((m) => ({ id: m.userId, name: m.name })),
+    ...mockSalesExecutives.filter((se) => !members.some((m) => m.userId === se.id)).map((se) => ({ id: se.id, name: se.name })),
+  ];
+
+  const handleAssignChange = async (execId: string) => {
+    if (!order) return;
+    const isUnassign = execId === "__unassign__";
+    const exec = allExecutives.find((e) => e.id === execId);
+    const oldName = order.assignedToName || "Unassigned";
+    const newName = isUnassign ? "Unassigned" : (exec?.name || "");
+
+    const { error } = await supabase
+      .from("orders")
+      .update({
+        assigned_to: isUnassign ? null : execId,
+        assigned_to_name: isUnassign ? "" : newName,
+      })
+      .eq("id", order.id);
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    await refreshOrders();
+    toast({ title: isUnassign ? "Assignment Removed" : "Assignment Updated", description: isUnassign ? "Order is now unassigned" : `Assigned to ${newName}` });
+    addLog({
+      actionType: isUnassign ? "Assignment Removed" : "Assignment Transferred",
+      userName,
+      role: role || "unknown",
+      entity: `Order #${order.invoiceId || order.id}`,
+      details: `${oldName} → ${newName}`,
+    });
+  };
 
   if (!order) {
     return (
@@ -300,6 +348,59 @@ export default function OrderDetailPage() {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Assignment Card */}
+            <div className="rounded-xl border border-border bg-card p-5 card-shadow">
+              <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+                <User className="h-3.5 w-3.5" /> Assignment
+              </h2>
+              {order.assignedTo && order.assignedToName ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                      {order.assignedToName.split(" ").map((n) => n[0]).join("")}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{order.assignedToName}</p>
+                      <Badge variant="outline" className="text-[9px] h-3.5 px-1 border-primary/20 text-primary">Assigned</Badge>
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <div className="flex gap-1.5 pt-2 border-t border-border">
+                      <Select onValueChange={handleAssignChange}>
+                        <SelectTrigger className="h-7 text-xs flex-1">
+                          <SelectValue placeholder="Transfer to..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allExecutives.filter((e) => e.id !== order.assignedTo).map((e) => (
+                            <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button variant="outline" size="sm" className="h-7 text-xs gap-1 text-warning hover:text-warning" onClick={() => handleAssignChange("__unassign__")}>
+                        <UserX className="h-3 w-3" /> Remove
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Badge variant="outline" className="text-[10px] h-5 px-2 border-warning/40 text-warning bg-warning/5">Unassigned</Badge>
+                  {isAdmin && (
+                    <Select onValueChange={handleAssignChange}>
+                      <SelectTrigger className="h-7 text-xs mt-2">
+                        <SelectValue placeholder="Assign to..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allExecutives.map((e) => (
+                          <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="rounded-xl border border-border bg-card p-5 card-shadow">

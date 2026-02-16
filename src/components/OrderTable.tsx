@@ -11,26 +11,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { cn } from "@/lib/utils";
 import {
-  Copy,
-  Phone,
-  MessageCircle,
-  Plus,
-  RefreshCw,
-  Edit2,
-  ChevronLeft,
-  ChevronRight,
-  Truck,
-  Loader2,
-  CheckCircle,
+  Copy, Phone, MessageCircle, Plus, RefreshCw, Edit2,
+  ChevronLeft, ChevronRight, Truck, Loader2, CheckCircle, User,
 } from "lucide-react";
 
 const stepLabels = ["1st Followup", "2nd Followup", "3rd Followup", "4th Followup", "5th Followup"];
 const stepColors = [
-  "bg-step-1/10 text-step-1",
-  "bg-step-2/10 text-step-2",
-  "bg-step-3/10 text-step-3",
-  "bg-step-4/10 text-step-4",
-  "bg-step-5/10 text-step-5",
+  "bg-step-1/10 text-step-1", "bg-step-2/10 text-step-2", "bg-step-3/10 text-step-3",
+  "bg-step-4/10 text-step-4", "bg-step-5/10 text-step-5",
 ];
 
 function getDeliveryName(id: string): string {
@@ -47,17 +35,23 @@ interface OrderTableProps {
   onEdit?: (order: Order) => void;
   onCompleteFollowup?: (order: Order) => void;
   pageSize?: number;
+  selectedIds?: Set<string>;
+  onSelectionChange?: (ids: Set<string>) => void;
 }
 
-export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup, pageSize = 20 }: OrderTableProps) {
+export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup, pageSize = 20, selectedIds, onSelectionChange }: OrderTableProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { updateOrder } = useOrderStore();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
   const [noteOrderId, setNoteOrderId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+
+  // Use external selection if provided, otherwise internal
+  const selected = selectedIds ?? internalSelected;
+  const setSelected = onSelectionChange ?? setInternalSelected;
 
   const totalPages = Math.max(1, Math.ceil(orders.length / pageSize));
   const pageOrders = orders.slice(page * pageSize, (page + 1) * pageSize);
@@ -68,14 +62,12 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
     } else {
       setSelected(new Set(pageOrders.map((o) => o.id)));
     }
-  }, [pageOrders, selected]);
+  }, [pageOrders, selected, setSelected]);
 
   const toggleOne = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    const next = new Set(selected);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setSelected(next);
   };
 
   const copyText = (text: string, label: string) => {
@@ -112,11 +104,7 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-border bg-muted/50">
               <th className="px-3 py-3 w-10">
-                <Checkbox
-                  checked={pageOrders.length > 0 && selected.size === pageOrders.length}
-                  onCheckedChange={toggleAll}
-                  data-action="true"
-                />
+                <Checkbox checked={pageOrders.length > 0 && selected.size === pageOrders.length} onCheckedChange={toggleAll} data-action="true" />
               </th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Status</th>
               <th className="px-3 py-3 w-8"></th>
@@ -126,36 +114,26 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Address</th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Delivery</th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Payment (৳)</th>
-              <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Employee</th>
+              <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Assigned</th>
               {(isAdmin || onCompleteFollowup) && <th className="px-3 py-3 w-16"></th>}
             </tr>
           </thead>
           <tbody>
             {pageOrders.length === 0 && (
               <tr>
-                <td colSpan={(isAdmin || onCompleteFollowup) ? 11 : 10} className="px-4 py-16 text-center text-muted-foreground">
-                  No orders found
-                </td>
+                <td colSpan={(isAdmin || onCompleteFollowup) ? 11 : 10} className="px-4 py-16 text-center text-muted-foreground">No orders found</td>
               </tr>
             )}
             {pageOrders.map((order) => {
               const isCompleted = order.followupDate <= today;
               const paid = order.paidAmount || 0;
               const due = order.price - paid;
+              const isAssigned = !!(order.assignedTo && order.assignedToName);
 
               return (
-                <tr
-                  key={order.id}
-                  onClick={(e) => handleRowClick(order.id, e)}
-                  className="border-b border-border last:border-0 hover:bg-muted/30 transition-fast cursor-pointer group"
-                >
-                  {/* Checkbox */}
+                <tr key={order.id} onClick={(e) => handleRowClick(order.id, e)} className="border-b border-border last:border-0 hover:bg-muted/30 transition-fast cursor-pointer group">
                   <td className="px-3 py-3" data-action="true">
-                    <Checkbox
-                      checked={selected.has(order.id)}
-                      onCheckedChange={() => toggleOne(order.id)}
-                      data-action="true"
-                    />
+                    <Checkbox checked={selected.has(order.id)} onCheckedChange={() => toggleOne(order.id)} data-action="true" />
                   </td>
 
                   {/* Status */}
@@ -170,37 +148,20 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                     </div>
                   </td>
 
-                  {/* Notes Quick Access */}
+                  {/* Notes */}
                   <td className="px-1 py-3" data-action="true">
                     <Popover open={noteOrderId === order.id} onOpenChange={(open) => { if (!open) setNoteOrderId(null); }}>
                       <PopoverTrigger asChild>
-                        <button
-                          data-action="true"
-                          onClick={(e) => { e.stopPropagation(); setNoteOrderId(order.id); setNoteText(order.note || ""); }}
-                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-fast"
-                          title="Add note"
-                        >
+                        <button data-action="true" onClick={(e) => { e.stopPropagation(); setNoteOrderId(order.id); setNoteText(order.note || ""); }} className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-fast" title="Add note">
                           <Plus className="h-3 w-3" />
                         </button>
                       </PopoverTrigger>
                       <PopoverContent className="w-64 p-3" data-action="true" onClick={(e) => e.stopPropagation()}>
                         <p className="text-xs font-medium text-foreground mb-2">Quick Note — {order.invoiceId || order.id}</p>
-                        <Textarea
-                          value={noteText}
-                          onChange={(e) => setNoteText(e.target.value)}
-                          rows={3}
-                          placeholder="Add a note..."
-                          className="text-xs"
-                        />
+                        <Textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={3} placeholder="Add a note..." className="text-xs" />
                         <div className="flex justify-end mt-2">
-                          <Button
-                            size="sm"
-                            className="h-7 text-xs"
-                            disabled={savingNote}
-                            onClick={() => handleSaveNote(order)}
-                          >
-                            {savingNote && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                            Save
+                          <Button size="sm" className="h-7 text-xs" disabled={savingNote} onClick={() => handleSaveNote(order)}>
+                            {savingNote && <Loader2 className="mr-1 h-3 w-3 animate-spin" />} Save
                           </Button>
                         </div>
                       </PopoverContent>
@@ -217,9 +178,7 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                       </Badge>
                     )}
                     {order.isUpsell && (
-                      <Badge variant="outline" className="mt-1 ml-1 text-[9px] h-4 px-1 border-success/30 text-success">
-                        Upsell
-                      </Badge>
+                      <Badge variant="outline" className="mt-1 ml-1 text-[9px] h-4 px-1 border-success/30 text-success">Upsell</Badge>
                     )}
                   </td>
 
@@ -228,32 +187,13 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                     <p className="font-semibold text-foreground text-xs">{order.customerName}</p>
                     <p className="text-[11px] text-muted-foreground">{order.mobile}</p>
                     <div className="flex items-center gap-1 mt-1" data-action="true">
-                      <button
-                        data-action="true"
-                        onClick={(e) => { e.stopPropagation(); copyText(order.mobile, "Phone number"); }}
-                        className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-fast"
-                        title="Copy number"
-                      >
+                      <button data-action="true" onClick={(e) => { e.stopPropagation(); copyText(order.mobile, "Phone number"); }} className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-fast" title="Copy number">
                         <Copy className="h-2.5 w-2.5" />
                       </button>
-                      <a
-                        data-action="true"
-                        href={`tel:${order.mobile}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-fast"
-                        title="Call"
-                      >
+                      <a data-action="true" href={`tel:${order.mobile}`} onClick={(e) => e.stopPropagation()} className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-fast" title="Call">
                         <Phone className="h-2.5 w-2.5" />
                       </a>
-                      <a
-                        data-action="true"
-                        href={`https://wa.me/${order.mobile}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-success hover:bg-success/10 transition-fast"
-                        title="WhatsApp"
-                      >
+                      <a data-action="true" href={`https://wa.me/${order.mobile}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-success hover:bg-success/10 transition-fast" title="WhatsApp">
                         <MessageCircle className="h-2.5 w-2.5" />
                       </a>
                     </div>
@@ -263,25 +203,15 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                   {/* Dates */}
                   <td className="px-3 py-3">
                     <div className="space-y-0.5">
-                      <p className="text-[11px] text-muted-foreground">
-                        <span className="text-muted-foreground/60">Ord:</span> {order.orderDate}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        <span className="text-muted-foreground/60">Del:</span> {order.deliveryDate}
-                      </p>
+                      <p className="text-[11px] text-muted-foreground"><span className="text-muted-foreground/60">Ord:</span> {order.orderDate}</p>
+                      <p className="text-[11px] text-muted-foreground"><span className="text-muted-foreground/60">Del:</span> {order.deliveryDate}</p>
                     </div>
                   </td>
 
                   {/* Address */}
                   <td className="px-3 py-3 max-w-[140px]">
-                    <p className="text-[11px] text-muted-foreground leading-tight truncate" title={order.address}>
-                      {truncate(order.address, 30)}
-                    </p>
-                    <button
-                      data-action="true"
-                      onClick={(e) => { e.stopPropagation(); copyText(order.address, "Address"); }}
-                      className="flex items-center gap-0.5 mt-0.5 text-[10px] text-muted-foreground/60 hover:text-foreground transition-fast"
-                    >
+                    <p className="text-[11px] text-muted-foreground leading-tight truncate" title={order.address}>{truncate(order.address, 30)}</p>
+                    <button data-action="true" onClick={(e) => { e.stopPropagation(); copyText(order.address, "Address"); }} className="flex items-center gap-0.5 mt-0.5 text-[10px] text-muted-foreground/60 hover:text-foreground transition-fast">
                       <Copy className="h-2 w-2" /> Copy
                     </button>
                   </td>
@@ -299,15 +229,27 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                     <div className="space-y-0.5">
                       <p className="text-xs font-semibold text-foreground">৳{order.price.toLocaleString()}</p>
                       <p className="text-[10px] text-muted-foreground">Paid: ৳{paid.toLocaleString()}</p>
-                      {due > 0 && (
-                        <p className="text-[10px] font-medium text-destructive">Due: ৳{due.toLocaleString()}</p>
-                      )}
+                      {due > 0 && <p className="text-[10px] font-medium text-destructive">Due: ৳{due.toLocaleString()}</p>}
                     </div>
                   </td>
 
-                  {/* Employee */}
+                  {/* Assigned */}
                   <td className="px-3 py-3">
-                    <span className="text-[11px] font-medium text-foreground">{order.assignedToName}</span>
+                    {isAssigned ? (
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10">
+                          <User className="h-2.5 w-2.5 text-primary" />
+                        </div>
+                        <div>
+                          <span className="text-[11px] font-medium text-foreground">{order.assignedToName}</span>
+                          <Badge variant="outline" className="ml-1.5 text-[8px] h-3.5 px-1 border-primary/20 text-primary">Assigned</Badge>
+                        </div>
+                      </div>
+                    ) : (
+                      <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-warning/40 text-warning bg-warning/5">
+                        Unassigned
+                      </Badge>
+                    )}
                   </td>
 
                   {/* Actions */}
@@ -315,25 +257,12 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                     <td className="px-3 py-3" data-action="true">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-fast">
                         {onCompleteFollowup && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-success hover:text-success"
-                            data-action="true"
-                            title="Complete followup"
-                            onClick={(e) => { e.stopPropagation(); onCompleteFollowup(order); }}
-                          >
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-success hover:text-success" data-action="true" title="Complete followup" onClick={(e) => { e.stopPropagation(); onCompleteFollowup(order); }}>
                             <CheckCircle className="h-3 w-3" />
                           </Button>
                         )}
                         {isAdmin && onEdit && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                            data-action="true"
-                            onClick={(e) => { e.stopPropagation(); onEdit(order); }}
-                          >
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" data-action="true" onClick={(e) => { e.stopPropagation(); onEdit(order); }}>
                             <Edit2 className="h-3 w-3" />
                           </Button>
                         )}
@@ -350,16 +279,12 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between border-t border-border px-4 py-2.5 bg-muted/30">
-          <p className="text-xs text-muted-foreground">
-            {page * pageSize + 1}–{Math.min((page + 1) * pageSize, orders.length)} of {orders.length}
-          </p>
+          <p className="text-xs text-muted-foreground">{page * pageSize + 1}–{Math.min((page + 1) * pageSize, orders.length)} of {orders.length}</p>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page === 0} onClick={() => setPage(page - 1)}>
               <ChevronLeft className="h-3.5 w-3.5" />
             </Button>
-            <span className="text-xs text-muted-foreground px-2">
-              {page + 1} / {totalPages}
-            </span>
+            <span className="text-xs text-muted-foreground px-2">{page + 1} / {totalPages}</span>
             <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
               <ChevronRight className="h-3.5 w-3.5" />
             </Button>
