@@ -14,6 +14,59 @@ export type Database = {
   }
   public: {
     Tables: {
+      followup_history: {
+        Row: {
+          completed_at: string
+          completed_by: string | null
+          completed_by_name: string
+          created_at: string
+          id: string
+          next_followup_date: string | null
+          note: string
+          order_id: string
+          problems_discussed: string
+          step_number: number
+          upsell_attempted: boolean
+          upsell_details: string
+        }
+        Insert: {
+          completed_at?: string
+          completed_by?: string | null
+          completed_by_name?: string
+          created_at?: string
+          id?: string
+          next_followup_date?: string | null
+          note?: string
+          order_id: string
+          problems_discussed?: string
+          step_number: number
+          upsell_attempted?: boolean
+          upsell_details?: string
+        }
+        Update: {
+          completed_at?: string
+          completed_by?: string | null
+          completed_by_name?: string
+          created_at?: string
+          id?: string
+          next_followup_date?: string | null
+          note?: string
+          order_id?: string
+          problems_discussed?: string
+          step_number?: number
+          upsell_attempted?: boolean
+          upsell_details?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "followup_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           address: string
@@ -21,6 +74,7 @@ export type Database = {
           assigned_to_name: string
           created_at: string
           created_by: string | null
+          current_status: string
           customer_name: string
           delivery_date: string | null
           delivery_method: string
@@ -49,6 +103,7 @@ export type Database = {
           assigned_to_name?: string
           created_at?: string
           created_by?: string | null
+          current_status?: string
           customer_name: string
           delivery_date?: string | null
           delivery_method?: string
@@ -77,6 +132,7 @@ export type Database = {
           assigned_to_name?: string
           created_at?: string
           created_by?: string | null
+          current_status?: string
           customer_name?: string
           delivery_date?: string | null
           delivery_method?: string
@@ -211,6 +267,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      advance_followup_steps: { Args: never; Returns: number }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]

@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Truck,
   Loader2,
+  CheckCircle,
 } from "lucide-react";
 
 const stepLabels = ["1st Followup", "2nd Followup", "3rd Followup", "4th Followup", "5th Followup"];
@@ -44,10 +45,11 @@ interface OrderTableProps {
   orders: Order[];
   isAdmin: boolean;
   onEdit?: (order: Order) => void;
+  onCompleteFollowup?: (order: Order) => void;
   pageSize?: number;
 }
 
-export default function OrderTable({ orders, isAdmin, onEdit, pageSize = 20 }: OrderTableProps) {
+export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup, pageSize = 20 }: OrderTableProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { updateOrder } = useOrderStore();
@@ -125,13 +127,13 @@ export default function OrderTable({ orders, isAdmin, onEdit, pageSize = 20 }: O
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Delivery</th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Payment (৳)</th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Employee</th>
-              {isAdmin && <th className="px-3 py-3 w-10"></th>}
+              {(isAdmin || onCompleteFollowup) && <th className="px-3 py-3 w-16"></th>}
             </tr>
           </thead>
           <tbody>
             {pageOrders.length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 11 : 10} className="px-4 py-16 text-center text-muted-foreground">
+                <td colSpan={(isAdmin || onCompleteFollowup) ? 11 : 10} className="px-4 py-16 text-center text-muted-foreground">
                   No orders found
                 </td>
               </tr>
@@ -308,18 +310,34 @@ export default function OrderTable({ orders, isAdmin, onEdit, pageSize = 20 }: O
                     <span className="text-[11px] font-medium text-foreground">{order.assignedToName}</span>
                   </td>
 
-                  {/* Edit */}
-                  {isAdmin && (
+                  {/* Actions */}
+                  {(isAdmin || onCompleteFollowup) && (
                     <td className="px-3 py-3" data-action="true">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-fast"
-                        data-action="true"
-                        onClick={(e) => { e.stopPropagation(); onEdit?.(order); }}
-                      >
-                        <Edit2 className="h-3 w-3" />
-                      </Button>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-fast">
+                        {onCompleteFollowup && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-success hover:text-success"
+                            data-action="true"
+                            title="Complete followup"
+                            onClick={(e) => { e.stopPropagation(); onCompleteFollowup(order); }}
+                          >
+                            <CheckCircle className="h-3 w-3" />
+                          </Button>
+                        )}
+                        {isAdmin && onEdit && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                            data-action="true"
+                            onClick={(e) => { e.stopPropagation(); onEdit(order); }}
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>
