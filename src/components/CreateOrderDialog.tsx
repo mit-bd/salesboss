@@ -10,6 +10,7 @@ import { useProductStore } from "@/contexts/ProductStoreContext";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useDeliveryMethods } from "@/hooks/useDeliveryMethods";
+import { useOrderSources } from "@/hooks/useOrderSources";
 import { Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -23,14 +24,13 @@ interface FormErrors {
   deliveryMethod?: string;
 }
 
-const ORDER_SOURCES = ["Website", "Phone Call", "Referral", "Social Media"];
-
 export default function CreateOrderDialog() {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
   const [errors, setErrors] = useState<FormErrors>({});
   const { methods: activePartners } = useDeliveryMethods({ activeOnly: true });
+  const { sources: activeSources } = useOrderSources({ activeOnly: true });
   const { products } = useProductStore();
   const { addOrder } = useOrderStore();
   const { members } = useTeamMembers();
@@ -154,7 +154,7 @@ export default function CreateOrderDialog() {
               <Select value={form.orderSource} onValueChange={(v) => update("orderSource", v)}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select source" /></SelectTrigger>
                 <SelectContent>
-                  {ORDER_SOURCES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  {activeSources.map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
               {errors.orderSource && <p className="text-xs text-destructive mt-1">{errors.orderSource}</p>}

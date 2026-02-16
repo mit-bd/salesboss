@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { mockSalesExecutives, mockProducts, mockDeliveryPartners } from "@/data/mockData";
+import { mockSalesExecutives, mockProducts } from "@/data/mockData";
+import { useOrderSources } from "@/hooks/useOrderSources";
+import { useDeliveryMethods } from "@/hooks/useDeliveryMethods";
 import { Filter, X } from "lucide-react";
 
 export interface FilterState {
@@ -25,7 +27,7 @@ const EMPTY_FILTERS: FilterState = {
   deliveryMethod: "",
 };
 
-const ORDER_SOURCES = ["Website", "Phone Call", "Referral", "Social Media"];
+
 
 interface GlobalFiltersProps {
   filters: FilterState;
@@ -36,6 +38,8 @@ interface GlobalFiltersProps {
 
 export default function GlobalFilters({ filters, onChange, showStepFilter = true, showDeliveryFilter = true }: GlobalFiltersProps) {
   const [open, setOpen] = useState(false);
+  const { sources: orderSources } = useOrderSources();
+  const { methods: activePartners } = useDeliveryMethods({ activeOnly: true });
 
   const hasActiveFilters = Object.values(filters).some((v) => v !== "");
 
@@ -44,8 +48,6 @@ export default function GlobalFilters({ filters, onChange, showStepFilter = true
   };
 
   const reset = () => onChange({ ...EMPTY_FILTERS });
-
-  const activePartners = mockDeliveryPartners.filter((dp) => dp.active);
 
   return (
     <div className="mb-4">
@@ -106,8 +108,8 @@ export default function GlobalFilters({ filters, onChange, showStepFilter = true
               <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="All" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
-                {ORDER_SOURCES.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                {orderSources.map((s) => (
+                  <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
