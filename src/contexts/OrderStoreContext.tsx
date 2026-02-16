@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
-import { Order } from "@/types/data";
+import { Order, FollowupHistoryEntry } from "@/types/data";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuditLog } from "./AuditLogContext";
 import { useAuth } from "./AuthContext";
@@ -9,12 +9,23 @@ interface OrderStoreContextType {
   orders: Order[];
   deletedOrders: Order[];
   activeOrders: Order[];
+  followupHistory: FollowupHistoryEntry[];
   loading: boolean;
   softDelete: (orderId: string) => Promise<void>;
   restoreOrder: (orderId: string) => Promise<void>;
   hardDelete: (orderId: string) => Promise<void>;
   updateOrder: (updated: Order) => Promise<void>;
   addOrder: (order: Omit<Order, "id">) => Promise<void>;
+  completeFollowup: (data: {
+    orderId: string;
+    stepNumber: number;
+    note: string;
+    problemsDiscussed: string;
+    upsellAttempted: boolean;
+    upsellDetails: string;
+    nextFollowupDate: string | null;
+  }) => Promise<void>;
+  getOrderHistory: (orderId: string) => FollowupHistoryEntry[];
   refreshOrders: () => Promise<void>;
 }
 
@@ -46,11 +57,29 @@ function mapRow(row: any): Order {
     isDeleted: row.is_deleted || false,
     paidAmount: Number(row.paid_amount) || 0,
     invoiceId: row.invoice_id || row.id,
+    currentStatus: row.current_status || "pending",
+  };
+}
+
+function mapHistoryRow(row: any): FollowupHistoryEntry {
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    stepNumber: row.step_number,
+    note: row.note || "",
+    problemsDiscussed: row.problems_discussed || "",
+    upsellAttempted: row.upsell_attempted || false,
+    upsellDetails: row.upsell_details || "",
+    nextFollowupDate: row.next_followup_date || null,
+    completedBy: row.completed_by || null,
+    completedByName: row.completed_by_name || "",
+    completedAt: row.completed_at || "",
   };
 }
 
 export function OrderStoreProvider({ children }: { children: ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [followupHistory, setFollowupHistory] = useState<FollowupHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const { addLog } = useAuditLog();
   const { user, profile, role } = useAuth();
@@ -80,11 +109,27 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Realtime: apply granular changes instead of full refetch
+  const fetchHistory = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("followup_history")
+      .select("*")
+      .order("step_number", { ascending: true });
+
+    if (error) {
+      console.error("[OrderStore] History fetch error:", error);
+      return;
+    }
+    if (isMounted.current) {
+      setFollowupHistory((data || []).map(mapHistoryRow));
+    }
+  }, []);
+
+  // Realtime subscriptions
   useEffect(() => {
     fetchOrders();
+    fetchHistory();
 
-    const channel = supabase
+    const ordersChannel = supabase
       .channel("orders-changes")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
         if (!isMounted.current) return;
@@ -106,11 +151,41 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [fetchOrders]);
+    const historyChannel = supabase
+      .channel("followup-history-changes")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "followup_history" }, (payload) => {
+        if (!isMounted.current) return;
+        const entry = mapHistoryRow(payload.new);
+        setFollowupHistory((prev) => {
+          if (prev.some((h) => h.id === entry.id)) return prev;
+          return [...prev, entry];
+        });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "followup_history" }, (payload) => {
+        if (!isMounted.current) return;
+        const updated = mapHistoryRow(payload.new);
+        setFollowupHistory((prev) => prev.map((h) => (h.id === updated.id ? updated : h)));
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "followup_history" }, (payload) => {
+        if (!isMounted.current) return;
+        const deletedId = (payload.old as any).id;
+        setFollowupHistory((prev) => prev.filter((h) => h.id !== deletedId));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ordersChannel);
+      supabase.removeChannel(historyChannel);
+    };
+  }, [fetchOrders, fetchHistory]);
 
   const activeOrders = orders.filter((o) => !o.isDeleted);
   const deletedOrders = orders.filter((o) => o.isDeleted);
+
+  const getOrderHistory = useCallback(
+    (orderId: string) => followupHistory.filter((h) => h.orderId === orderId).sort((a, b) => a.stepNumber - b.stepNumber),
+    [followupHistory]
+  );
 
   const addOrder = useCallback(
     async (order: Omit<Order, "id">) => {
@@ -126,6 +201,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
           price: order.price,
           note: order.note,
           followup_step: 1,
+          current_status: "pending",
           followup_date: order.followupDate || null,
           assigned_to: order.assignedTo || null,
           assigned_to_name: order.assignedToName,
@@ -147,7 +223,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Immediate local state update
       const newOrder = mapRow(data);
       setOrders((prev) => {
         if (prev.some((o) => o.id === newOrder.id)) return prev;
@@ -166,12 +241,91 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
     [addLog, user, userName, role, toast]
   );
 
+  const completeFollowup = useCallback(
+    async (data: {
+      orderId: string;
+      stepNumber: number;
+      note: string;
+      problemsDiscussed: string;
+      upsellAttempted: boolean;
+      upsellDetails: string;
+      nextFollowupDate: string | null;
+    }) => {
+      // 1. Insert followup history record
+      const { data: historyData, error: historyError } = await supabase
+        .from("followup_history")
+        .insert({
+          order_id: data.orderId,
+          step_number: data.stepNumber,
+          note: data.note,
+          problems_discussed: data.problemsDiscussed,
+          upsell_attempted: data.upsellAttempted,
+          upsell_details: data.upsellDetails,
+          next_followup_date: data.nextFollowupDate || null,
+          completed_by: user?.id || null,
+          completed_by_name: userName,
+        })
+        .select()
+        .single();
+
+      if (historyError) {
+        console.error("[OrderStore] Complete followup error:", historyError);
+        toast({ title: "Error completing followup", description: historyError.message, variant: "destructive" });
+        throw historyError;
+      }
+
+      // 2. Update order status to completed
+      const isFinalStep = data.stepNumber === 5;
+      const updatePayload: any = {
+        current_status: "completed",
+        followup_date: data.nextFollowupDate || null,
+      };
+
+      // If final step, mark health as good
+      if (isFinalStep) {
+        updatePayload.health = "good";
+      }
+
+      const { data: orderData, error: orderError } = await supabase
+        .from("orders")
+        .update(updatePayload)
+        .eq("id", data.orderId)
+        .select()
+        .single();
+
+      if (orderError) {
+        console.error("[OrderStore] Update order after followup error:", orderError);
+        toast({ title: "Error updating order", description: orderError.message, variant: "destructive" });
+        throw orderError;
+      }
+
+      // Optimistic local updates
+      const newHistoryEntry = mapHistoryRow(historyData);
+      setFollowupHistory((prev) => {
+        if (prev.some((h) => h.id === newHistoryEntry.id)) return prev;
+        return [...prev, newHistoryEntry];
+      });
+
+      const updatedOrder = mapRow(orderData);
+      setOrders((prev) => prev.map((o) => (o.id === updatedOrder.id ? updatedOrder : o)));
+
+      toast({ title: `Step ${data.stepNumber} completed`, description: isFinalStep ? "Followup lifecycle fully completed!" : `Next followup on ${data.nextFollowupDate}` });
+      addLog({
+        actionType: "Followup Completed",
+        userName,
+        role: role || "unknown",
+        entity: `Order #${data.orderId}`,
+        details: `Step ${data.stepNumber} completed`,
+      });
+    },
+    [user, userName, role, toast, addLog]
+  );
+
   const softDelete = useCallback(
     async (orderId: string) => {
       const childIds = orders.filter((o) => o.parentOrderId === orderId).map((o) => o.id);
       const idsToDelete = [orderId, ...childIds];
 
-      // Optimistic update
       setOrders((prev) => prev.map((o) => idsToDelete.includes(o.id) ? { ...o, isDeleted: true } : o));
 
       const { error } = await supabase
@@ -182,7 +336,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error("[OrderStore] Soft delete error:", error);
         toast({ title: "Error deleting order", description: error.message, variant: "destructive" });
-        // Rollback
         setOrders((prev) => prev.map((o) => idsToDelete.includes(o.id) ? { ...o, isDeleted: false } : o));
         return;
       }
@@ -200,7 +353,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       const idsToRestore = [orderId, ...childIds];
       if (order?.parentOrderId) idsToRestore.push(order.parentOrderId);
 
-      // Optimistic update
       setOrders((prev) => prev.map((o) => idsToRestore.includes(o.id) ? { ...o, isDeleted: false } : o));
 
       const { error } = await supabase
@@ -226,7 +378,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       const childIds = orders.filter((o) => o.parentOrderId === orderId).map((o) => o.id);
       const idsToDelete = [orderId, ...childIds];
 
-      // Optimistic removal
       const backup = orders.filter((o) => idsToDelete.includes(o.id));
       setOrders((prev) => prev.filter((o) => !idsToDelete.includes(o.id)));
 
@@ -238,7 +389,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error("[OrderStore] Hard delete error:", error);
         toast({ title: "Error deleting order", description: error.message, variant: "destructive" });
-        // Rollback
         setOrders((prev) => [...backup, ...prev]);
         return;
       }
@@ -251,7 +401,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
   const updateOrder = useCallback(
     async (updated: Order) => {
-      // Optimistic update
       const prev = orders.find((o) => o.id === updated.id);
       setOrders((list) => list.map((o) => (o.id === updated.id ? updated : o)));
 
@@ -275,6 +424,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
           delivery_method: updated.deliveryMethod,
           health: updated.health,
           paid_amount: updated.paidAmount || 0,
+          current_status: updated.currentStatus || "pending",
         })
         .eq("id", updated.id)
         .select()
@@ -283,12 +433,10 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error("[OrderStore] Update error:", error);
         toast({ title: "Error updating order", description: error.message, variant: "destructive" });
-        // Rollback
         if (prev) setOrders((list) => list.map((o) => (o.id === updated.id ? prev : o)));
         return;
       }
 
-      // Replace with confirmed DB data
       if (data) {
         const confirmed = mapRow(data);
         setOrders((list) => list.map((o) => (o.id === confirmed.id ? confirmed : o)));
@@ -308,7 +456,21 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
   return (
     <OrderStoreContext.Provider
-      value={{ orders, deletedOrders, activeOrders, loading, softDelete, restoreOrder, hardDelete, updateOrder, addOrder, refreshOrders: fetchOrders }}
+      value={{
+        orders,
+        deletedOrders,
+        activeOrders,
+        followupHistory,
+        loading,
+        softDelete,
+        restoreOrder,
+        hardDelete,
+        updateOrder,
+        addOrder,
+        completeFollowup,
+        getOrderHistory,
+        refreshOrders: fetchOrders,
+      }}
     >
       {children}
     </OrderStoreContext.Provider>

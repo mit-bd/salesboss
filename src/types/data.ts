@@ -33,6 +33,7 @@ export interface Order {
   isDeleted?: boolean;
   paidAmount?: number;
   invoiceId?: string;
+  currentStatus?: "pending" | "completed";
 }
 
 export interface FollowupStep {
@@ -40,6 +41,20 @@ export interface FollowupStep {
   label: string;
   pending: number;
   completed: number;
+}
+
+export interface FollowupHistoryEntry {
+  id: string;
+  orderId: string;
+  stepNumber: number;
+  note: string;
+  problemsDiscussed: string;
+  upsellAttempted: boolean;
+  upsellDetails: string;
+  nextFollowupDate: string | null;
+  completedBy: string | null;
+  completedByName: string;
+  completedAt: string;
 }
 
 export interface DashboardMetrics {

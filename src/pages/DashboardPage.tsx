@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader, { KpiCard } from "@/components/layout/PageHeader";
-import { mockDashboardMetrics, mockFollowupSteps, mockSalesExecutives } from "@/data/mockData";
+import { mockDashboardMetrics, mockSalesExecutives } from "@/data/mockData";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { ShoppingCart, DollarSign, TrendingUp, RefreshCw, PhoneForwarded, Zap, Search, X } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 
 const m = mockDashboardMetrics;
 
-const funnelData = mockFollowupSteps.map((s) => ({ name: s.label, pending: s.pending, completed: s.completed }));
+const STEP_LABELS = ["1st Followup", "2nd Followup", "3rd Followup", "4th Followup", "5th Followup"];
 const performanceData = mockSalesExecutives.map((se) => ({ name: se.name.split(" ")[0], orders: se.assignedOrders, followups: se.completedFollowups }));
 const sourceData = [
   { name: "Website", value: 45 },
@@ -30,7 +30,19 @@ export default function DashboardPage() {
   const searchRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { activeOrders } = useOrderStore();
-  const todayFollowups = activeOrders.filter(o => o.followupDate === "2026-02-15").length;
+  const todayFollowups = activeOrders.filter(o => o.followupDate === new Date().toISOString().split("T")[0] && (o.currentStatus || "pending") === "pending").length;
+
+  // Live followup step data
+  const liveFollowupSteps = [1, 2, 3, 4, 5].map((step) => {
+    const atStep = activeOrders.filter((o) => o.followupStep === step);
+    return {
+      step,
+      label: STEP_LABELS[step - 1],
+      pending: atStep.filter((o) => (o.currentStatus || "pending") === "pending").length,
+      completed: atStep.filter((o) => (o.currentStatus || "pending") === "completed").length,
+    };
+  });
+  const funnelData = liveFollowupSteps.map((s) => ({ name: s.label, pending: s.pending, completed: s.completed }));
 
   const searchResults = search.trim()
     ? activeOrders.filter(
@@ -142,7 +154,7 @@ export default function DashboardPage() {
         <div className="rounded-xl border border-border bg-card p-5 card-shadow animate-fade-in">
           <h2 className="text-sm font-semibold text-card-foreground mb-4">Followup Step Overview</h2>
           <div className="space-y-3">
-            {mockFollowupSteps.map((step, i) => {
+            {liveFollowupSteps.map((step, i) => {
               const total = step.pending + step.completed;
               const pct = total > 0 ? (step.completed / total) * 100 : 0;
               return (
