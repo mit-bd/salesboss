@@ -31,7 +31,7 @@ export interface Order {
   isUpsell?: boolean;
   health: "new" | "good" | "at-risk";
   isDeleted?: boolean;
-  paidAmount?: number;
+  
   invoiceId?: string;
   currentStatus?: "pending" | "completed";
   itemDescription?: string;

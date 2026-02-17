@@ -71,7 +71,7 @@ function mapRow(row: any): Order {
     isUpsell: row.is_upsell || false,
     health: row.health || "new",
     isDeleted: row.is_deleted || false,
-    paidAmount: Number(row.paid_amount) || 0,
+    
     invoiceId: row.invoice_id || row.id,
     currentStatus: row.current_status || "pending",
     itemDescription: row.item_description || "",
@@ -557,7 +557,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
           assigned_to: updated.assignedTo || null, assigned_to_name: updated.assignedToName,
           order_date: updated.orderDate, delivery_date: updated.deliveryDate || null,
           delivery_method: updated.deliveryMethod, health: updated.health,
-          paid_amount: updated.paidAmount || 0, current_status: updated.currentStatus || "pending",
+          current_status: updated.currentStatus || "pending",
         })
         .eq("id", updated.id)
         .select()

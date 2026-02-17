@@ -5,7 +5,7 @@ import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Phone, MapPin, Package, Calendar, RefreshCw, ShoppingBag, TrendingUp } from "lucide-react";
+import { ArrowLeft, Phone, MapPin, Calendar, RefreshCw, ShoppingBag, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Customer {
@@ -59,7 +59,6 @@ export default function CustomerProfilePage() {
     const total = activeCustomerOrders.length;
     const repeats = activeCustomerOrders.filter((o) => o.isRepeat).length;
     const revenue = activeCustomerOrders.reduce((sum, o) => sum + o.price, 0);
-    const paid = activeCustomerOrders.reduce((sum, o) => sum + (o.paidAmount || 0), 0);
 
     const allHistoryIds = new Set(activeCustomerOrders.map((o) => o.id));
     const relatedHistory = followupHistory.filter((h) => allHistoryIds.has(h.orderId));
@@ -67,7 +66,7 @@ export default function CustomerProfilePage() {
 
     const latestOrder = activeCustomerOrders.sort((a, b) => b.orderDate.localeCompare(a.orderDate))[0];
 
-    return { total, repeats, revenue, paid, lastFollowup, latestOrder, historyCount: relatedHistory.length };
+    return { total, repeats, revenue, lastFollowup, latestOrder, historyCount: relatedHistory.length };
   }, [activeCustomerOrders, followupHistory]);
 
   if (loading) {
@@ -119,7 +118,6 @@ export default function CustomerProfilePage() {
             { label: "Total Orders", value: stats.total, icon: ShoppingBag, color: "text-primary" },
             { label: "Repeat Orders", value: stats.repeats, icon: RefreshCw, color: "text-warning" },
             { label: "Total Revenue", value: `৳${stats.revenue.toLocaleString()}`, icon: TrendingUp, color: "text-success" },
-            { label: "Total Paid", value: `৳${stats.paid.toLocaleString()}`, icon: Package, color: "text-info" },
           ].map((stat) => (
             <div key={stat.label} className="rounded-xl border border-border bg-card p-4 card-shadow">
               <div className="flex items-center gap-2 mb-1">

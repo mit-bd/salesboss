@@ -212,12 +212,6 @@ export default function OrderDetailPage() {
                     <div><p className="text-xs text-muted-foreground">Delivery Date</p><p className="text-sm font-medium text-foreground flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {order.deliveryDate}</p></div>
                     <div><p className="text-xs text-muted-foreground">Delivery Method</p><p className="text-sm font-medium text-foreground flex items-center gap-1"><Truck className="h-3.5 w-3.5" /> {getDeliveryName(order.deliveryMethod)}</p></div>
                   </div>
-                  {order.paidAmount !== undefined && order.paidAmount > 0 && (
-                    <div className="pt-4 border-t border-border mt-4">
-                      <p className="text-xs text-muted-foreground">Paid Amount</p>
-                      <p className="text-sm font-bold text-success">৳{order.paidAmount}</p>
-                    </div>
-                  )}
                   {order.itemDescription && (
                     <div className="pt-4 border-t border-border mt-4">
                       <p className="text-xs text-muted-foreground">Item Description</p>
