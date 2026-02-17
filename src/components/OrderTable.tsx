@@ -131,7 +131,7 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Dates</th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Address</th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Delivery</th>
-              <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Payment (৳)</th>
+              <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Amount (৳)</th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Assigned</th>
               {(isAdmin || onCompleteFollowup) && <th className="px-3 py-3 w-16"></th>}
             </tr>
@@ -144,8 +144,6 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
             )}
             {pageOrders.map((order) => {
               const isCompleted = order.followupDate <= today;
-              const paid = order.paidAmount || 0;
-              const due = order.price - paid;
               const isAssigned = !!(order.assignedTo && order.assignedToName);
 
               return (
@@ -271,13 +269,9 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                     </div>
                   </td>
 
-                  {/* Payment */}
+                  {/* Amount */}
                   <td className="px-3 py-3">
-                    <div className="space-y-0.5">
-                      <p className="text-xs font-semibold text-foreground">৳{order.price.toLocaleString()}</p>
-                      <p className="text-[10px] text-muted-foreground">Paid: ৳{paid.toLocaleString()}</p>
-                      {due > 0 && <p className="text-[10px] font-medium text-destructive">Due: ৳{due.toLocaleString()}</p>}
-                    </div>
+                    <p className="text-xs font-semibold text-foreground">৳{order.price.toLocaleString()}</p>
                   </td>
 
                   {/* Assigned */}
