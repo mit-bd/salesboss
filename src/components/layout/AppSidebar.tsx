@@ -81,7 +81,7 @@ const navCategories: NavCategory[] = [
     label: "Access Control",
     key: "access",
     items: [
-      { label: "Team Management", icon: Users, path: "/team" },
+      { label: "Team", icon: Users, path: "/team" },
       { label: "Roles", icon: KeyRound, path: "/roles", permission: "roles.manage" },
       { label: "Audit Logs", icon: Shield, path: "/audit-logs", permission: "audit.view" },
     ],
