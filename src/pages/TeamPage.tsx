@@ -110,7 +110,7 @@ export default function TeamPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-2">
                 <Badge variant={roleVariant(u.role)} className="text-xs">
                   {roleLabel(u.role)}
                 </Badge>
@@ -129,8 +129,11 @@ export default function TeamPage() {
                 </div>
               </div>
 
+              <p className="text-[11px] text-muted-foreground">
+                Created: {new Date(u.createdAt).toLocaleDateString()}
+              </p>
               {u.lastSignIn && (
-                <p className="text-[11px] text-muted-foreground mt-2">
+                <p className="text-[11px] text-muted-foreground">
                   Last login: {new Date(u.lastSignIn).toLocaleDateString()}
                 </p>
               )}
