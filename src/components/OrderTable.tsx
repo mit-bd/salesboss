@@ -49,15 +49,22 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
   const [noteText, setNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
 
-  // Calculate total confirmed orders per mobile number
-  const orderCountByMobile = useMemo(() => {
+  // Calculate total confirmed orders per mobile number and map mobile to customer_id
+  const { orderCountByMobile, customerIdByMobile } = useMemo(() => {
     const counts: Record<string, number> = {};
+    const ids: Record<string, string> = {};
     activeOrders.forEach((o) => {
       if (o.mobile) {
         counts[o.mobile] = (counts[o.mobile] || 0) + 1;
       }
     });
-    return counts;
+    // Map mobile to customer_id from order data
+    activeOrders.forEach((o) => {
+      if (o.mobile && !ids[o.mobile] && o.customerId) {
+        ids[o.mobile] = o.customerId;
+      }
+    });
+    return { orderCountByMobile: counts, customerIdByMobile: ids };
   }, [activeOrders]);
 
   // Use external selection if provided, otherwise internal
@@ -196,11 +203,27 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                   {/* Customer */}
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1.5">
-                      <p className="font-semibold text-foreground text-xs">{order.customerName}</p>
+                      <button
+                        data-action="true"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const custId = customerIdByMobile[order.mobile];
+                          if (custId) navigate(`/customers/${custId}`);
+                          else navigate(`/orders?search=${encodeURIComponent(order.mobile)}`);
+                        }}
+                        className="font-semibold text-foreground text-xs hover:text-primary hover:underline transition-fast"
+                      >
+                        {order.customerName}
+                      </button>
                       {orderCountByMobile[order.mobile] > 0 && (
                         <button
                           data-action="true"
-                          onClick={(e) => { e.stopPropagation(); navigate(`/orders?search=${encodeURIComponent(order.mobile)}`); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const custId = customerIdByMobile[order.mobile];
+                            if (custId) navigate(`/customers/${custId}`);
+                            else navigate(`/orders?search=${encodeURIComponent(order.mobile)}`);
+                          }}
                           className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold text-primary hover:bg-primary/20 transition-fast"
                           title={`Total orders by ${order.mobile}`}
                         >

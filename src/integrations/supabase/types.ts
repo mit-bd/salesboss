@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      customers: {
+        Row: {
+          address: string
+          created_at: string
+          id: string
+          mobile_number: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string
+          created_at?: string
+          id?: string
+          mobile_number: string
+          name?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          id?: string
+          mobile_number?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       delivery_methods: {
         Row: {
           contact_info: string
@@ -135,6 +162,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           current_status: string
+          customer_id: string | null
           customer_name: string
           delivery_date: string | null
           delivery_method: string
@@ -168,6 +196,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           current_status?: string
+          customer_id?: string | null
           customer_name: string
           delivery_date?: string | null
           delivery_method?: string
@@ -201,6 +230,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           current_status?: string
+          customer_id?: string | null
           customer_name?: string
           delivery_date?: string | null
           delivery_method?: string
@@ -228,6 +258,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "orders_parent_order_id_fkey"
             columns: ["parent_order_id"]
@@ -499,6 +536,10 @@ export type Database = {
     }
     Functions: {
       advance_followup_steps: { Args: never; Returns: number }
+      find_or_create_customer: {
+        Args: { p_address: string; p_mobile: string; p_name: string }
+        Returns: string
+      }
       get_next_sku_sequence: { Args: { p_sku: string }; Returns: number }
       get_user_role: {
         Args: { _user_id: string }

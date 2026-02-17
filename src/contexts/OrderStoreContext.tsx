@@ -78,6 +78,7 @@ function mapRow(row: any): Order {
     productSku: row.product_sku || "",
     orderSequenceNumber: row.order_sequence_number || 0,
     generatedOrderId: row.generated_order_id || "",
+    customerId: row.customer_id || "",
   };
 }
 
@@ -269,6 +270,20 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
   const addOrder = useCallback(
     async (order: Omit<Order, "id">) => {
+      // Find or create customer using the DB function
+      const { data: customerId, error: customerError } = await supabase
+        .rpc("find_or_create_customer", {
+          p_name: order.customerName,
+          p_mobile: order.mobile,
+          p_address: order.address,
+        });
+
+      if (customerError) {
+        console.error("[OrderStore] Customer upsert error:", customerError);
+        toast({ title: "Error creating customer", description: customerError.message, variant: "destructive" });
+        return;
+      }
+
       const insertPayload: any = {
           customer_name: order.customerName,
           mobile: order.mobile,
@@ -292,6 +307,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
           health: "new",
           created_by: user?.id,
           item_description: order.itemDescription || "",
+          customer_id: customerId,
         };
 
       const { data, error } = await supabase
@@ -368,10 +384,8 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       // 3. Create repeat child orders and records
       const parentOrder = orders.find((o) => o.id === data.orderId);
       for (const entry of data.repeatOrderEntries) {
-        // Create child order inheriting customer info
-        const { data: childData, error: childError } = await supabase
-          .from("orders")
-          .insert({
+        // Create child order inheriting customer info and customer_id
+        const childPayload: any = {
             customer_name: parentOrder?.customerName || "",
             mobile: parentOrder?.mobile || "",
             address: parentOrder?.address || "",
@@ -390,7 +404,11 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
             is_repeat: true,
             health: "new",
             created_by: user?.id,
-          })
+            customer_id: parentOrder?.customerId || null,
+          };
+        const { data: childData, error: childError } = await supabase
+          .from("orders")
+          .insert(childPayload)
           .select()
           .single();
 
