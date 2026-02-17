@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
@@ -33,8 +34,19 @@ function applyFilters(orders: Order[], filters: FilterState): Order[] {
 }
 
 export default function FollowupsPage() {
-  const [activeStep, setActiveStep] = useState(1);
+  const [searchParams] = useSearchParams();
+  const initialStep = Number(searchParams.get("step")) || 1;
+  const [activeStep, setActiveStep] = useState(initialStep);
   const [activeTab, setActiveTab] = useState<"pending" | "completed">("pending");
+
+  // Sync with URL query param changes
+  useEffect(() => {
+    const step = Number(searchParams.get("step"));
+    if (step >= 1 && step <= 5) {
+      setActiveStep(step);
+      setActiveTab("pending");
+    }
+  }, [searchParams]);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [completeOrder, setCompleteOrder] = useState<Order | null>(null);
   const { isAdmin } = useRole();
