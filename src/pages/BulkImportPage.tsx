@@ -20,22 +20,35 @@ interface ParsedRow {
   product?: string;
   price?: string;
   note?: string;
+  orderDate?: string;
+  deliveryDate?: string;
+  deliveryMethod?: string;
+  itemDescription?: string;
   error?: string;
 }
 
-const REQUIRED_COLUMNS = ["customerName", "mobile", "address", "orderSource"];
+const REQUIRED_COLUMNS = ["customerName", "mobile", "address", "orderSource", "product", "price", "orderDate", "deliveryDate", "deliveryMethod", "itemDescription"];
 
 function parseCSV(text: string): { headers: string[]; rows: string[][] } {
   const lines = text.trim().split("\n").map((l) => l.split(",").map((c) => c.trim().replace(/^"|"$/g, "")));
   return { headers: lines[0] || [], rows: lines.slice(1) };
 }
 
-function validateRow(row: Record<string, string>): string | undefined {
+function validateRow(row: Record<string, string>, activeDeliveryMethodNames: string[]): string | undefined {
   if (!row.customerName?.trim()) return "Missing customer name";
   if (!row.mobile?.trim()) return "Missing mobile";
   if (!/^\d{10,15}$/.test(row.mobile.replace(/\s/g, ""))) return "Invalid mobile number";
   if (!row.address?.trim()) return "Missing address";
   if (!row.orderSource?.trim()) return "Missing order source";
+  if (!row.product?.trim()) return "Missing product";
+  if (!row.price?.trim()) return "Missing price";
+  if (!row.orderDate?.trim()) return "Missing order date";
+  else if (!/^\d{4}-\d{2}-\d{2}$/.test(row.orderDate.trim())) return "Invalid order date format (YYYY-MM-DD)";
+  if (!row.deliveryDate?.trim()) return "Missing delivery date";
+  else if (!/^\d{4}-\d{2}-\d{2}$/.test(row.deliveryDate.trim())) return "Invalid delivery date format (YYYY-MM-DD)";
+  if (!row.deliveryMethod?.trim()) return "Missing delivery method";
+  else if (!activeDeliveryMethodNames.some((m) => m.toLowerCase() === row.deliveryMethod.trim().toLowerCase())) return "Invalid delivery method";
+  if (!row.itemDescription?.trim()) return "Missing item description";
   return undefined;
 }
 
@@ -76,6 +89,10 @@ export default function BulkImportPage() {
         product: ["product", "product title"],
         price: ["price", "amount"],
         note: ["note", "notes", "order note"],
+        orderDate: ["order date", "orderdate", "order_date"],
+        deliveryDate: ["delivery date", "deliverydate", "delivery_date"],
+        deliveryMethod: ["delivery method", "deliverymethod", "delivery_method", "delivery partner"],
+        itemDescription: ["item description", "itemdescription", "item_description", "description"],
       };
       headers.forEach((h) => {
         const hl = h.toLowerCase();
@@ -90,12 +107,13 @@ export default function BulkImportPage() {
   };
 
   const handlePreview = () => {
+    const deliveryMethodNames = activeDeliveryMethods.map((dm) => dm.name);
     const rows: ParsedRow[] = rawRows.map((row) => {
       const obj: Record<string, string> = {};
       rawHeaders.forEach((h, i) => { obj[h] = row[i] || ""; });
       const mapped: Record<string, string> = {};
       Object.entries(columnMapping).forEach(([key, col]) => { mapped[key] = obj[col] || ""; });
-      const error = validateRow(mapped);
+      const error = validateRow(mapped, deliveryMethodNames);
       return { ...mapped, error } as ParsedRow;
     });
     setParsedData(rows);
@@ -149,8 +167,12 @@ export default function BulkImportPage() {
                 <span>• Mobile Number *</span>
                 <span>• Address *</span>
                 <span>• Order Source *</span>
-                <span>• Product</span>
-                <span>• Price</span>
+                <span>• Product *</span>
+                <span>• Price *</span>
+                <span>• Order Date *</span>
+                <span>• Delivery Date *</span>
+                <span>• Delivery Method *</span>
+                <span>• Item Description *</span>
                 <span>• Order Note</span>
               </div>
             </div>
@@ -166,7 +188,7 @@ export default function BulkImportPage() {
 
             <div className="rounded-xl border border-border bg-card p-5 card-shadow">
               <div className="grid grid-cols-2 gap-3">
-                {["customerName", "mobile", "address", "orderSource", "product", "price", "note"].map((field) => (
+                {["customerName", "mobile", "address", "orderSource", "product", "price", "orderDate", "deliveryDate", "deliveryMethod", "itemDescription", "note"].map((field) => (
                   <div key={field} className="flex items-center gap-2">
                     <span className="text-xs font-medium text-foreground min-w-24 capitalize">
                       {field.replace(/([A-Z])/g, " $1")} {REQUIRED_COLUMNS.includes(field) ? "*" : ""}
@@ -233,11 +255,13 @@ export default function BulkImportPage() {
                     <thead>
                       <tr className="border-b border-border bg-muted/50">
                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Status</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Name</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Mobile</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Address</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Source</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Error</th>
+                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Name</th>
+                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Mobile</th>
+                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Source</th>
+                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Order Date</th>
+                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Delivery</th>
+                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Description</th>
+                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Error</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -246,8 +270,10 @@ export default function BulkImportPage() {
                           <td className="px-3 py-2">{row.error ? <AlertCircle className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle className="h-3.5 w-3.5 text-success" />}</td>
                           <td className="px-3 py-2 text-foreground">{row.customerName}</td>
                           <td className="px-3 py-2 text-muted-foreground">{row.mobile}</td>
-                          <td className="px-3 py-2 text-muted-foreground truncate max-w-32">{row.address}</td>
                           <td className="px-3 py-2 text-muted-foreground">{row.orderSource}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{row.orderDate}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{row.deliveryMethod}</td>
+                          <td className="px-3 py-2 text-muted-foreground truncate max-w-24">{row.itemDescription}</td>
                           <td className="px-3 py-2 text-destructive">{row.error}</td>
                         </tr>
                       ))}

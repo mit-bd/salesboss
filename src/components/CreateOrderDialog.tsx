@@ -52,6 +52,7 @@ export default function CreateOrderDialog() {
     orderDate: new Date().toISOString().split("T")[0],
     deliveryDate: "",
     deliveryMethod: "",
+    itemDescription: "",
   });
 
   const validate = (): boolean => {
@@ -101,9 +102,10 @@ export default function CreateOrderDialog() {
         parentOrderId: null,
         isRepeat: false,
         health: "new",
+        itemDescription: form.itemDescription,
       });
       toast({ title: "Order Created", description: `Order for ${form.customerName} created successfully.` });
-      setForm({ customerName: "", mobile: "", address: "", orderSource: "", productId: "", price: "", note: "", assignedTo: "", orderDate: new Date().toISOString().split("T")[0], deliveryDate: "", deliveryMethod: "" });
+      setForm({ customerName: "", mobile: "", address: "", orderSource: "", productId: "", price: "", note: "", assignedTo: "", orderDate: new Date().toISOString().split("T")[0], deliveryDate: "", deliveryMethod: "", itemDescription: "" });
       setErrors({});
       setOpen(false);
     } catch (err) {
@@ -205,6 +207,10 @@ export default function CreateOrderDialog() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          <div>
+            <Label className="text-xs">Item Description *</Label>
+            <Textarea value={form.itemDescription} onChange={(e) => update("itemDescription", e.target.value)} placeholder="Describe the items..." className="mt-1" rows={2} />
           </div>
           <div>
             <Label className="text-xs">Order Note</Label>

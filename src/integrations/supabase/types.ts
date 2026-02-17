@@ -140,20 +140,24 @@ export type Database = {
           delivery_method: string
           followup_date: string | null
           followup_step: number
+          generated_order_id: string
           health: string
           id: string
           invoice_id: string
           is_deleted: boolean
           is_repeat: boolean
           is_upsell: boolean
+          item_description: string
           mobile: string
           note: string
           order_date: string
+          order_sequence_number: number
           order_source: string
           paid_amount: number
           parent_order_id: string | null
           price: number
           product_id: string | null
+          product_sku: string
           product_title: string
           updated_at: string
         }
@@ -169,20 +173,24 @@ export type Database = {
           delivery_method?: string
           followup_date?: string | null
           followup_step?: number
+          generated_order_id?: string
           health?: string
           id?: string
           invoice_id?: string
           is_deleted?: boolean
           is_repeat?: boolean
           is_upsell?: boolean
+          item_description?: string
           mobile: string
           note?: string
           order_date?: string
+          order_sequence_number?: number
           order_source?: string
           paid_amount?: number
           parent_order_id?: string | null
           price?: number
           product_id?: string | null
+          product_sku?: string
           product_title?: string
           updated_at?: string
         }
@@ -198,20 +206,24 @@ export type Database = {
           delivery_method?: string
           followup_date?: string | null
           followup_step?: number
+          generated_order_id?: string
           health?: string
           id?: string
           invoice_id?: string
           is_deleted?: boolean
           is_repeat?: boolean
           is_upsell?: boolean
+          item_description?: string
           mobile?: string
           note?: string
           order_date?: string
+          order_sequence_number?: number
           order_source?: string
           paid_amount?: number
           parent_order_id?: string | null
           price?: number
           product_id?: string | null
+          product_sku?: string
           product_title?: string
           updated_at?: string
         }
@@ -487,6 +499,7 @@ export type Database = {
     }
     Functions: {
       advance_followup_steps: { Args: never; Returns: number }
+      get_next_sku_sequence: { Args: { p_sku: string }; Returns: number }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
