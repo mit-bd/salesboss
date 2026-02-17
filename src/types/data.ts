@@ -38,6 +38,7 @@ export interface Order {
   productSku?: string;
   orderSequenceNumber?: number;
   generatedOrderId?: string;
+  customerId?: string;
 }
 
 export interface FollowupStep {
