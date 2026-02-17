@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Order } from "@/types/data";
 import { mockDeliveryPartners } from "@/data/mockData";
@@ -12,7 +12,7 @@ import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { cn } from "@/lib/utils";
 import {
   Copy, Phone, MessageCircle, Plus, RefreshCw, Edit2,
-  ChevronLeft, ChevronRight, Truck, Loader2, CheckCircle, User,
+  ChevronLeft, ChevronRight, Truck, Loader2, CheckCircle, User, ShoppingBag,
 } from "lucide-react";
 
 const stepLabels = ["1st Followup", "2nd Followup", "3rd Followup", "4th Followup", "5th Followup"];
@@ -42,12 +42,23 @@ interface OrderTableProps {
 export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup, pageSize = 20, selectedIds, onSelectionChange }: OrderTableProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { updateOrder } = useOrderStore();
+  const { updateOrder, activeOrders } = useOrderStore();
   const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
   const [noteOrderId, setNoteOrderId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+
+  // Calculate total confirmed orders per mobile number
+  const orderCountByMobile = useMemo(() => {
+    const counts: Record<string, number> = {};
+    activeOrders.forEach((o) => {
+      if (o.mobile) {
+        counts[o.mobile] = (counts[o.mobile] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [activeOrders]);
 
   // Use external selection if provided, otherwise internal
   const selected = selectedIds ?? internalSelected;
@@ -109,7 +120,7 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Status</th>
               <th className="px-3 py-3 w-8"></th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Invoice / Product</th>
-              <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Customer</th>
+              <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Customer / Orders</th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Dates</th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Address</th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Delivery</th>
@@ -170,7 +181,7 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
 
                   {/* Invoice / Product */}
                   <td className="px-3 py-3">
-                    <p className="font-semibold text-primary text-xs">{order.invoiceId || order.id}</p>
+                    <p className="font-semibold text-primary text-xs">{order.generatedOrderId || order.invoiceId || order.id}</p>
                     <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{order.productTitle}</p>
                     {order.isRepeat && (
                       <Badge variant="outline" className="mt-1 gap-0.5 text-[9px] h-4 px-1 border-warning/30 text-warning">
@@ -184,7 +195,20 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
 
                   {/* Customer */}
                   <td className="px-3 py-3">
-                    <p className="font-semibold text-foreground text-xs">{order.customerName}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-semibold text-foreground text-xs">{order.customerName}</p>
+                      {orderCountByMobile[order.mobile] > 0 && (
+                        <button
+                          data-action="true"
+                          onClick={(e) => { e.stopPropagation(); navigate(`/orders?search=${encodeURIComponent(order.mobile)}`); }}
+                          className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold text-primary hover:bg-primary/20 transition-fast"
+                          title={`Total orders by ${order.mobile}`}
+                        >
+                          <ShoppingBag className="h-2.5 w-2.5" />
+                          {orderCountByMobile[order.mobile]}
+                        </button>
+                      )}
+                    </div>
                     <p className="text-[11px] text-muted-foreground">{order.mobile}</p>
                     <div className="flex items-center gap-1 mt-1" data-action="true">
                       <button data-action="true" onClick={(e) => { e.stopPropagation(); copyText(order.mobile, "Phone number"); }} className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-fast" title="Copy number">

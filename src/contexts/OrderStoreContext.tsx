@@ -74,6 +74,10 @@ function mapRow(row: any): Order {
     paidAmount: Number(row.paid_amount) || 0,
     invoiceId: row.invoice_id || row.id,
     currentStatus: row.current_status || "pending",
+    itemDescription: row.item_description || "",
+    productSku: row.product_sku || "",
+    orderSequenceNumber: row.order_sequence_number || 0,
+    generatedOrderId: row.generated_order_id || "",
   };
 }
 
@@ -265,9 +269,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
   const addOrder = useCallback(
     async (order: Omit<Order, "id">) => {
-      const { data, error } = await supabase
-        .from("orders")
-        .insert({
+      const insertPayload: any = {
           customer_name: order.customerName,
           mobile: order.mobile,
           address: order.address,
@@ -289,7 +291,12 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
           is_upsell: order.isUpsell || false,
           health: "new",
           created_by: user?.id,
-        })
+          item_description: order.itemDescription || "",
+        };
+
+      const { data, error } = await supabase
+        .from("orders")
+        .insert(insertPayload)
         .select()
         .single();
 

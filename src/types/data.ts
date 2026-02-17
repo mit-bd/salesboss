@@ -34,6 +34,10 @@ export interface Order {
   paidAmount?: number;
   invoiceId?: string;
   currentStatus?: "pending" | "completed";
+  itemDescription?: string;
+  productSku?: string;
+  orderSequenceNumber?: number;
+  generatedOrderId?: string;
 }
 
 export interface FollowupStep {

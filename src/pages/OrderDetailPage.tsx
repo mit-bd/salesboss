@@ -161,7 +161,7 @@ export default function OrderDetailPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-semibold text-foreground">{order.customerName}</h1>
-                <span className="text-xs text-muted-foreground">#{order.invoiceId || order.id}</span>
+                <span className="text-xs text-muted-foreground">#{order.generatedOrderId || order.invoiceId || order.id}</span>
                 {order.isRepeat && <Badge variant="outline" className="text-[10px] h-5 border-warning/40 text-warning bg-warning/5">REPEAT</Badge>}
                 {order.isUpsell && <Badge variant="outline" className="text-[10px] h-5 border-info/40 text-info bg-info/5">UPSELL</Badge>}
               </div>
@@ -216,6 +216,12 @@ export default function OrderDetailPage() {
                     <div className="pt-4 border-t border-border mt-4">
                       <p className="text-xs text-muted-foreground">Paid Amount</p>
                       <p className="text-sm font-bold text-success">৳{order.paidAmount}</p>
+                    </div>
+                  )}
+                  {order.itemDescription && (
+                    <div className="pt-4 border-t border-border mt-4">
+                      <p className="text-xs text-muted-foreground">Item Description</p>
+                      <p className="text-sm text-foreground">{order.itemDescription}</p>
                     </div>
                   )}
                 </div>
