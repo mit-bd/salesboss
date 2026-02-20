@@ -51,39 +51,22 @@ export default function BulkCompleteFollowupDialog({
       const ids = Array.from(selectedIds);
       const userName = profile?.full_name || "Admin User";
 
-      // Insert followup history for each order individually
-      const historyRows = ids.map((orderId) => ({
-        order_id: orderId,
-        step_number: activeStep,
-        note: note.trim(),
-        problems_discussed: "",
-        upsell_attempted: false,
-        upsell_details: "",
-        next_followup_date: isFinalStep ? null : nextDate,
-        completed_by: user?.id || null,
-        completed_by_name: userName,
-      }));
+      // Use atomic bulk followup completion RPC for transactional safety
+      const { data: affectedCount, error } = await supabase.rpc("bulk_complete_followups", {
+        p_order_ids: ids,
+        p_step_number: activeStep,
+        p_note: note.trim(),
+        p_next_followup_date: isFinalStep ? null : nextDate,
+        p_completed_by: user?.id || null,
+        p_completed_by_name: userName,
+      });
 
-      const { error: historyError } = await supabase
-        .from("followup_history")
-        .insert(historyRows);
+      if (error) {
+        console.error("[BulkCompleteFollowup] Atomic transaction failed:", error);
+        throw error;
+      }
 
-      if (historyError) throw historyError;
-
-      // Update all orders to completed status
-      const updatePayload: Record<string, any> = {
-        current_status: "completed",
-        followup_date: isFinalStep ? null : nextDate,
-      };
-      if (isFinalStep) updatePayload.health = "good";
-
-      const { error: orderError } = await supabase
-        .from("orders")
-        .update(updatePayload)
-        .in("id", ids);
-
-      if (orderError) throw orderError;
-
+      console.info(`[BulkCompleteFollowup] Atomically completed ${affectedCount} orders at step ${activeStep}`);
       await refreshOrders();
 
       addLog({
@@ -94,7 +77,7 @@ export default function BulkCompleteFollowupDialog({
         details: `Step ${activeStep} completed${isFinalStep ? " (final)" : `, next: ${nextDate}`}`,
       });
 
-      toast({ title: "Bulk Followup Complete", description: `${count} order(s) marked as completed for Step ${activeStep}.` });
+      toast({ title: "Bulk Followup Complete", description: `${affectedCount} order(s) marked as completed for Step ${activeStep}.` });
 
       setNote("");
       setNextDate("");
@@ -102,7 +85,7 @@ export default function BulkCompleteFollowupDialog({
       onOpenChange(false);
     } catch (err: any) {
       console.error("[BulkCompleteFollowup] Error:", err);
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Error", description: err.message + ". No records were modified.", variant: "destructive" });
     } finally {
       setSaving(false);
     }
