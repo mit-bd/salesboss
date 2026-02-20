@@ -88,9 +88,18 @@ export default function BulkSingleFieldDialog({ open, onOpenChange, fieldType, s
         }
       }
 
-      const { error } = await supabase.from("orders").update(updatePayload).in("id", ids);
-      if (error) throw error;
+      // Use atomic bulk update RPC for transactional safety
+      const { data: affectedCount, error } = await supabase.rpc("bulk_update_orders", {
+        p_order_ids: ids,
+        p_updates: updatePayload,
+      });
 
+      if (error) {
+        console.error(`[BulkSingleField:${fieldType}] Atomic bulk update failed:`, error);
+        throw error;
+      }
+
+      console.info(`[BulkSingleField:${fieldType}] Atomically updated ${affectedCount} orders`);
       await refreshOrders();
 
       addLog({
@@ -101,12 +110,13 @@ export default function BulkSingleFieldDialog({ open, onOpenChange, fieldType, s
         details: detail,
       });
 
-      toast({ title: "Bulk Update Complete", description: `${count} order(s): ${detail}` });
+      toast({ title: "Bulk Update Complete", description: `${affectedCount} order(s): ${detail}` });
       setValue("");
       onComplete();
       onOpenChange(false);
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      console.error(`[BulkSingleField:${fieldType}] Error:`, err);
+      toast({ title: "Error", description: err.message + ". No records were modified.", variant: "destructive" });
     } finally {
       setSaving(false);
     }

@@ -110,13 +110,18 @@ export default function BulkEditDialog({ open, onOpenChange, selectedIds, onComp
 
       if (Object.keys(updatePayload).length === 0) return;
 
-      const { error } = await supabase
-        .from("orders")
-        .update(updatePayload)
-        .in("id", ids);
+      // Use atomic bulk update RPC for transactional safety
+      const { data: affectedCount, error } = await supabase.rpc("bulk_update_orders", {
+        p_order_ids: ids,
+        p_updates: updatePayload,
+      });
 
-      if (error) throw error;
+      if (error) {
+        console.error("[BulkEdit] Atomic bulk update failed:", error);
+        throw error;
+      }
 
+      console.info(`[BulkEdit] Atomically updated ${affectedCount} orders`);
       await refreshOrders();
 
       const userName = profile?.full_name || "Admin User";
@@ -128,7 +133,7 @@ export default function BulkEditDialog({ open, onOpenChange, selectedIds, onComp
         details: changes.join("; "),
       });
 
-      toast({ title: "Bulk Update Complete", description: `${count} order(s) updated: ${changes.join(", ")}` });
+      toast({ title: "Bulk Update Complete", description: `${affectedCount} order(s) updated: ${changes.join(", ")}` });
 
       // Reset
       setFields({
@@ -143,7 +148,7 @@ export default function BulkEditDialog({ open, onOpenChange, selectedIds, onComp
       onOpenChange(false);
     } catch (err: any) {
       console.error("[BulkEdit] Error:", err);
-      toast({ title: "Bulk Update Failed", description: err.message || "An error occurred", variant: "destructive" });
+      toast({ title: "Bulk Update Failed", description: err.message || "An error occurred. No records were modified.", variant: "destructive" });
     } finally {
       setSaving(false);
     }
