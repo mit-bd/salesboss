@@ -6,13 +6,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ── Sales executive user IDs ──
 const HASAN_ID = "59b0b319-336b-4dac-8f6b-ee82ffabeea5";
 const KAJAL_ID = "6471e991-5f50-4a01-801b-00b242129f2e";
 const PEYARUL_ID = "51d4b678-c928-40a0-8bd9-e3f145dd0be0";
 const ADMIN_ID = "a795cb65-fd52-4c54-95aa-6ca2f840217e";
 
-// ── Products ──
 const PRODUCTS = [
   { id: "11ef1144-224d-4560-86a7-cb26c7ab34ef", sku: "SG-15", price: 990, title: "ShaktiGuard-ট্রায়াল প্যাকেজ (১৫ দিনের)" },
   { id: "65b05bc9-86f7-4bf3-b28d-a2ce8e607431", sku: "SG-30", price: 1590, title: "ShaktiGuard ১ মাসের প্যাকেজ।" },
@@ -21,13 +19,9 @@ const PRODUCTS = [
   { id: "3cb69630-a4a6-4f99-ae10-694de0ca9a1b", sku: "DC-30", price: 1200, title: "DiabaCare Plus" },
 ];
 
-const DELIVERY_METHOD = "ded04f1a-f52d-497d-bff2-0e24e01721dc"; // SteadFast
+const DELIVERY_METHOD = "ded04f1a-f52d-497d-bff2-0e24e01721dc";
+const ORDER_SOURCES = ["Website", "Phone Call", "Referral", "Messenger", "WhatsApp", "Comment", "FB Group", "Followup"];
 
-const ORDER_SOURCES = [
-  "Website", "Phone Call", "Referral", "Messenger", "WhatsApp", "Comment", "FB Group", "Followup"
-];
-
-// ── 50 Bangladeshi customer names ──
 const CUSTOMERS = [
   { name: "আরিফুল ইসলাম", mobile: "01711000101", address: "মিরপুর-১০, ঢাকা" },
   { name: "রহিমা বেগম", mobile: "01711000102", address: "উত্তরা সেক্টর-৭, ঢাকা" },
@@ -39,7 +33,6 @@ const CUSTOMERS = [
   { name: "তানভীর আহমেদ", mobile: "01711000108", address: "রামপুরা, ঢাকা" },
   { name: "রোকেয়া সুলতানা", mobile: "01711000109", address: "তেজগাঁও, ঢাকা" },
   { name: "মোঃ জাহিদুল ইসলাম", mobile: "01711000110", address: "কল্যাণপুর, ঢাকা" },
-  // Repeat customers (will have 2-3 orders) — indices 10-19
   { name: "আবু সাঈদ", mobile: "01711000111", address: "আগারগাঁও, ঢাকা" },
   { name: "শামীমা নাসরিন", mobile: "01711000112", address: "শ্যামলী, ঢাকা" },
   { name: "মোঃ রাসেল মিয়া", mobile: "01711000113", address: "যাত্রাবাড়ী, ঢাকা" },
@@ -50,7 +43,6 @@ const CUSTOMERS = [
   { name: "তাসলিমা আক্তার", mobile: "01711000118", address: "কাফরুল, ঢাকা" },
   { name: "আব্দুর রহমান", mobile: "01711000119", address: "বসুন্ধরা, ঢাকা" },
   { name: "সালমা বেগম", mobile: "01711000120", address: "নিকুঞ্জ, ঢাকা" },
-  // Regular customers 20-49
   { name: "জহিরুল ইসলাম", mobile: "01711000121", address: "চট্টগ্রাম সদর" },
   { name: "আমেনা খাতুন", mobile: "01711000122", address: "নারায়ণগঞ্জ সদর" },
   { name: "মোঃ ফারুক আহমেদ", mobile: "01711000123", address: "গাজীপুর সদর" },
@@ -86,418 +78,220 @@ const CUSTOMERS = [
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
-
 function dateStr(daysAgo: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
+  const d = new Date(); d.setDate(d.getDate() - daysAgo);
   return d.toISOString().split("T")[0];
 }
-
 function isoStr(daysAgo: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
+  const d = new Date(); d.setDate(d.getDate() - daysAgo);
   return d.toISOString();
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Auth check — admin only
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!authHeader) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const callerClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    const callerClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
     const { data: { user: caller } } = await callerClient.auth.getUser();
-    if (!caller) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!caller) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", caller.id).maybeSingle();
-    if (roleData?.role !== "admin") {
-      return new Response(JSON.stringify({ error: "Forbidden: Admin only" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (roleData?.role !== "admin") return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    const body = await req.json();
-    const { action } = body;
+    const { action } = await req.json();
 
     if (action === "seed") {
-      // ─── Step 1: Create customers ───
+      // Step 1: Batch create customers
       const customerIds: Record<string, string> = {};
       for (const c of CUSTOMERS) {
-        const { data } = await supabase.rpc("find_or_create_customer", {
-          p_name: c.name, p_mobile: c.mobile, p_address: c.address,
-        });
+        const { data } = await supabase.rpc("find_or_create_customer", { p_name: c.name, p_mobile: c.mobile, p_address: c.address });
         customerIds[c.mobile] = data as string;
       }
 
-      // ─── Step 2: Build order list ───
-      // Distribution: 40 S1P, 20 S1C, 20 S2P, 15 S3P, 10 S4P, 5 S5C, 10 Repeat = 120
-      // Assignment: Hasan 40, Kajal 40, Peyarul 30, Unassigned 10
-      const executives = [
-        { id: HASAN_ID, name: "Hasan", count: 40 },
-        { id: KAJAL_ID, name: "Kajal", count: 40 },
-        { id: PEYARUL_ID, name: "Peyarul", count: 30 },
+      // Step 2: Build all order rows — insert ONE AT A TIME to let trigger generate SKU IDs sequentially
+      const execs = [
+        { id: HASAN_ID, name: "Hasan" },
+        { id: KAJAL_ID, name: "Kajal" },
+        { id: PEYARUL_ID, name: "Peyarul" },
       ];
+      const execLimits = [40, 40, 30];
+      const execCounts = [0, 0, 0];
 
-      interface OrderDef {
-        step: number;
-        status: string;
-        health: string;
-        isRepeat: boolean;
-        parentIdx?: number; // index into orders array for parent
-        custIdx: number;
-        prodIdx: number;
-        assignedTo: string | null;
-        assignedToName: string;
-        daysAgo: number;
-      }
-
-      const orderDefs: OrderDef[] = [];
-      let custCursor = 0;
-      let assignIdx = 0; // which exec bucket
-      let assignCount = [0, 0, 0]; // current count per exec
-
-      function getNextExec(): { id: string | null; name: string } {
-        // Fill Hasan first, then Kajal, then Peyarul, then unassigned
+      function getExec(): { id: string | null; name: string } {
         for (let i = 0; i < 3; i++) {
-          if (assignCount[i] < executives[i].count) {
-            assignCount[i]++;
-            return { id: executives[i].id, name: executives[i].name };
-          }
+          if (execCounts[i] < execLimits[i]) { execCounts[i]++; return { id: execs[i].id, name: execs[i].name }; }
         }
-        return { id: null, name: "" };
+        return { id: null, name: "" }; // unassigned
       }
 
-      // 40 orders → Step 1 Pending
-      for (let i = 0; i < 40; i++) {
-        const exec = getNextExec();
-        orderDefs.push({
-          step: 1, status: "pending", health: "new", isRepeat: false,
-          custIdx: custCursor % 50, prodIdx: i % 5,
-          assignedTo: exec.id, assignedToName: exec.name,
-          daysAgo: 1 + (i % 15),
-        });
-        custCursor++;
-      }
+      interface ODef { step: number; status: string; health: string; custIdx: number; prodIdx: number; daysAgo: number; }
+      const defs: ODef[] = [];
+      let ci = 0;
+      // 40 S1P
+      for (let i = 0; i < 40; i++) { defs.push({ step: 1, status: "pending", health: "new", custIdx: ci++ % 50, prodIdx: i % 5, daysAgo: 1 + (i % 15) }); }
+      // 20 S1C
+      for (let i = 0; i < 20; i++) { defs.push({ step: 1, status: "completed", health: "good", custIdx: ci++ % 50, prodIdx: i % 5, daysAgo: 10 + (i % 10) }); }
+      // 20 S2P
+      for (let i = 0; i < 20; i++) { defs.push({ step: 2, status: "pending", health: "good", custIdx: ci++ % 50, prodIdx: i % 5, daysAgo: 15 + (i % 10) }); }
+      // 15 S3P
+      for (let i = 0; i < 15; i++) { defs.push({ step: 3, status: "pending", health: "good", custIdx: ci++ % 50, prodIdx: i % 5, daysAgo: 20 + (i % 10) }); }
+      // 10 S4P
+      for (let i = 0; i < 10; i++) { defs.push({ step: 4, status: "pending", health: "good", custIdx: (20 + i) % 50, prodIdx: i % 5, daysAgo: 30 + (i % 5) }); }
+      // 5 S5C
+      for (let i = 0; i < 5; i++) { defs.push({ step: 5, status: "completed", health: "good", custIdx: (30 + i) % 50, prodIdx: i % 5, daysAgo: 40 + i }); }
 
-      // 20 orders → Step 1 Completed
-      for (let i = 0; i < 20; i++) {
-        const exec = getNextExec();
-        orderDefs.push({
-          step: 1, status: "completed", health: "good", isRepeat: false,
-          custIdx: custCursor % 50, prodIdx: i % 5,
-          assignedTo: exec.id, assignedToName: exec.name,
-          daysAgo: 10 + (i % 10),
-        });
-        custCursor++;
-      }
+      // Insert orders one by one (trigger needs sequential access)
+      const orderIds: string[] = [];
+      const orderExecs: { id: string | null; name: string }[] = [];
+      for (let i = 0; i < defs.length; i++) {
+        const d = defs[i];
+        const c = CUSTOMERS[d.custIdx];
+        const p = PRODUCTS[d.prodIdx];
+        const ex = getExec();
+        orderExecs.push(ex);
+        const followupDate = d.status === "completed" ? null : dateStr(Math.max(0, d.daysAgo - 3));
 
-      // 20 orders → Step 2 Pending
-      for (let i = 0; i < 20; i++) {
-        const exec = getNextExec();
-        orderDefs.push({
-          step: 2, status: "pending", health: "good", isRepeat: false,
-          custIdx: custCursor % 50, prodIdx: i % 5,
-          assignedTo: exec.id, assignedToName: exec.name,
-          daysAgo: 15 + (i % 10),
-        });
-        custCursor++;
-      }
-
-      // 15 orders → Step 3 Pending
-      for (let i = 0; i < 15; i++) {
-        const exec = getNextExec();
-        orderDefs.push({
-          step: 3, status: "pending", health: "good", isRepeat: false,
-          custIdx: custCursor % 50, prodIdx: i % 5,
-          assignedTo: exec.id, assignedToName: exec.name,
-          daysAgo: 20 + (i % 10),
-        });
-        custCursor++;
-      }
-
-      // 10 orders → Step 4 Pending
-      for (let i = 0; i < 10; i++) {
-        const exec = getNextExec();
-        orderDefs.push({
-          step: 4, status: "pending", health: "good", isRepeat: false,
-          custIdx: (20 + i) % 50, prodIdx: i % 5,
-          assignedTo: exec.id, assignedToName: exec.name,
-          daysAgo: 30 + (i % 5),
-        });
-        custCursor++;
-      }
-
-      // 5 orders → Step 5 Completed
-      for (let i = 0; i < 5; i++) {
-        const exec = getNextExec();
-        orderDefs.push({
-          step: 5, status: "completed", health: "good", isRepeat: false,
-          custIdx: (30 + i) % 50, prodIdx: i % 5,
-          assignedTo: exec.id, assignedToName: exec.name,
-          daysAgo: 40 + i,
-        });
-        custCursor++;
-      }
-
-      // Reserve spots for 10 repeat orders (will be added after parents are inserted)
-      // Use repeat customers (index 10-19) as parents
-      // Parent orders are some of the S1C/S2P group above
-
-      // ─── Step 3: Insert base orders (110 non-repeat) ───
-      const insertedOrderIds: string[] = [];
-      for (let i = 0; i < orderDefs.length; i++) {
-        const def = orderDefs[i];
-        const cust = CUSTOMERS[def.custIdx];
-        const prod = PRODUCTS[def.prodIdx];
-        const followupDate = def.status === "completed" ? null : dateStr(-1 * (def.daysAgo > 3 ? def.daysAgo - 3 : 0));
-
-        const { data: order, error } = await supabase.from("orders").insert({
-          customer_name: cust.name,
-          mobile: cust.mobile,
-          address: cust.address,
+        const { data, error } = await supabase.from("orders").insert({
+          customer_name: c.name, mobile: c.mobile, address: c.address,
           order_source: pickRandom(ORDER_SOURCES),
-          product_id: prod.id,
-          product_title: prod.title,
-          price: prod.price,
-          followup_step: def.step,
-          current_status: def.status,
+          product_id: p.id, product_title: p.title, price: p.price,
+          followup_step: d.step, current_status: d.status,
           followup_date: followupDate,
-          assigned_to: def.assignedTo,
-          assigned_to_name: def.assignedToName,
-          order_date: dateStr(def.daysAgo),
-          delivery_date: dateStr(def.daysAgo - 3 > 0 ? def.daysAgo - 3 : 0),
-          delivery_method: DELIVERY_METHOD,
-          health: def.health,
-          customer_id: customerIds[cust.mobile],
-          created_by: ADMIN_ID,
-          is_repeat: false,
-          is_upsell: false,
-          note: "",
+          assigned_to: ex.id, assigned_to_name: ex.name,
+          order_date: dateStr(d.daysAgo), delivery_date: dateStr(Math.max(0, d.daysAgo - 3)),
+          delivery_method: DELIVERY_METHOD, health: d.health,
+          customer_id: customerIds[c.mobile], created_by: ADMIN_ID,
+          is_repeat: false, is_upsell: false, note: "",
         }).select("id").single();
 
-        if (error) {
-          console.error("Order insert error:", error.message);
-          insertedOrderIds.push("");
-        } else {
-          insertedOrderIds.push(order.id);
-        }
+        if (error) { console.error("Err:", error.message); orderIds.push(""); }
+        else { orderIds.push(data.id); }
       }
 
-      // ─── Step 4: Insert followup history for completed steps ───
-      // Orders at step N with status pending need history for steps 1..(N-1)
-      // Orders at step N with status completed need history for steps 1..N
-      for (let i = 0; i < orderDefs.length; i++) {
-        const def = orderDefs[i];
-        const orderId = insertedOrderIds[i];
-        if (!orderId) continue;
-
-        const historySteps = def.status === "completed" ? def.step : def.step - 1;
-        for (let s = 1; s <= historySteps; s++) {
-          const completedBy = def.assignedTo || ADMIN_ID;
-          const completedByName = def.assignedToName || "Admin";
-          const nextDate = s < 5 ? dateStr(def.daysAgo - s * 3) : null;
-
-          await supabase.from("followup_history").insert({
-            order_id: orderId,
-            step_number: s,
+      // Step 3: Batch insert followup history
+      const historyRows: any[] = [];
+      for (let i = 0; i < defs.length; i++) {
+        const d = defs[i];
+        const oid = orderIds[i];
+        if (!oid) continue;
+        const ex = orderExecs[i];
+        const stepsToCreate = d.status === "completed" ? d.step : d.step - 1;
+        for (let s = 1; s <= stepsToCreate; s++) {
+          historyRows.push({
+            order_id: oid, step_number: s,
             note: `Step ${s} followup completed.`,
             problems_discussed: s > 1 ? "Customer had questions about usage." : "",
-            upsell_attempted: false,
-            upsell_details: "",
-            next_followup_date: nextDate,
-            completed_by: completedBy,
-            completed_by_name: completedByName,
-            completed_at: isoStr(def.daysAgo - (s - 1) * 3),
+            upsell_attempted: false, upsell_details: "",
+            next_followup_date: s < 5 ? dateStr(d.daysAgo - s * 3) : null,
+            completed_by: ex.id || ADMIN_ID,
+            completed_by_name: ex.name || "Admin",
+            completed_at: isoStr(d.daysAgo - (s - 1) * 3),
           });
         }
       }
+      // Insert in batches of 50
+      for (let b = 0; b < historyRows.length; b += 50) {
+        const batch = historyRows.slice(b, b + 50);
+        const { error } = await supabase.from("followup_history").insert(batch);
+        if (error) console.error("History batch err:", error.message);
+      }
 
-      // ─── Step 5: Insert 10 repeat orders ───
-      // Use repeat customers (indices 10-19) — find their parent orders
-      const repeatParentIndices = [40, 41, 42, 43, 44, 60, 61, 62, 63, 64]; // S1C and S2P groups
-      const repeatOrderIds: string[] = [];
+      // Step 4: Insert 10 repeat orders
+      const parentIndices = [40, 41, 42, 43, 44, 60, 61, 62, 63, 64];
+      const repeatIds: string[] = [];
       for (let r = 0; r < 10; r++) {
-        const parentIdx = repeatParentIndices[r % repeatParentIndices.length];
-        const parentId = insertedOrderIds[parentIdx];
+        const parentId = orderIds[parentIndices[r]];
         if (!parentId) continue;
-
-        const custIdx = 10 + r; // repeat customers
-        const cust = CUSTOMERS[custIdx];
-        const prod = PRODUCTS[r % 5];
-        const exec = executives[r % 3];
-
-        const { data: repOrder } = await supabase.from("orders").insert({
-          customer_name: cust.name,
-          mobile: cust.mobile,
-          address: cust.address,
-          order_source: "Followup",
-          product_id: prod.id,
-          product_title: prod.title,
-          price: prod.price,
-          followup_step: 1,
-          current_status: "pending",
-          followup_date: dateStr(0),
-          assigned_to: exec.id,
-          assigned_to_name: exec.name,
-          order_date: dateStr(2),
-          delivery_date: dateStr(0),
-          delivery_method: DELIVERY_METHOD,
-          health: "good",
-          customer_id: customerIds[cust.mobile],
-          created_by: ADMIN_ID,
-          parent_order_id: parentId,
-          is_repeat: true,
-          is_upsell: false,
+        const c = CUSTOMERS[10 + r];
+        const p = PRODUCTS[r % 5];
+        const ex = execs[r % 3];
+        const { data, error } = await supabase.from("orders").insert({
+          customer_name: c.name, mobile: c.mobile, address: c.address,
+          order_source: "Followup", product_id: p.id, product_title: p.title, price: p.price,
+          followup_step: 1, current_status: "pending", followup_date: dateStr(0),
+          assigned_to: ex.id, assigned_to_name: ex.name,
+          order_date: dateStr(2), delivery_date: dateStr(0),
+          delivery_method: DELIVERY_METHOD, health: "good",
+          customer_id: customerIds[c.mobile], created_by: ADMIN_ID,
+          parent_order_id: parentId, is_repeat: true, is_upsell: false,
           note: "Repeat order from followup",
         }).select("id").single();
-
-        if (repOrder) repeatOrderIds.push(repOrder.id);
+        if (data) repeatIds.push(data.id); else if (error) console.error("Repeat err:", error.message);
       }
 
-      // ─── Step 6: Create followup history entries with upsell data ───
-      // Pick 15 completed-step orders for upsell entries
-      const upsellOrderIndices: number[] = [];
-      for (let i = 0; i < orderDefs.length && upsellOrderIndices.length < 15; i++) {
-        const def = orderDefs[i];
-        if ((def.status === "completed" || def.step > 1) && insertedOrderIds[i]) {
-          upsellOrderIndices.push(i);
-        }
+      // Step 5: Upsell records — get followup history IDs for first 15 completed orders
+      const upsellCandidates = defs.map((d, i) => ({ i, d })).filter(x => (x.d.status === "completed" || x.d.step > 1) && orderIds[x.i]).slice(0, 15);
+      const upsellOrderIds = upsellCandidates.map(x => orderIds[x.i]);
+      const { data: allHistories } = await supabase.from("followup_history").select("id, order_id").in("order_id", upsellOrderIds).order("step_number", { ascending: true });
+
+      const orderHistoryMap: Record<string, string> = {};
+      for (const h of allHistories || []) {
+        if (!orderHistoryMap[h.order_id]) orderHistoryMap[h.order_id] = h.id;
       }
 
-      // Get followup_history IDs for these orders to attach upsell records
-      for (const idx of upsellOrderIndices) {
-        const orderId = insertedOrderIds[idx];
-        const { data: histories } = await supabase
-          .from("followup_history")
-          .select("id, step_number")
-          .eq("order_id", orderId)
-          .order("step_number", { ascending: true })
-          .limit(1);
-
-        if (histories && histories.length > 0) {
-          const followupId = histories[0].id;
-          const upsellProd = PRODUCTS[(idx + 1) % 5];
-
-          await supabase.from("upsell_records").insert({
-            followup_id: followupId,
-            product_id: upsellProd.id,
-            product_name: upsellProd.title,
-            price: upsellProd.price,
-            note: "Customer interested in additional product",
-            added_by: orderDefs[idx].assignedTo || ADMIN_ID,
-          });
-
-          // Some orders get multiple upsell products
-          if (idx % 3 === 0) {
-            const upsellProd2 = PRODUCTS[(idx + 2) % 5];
-            await supabase.from("upsell_records").insert({
-              followup_id: followupId,
-              product_id: upsellProd2.id,
-              product_name: upsellProd2.title,
-              price: upsellProd2.price,
-              note: "Second upsell product",
-              added_by: orderDefs[idx].assignedTo || ADMIN_ID,
-            });
-          }
+      const upsellRows: any[] = [];
+      for (let idx = 0; idx < upsellCandidates.length; idx++) {
+        const oid = orderIds[upsellCandidates[idx].i];
+        const fid = orderHistoryMap[oid];
+        if (!fid) continue;
+        const up = PRODUCTS[(idx + 1) % 5];
+        upsellRows.push({ followup_id: fid, product_id: up.id, product_name: up.title, price: up.price, note: "Customer interested", added_by: orderExecs[upsellCandidates[idx].i].id || ADMIN_ID });
+        if (idx % 3 === 0) {
+          const up2 = PRODUCTS[(idx + 2) % 5];
+          upsellRows.push({ followup_id: fid, product_id: up2.id, product_name: up2.title, price: up2.price, note: "Second upsell", added_by: orderExecs[upsellCandidates[idx].i].id || ADMIN_ID });
         }
       }
+      if (upsellRows.length > 0) {
+        const { error } = await supabase.from("upsell_records").insert(upsellRows);
+        if (error) console.error("Upsell err:", error.message);
+      }
 
-      // ─── Step 7: Create repeat_order_records linking to repeat orders ───
-      for (let r = 0; r < repeatOrderIds.length; r++) {
-        const parentIdx = repeatParentIndices[r % repeatParentIndices.length];
-        const parentOrderId = insertedOrderIds[parentIdx];
-        if (!parentOrderId) continue;
-
-        const { data: histories } = await supabase
-          .from("followup_history")
-          .select("id")
-          .eq("order_id", parentOrderId)
-          .order("step_number", { ascending: false })
-          .limit(1);
-
-        if (histories && histories.length > 0) {
-          const prod = PRODUCTS[r % 5];
-          await supabase.from("repeat_order_records").insert({
-            followup_id: histories[0].id,
-            product_id: prod.id,
-            product_name: prod.title,
-            price: prod.price,
-            child_order_id: repeatOrderIds[r],
-            note: "Repeat order from followup",
-            added_by: executives[r % 3].id,
-          });
-        }
+      // Step 6: Repeat order records
+      const repeatRecordRows: any[] = [];
+      for (let r = 0; r < repeatIds.length; r++) {
+        const parentId = orderIds[parentIndices[r]];
+        const fid = orderHistoryMap[parentId];
+        if (!fid) continue;
+        const p = PRODUCTS[r % 5];
+        repeatRecordRows.push({ followup_id: fid, product_id: p.id, product_name: p.title, price: p.price, child_order_id: repeatIds[r], note: "Repeat from followup", added_by: execs[r % 3].id });
+      }
+      if (repeatRecordRows.length > 0) {
+        const { error } = await supabase.from("repeat_order_records").insert(repeatRecordRows);
+        if (error) console.error("Repeat record err:", error.message);
       }
 
       return new Response(JSON.stringify({
         success: true,
-        summary: {
-          customers: Object.keys(customerIds).length,
-          baseOrders: insertedOrderIds.filter(Boolean).length,
-          repeatOrders: repeatOrderIds.length,
-          totalOrders: insertedOrderIds.filter(Boolean).length + repeatOrderIds.length,
-          upsellRecords: upsellOrderIndices.length,
-        },
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        summary: { customers: Object.keys(customerIds).length, baseOrders: orderIds.filter(Boolean).length, repeatOrders: repeatIds.length, totalOrders: orderIds.filter(Boolean).length + repeatIds.length, upsellRecords: upsellRows.length },
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (action === "cleanup") {
-      // Delete all demo data by mobile pattern
       const demoMobiles = CUSTOMERS.map(c => c.mobile);
-
-      // Get order IDs for cleanup
-      const { data: demoOrders } = await supabase
-        .from("orders")
-        .select("id")
-        .in("mobile", demoMobiles);
-
+      const { data: demoOrders } = await supabase.from("orders").select("id").in("mobile", demoMobiles);
       if (demoOrders && demoOrders.length > 0) {
-        const orderIds = demoOrders.map(o => o.id);
-
-        // Delete in dependency order
-        await supabase.from("upsell_records").delete().in("followup_id",
-          (await supabase.from("followup_history").select("id").in("order_id", orderIds)).data?.map((h: any) => h.id) || []
-        );
-        await supabase.from("repeat_order_records").delete().in("followup_id",
-          (await supabase.from("followup_history").select("id").in("order_id", orderIds)).data?.map((h: any) => h.id) || []
-        );
-        await supabase.from("followup_history").delete().in("order_id", orderIds);
-        await supabase.from("orders").delete().in("id", orderIds);
+        const oids = demoOrders.map(o => o.id);
+        const { data: hists } = await supabase.from("followup_history").select("id").in("order_id", oids);
+        const hids = hists?.map((h: any) => h.id) || [];
+        if (hids.length) {
+          await supabase.from("upsell_records").delete().in("followup_id", hids);
+          await supabase.from("repeat_order_records").delete().in("followup_id", hids);
+        }
+        await supabase.from("followup_history").delete().in("order_id", oids);
+        await supabase.from("orders").delete().in("id", oids);
       }
-
-      // Delete demo customers
       await supabase.from("customers").delete().in("mobile_number", demoMobiles);
-
-      return new Response(JSON.stringify({ success: true, message: "Demo data cleaned up" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(JSON.stringify({ success: true, message: "Cleaned up" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    return new Response(JSON.stringify({ error: "Unknown action. Use 'seed' or 'cleanup'" }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({ error: "Use 'seed' or 'cleanup'" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
