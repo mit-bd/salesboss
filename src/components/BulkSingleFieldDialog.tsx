@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useDeliveryMethods } from "@/hooks/useDeliveryMethods";
 import { useOrderSources } from "@/hooks/useOrderSources";
@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/contexts/AuditLogContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
+import { useBulkConflict } from "@/hooks/useBulkConflict";
 
 export type BulkFieldType = "assignExecutive" | "deliveryMethod" | "orderSource" | "followupDate";
 
@@ -23,6 +24,7 @@ interface BulkSingleFieldDialogProps {
   fieldType: BulkFieldType;
   selectedIds: Set<string>;
   onComplete: () => void;
+  onConflict?: (conflictIds: Set<string>) => void;
 }
 
 const TITLES: Record<BulkFieldType, string> = {
@@ -32,7 +34,7 @@ const TITLES: Record<BulkFieldType, string> = {
   followupDate: "Update Next Followup Date",
 };
 
-export default function BulkSingleFieldDialog({ open, onOpenChange, fieldType, selectedIds, onComplete }: BulkSingleFieldDialogProps) {
+export default function BulkSingleFieldDialog({ open, onOpenChange, fieldType, selectedIds, onComplete, onConflict }: BulkSingleFieldDialogProps) {
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -43,6 +45,7 @@ export default function BulkSingleFieldDialog({ open, onOpenChange, fieldType, s
   const { members } = useTeamMembers();
   const { methods: deliveryMethods } = useDeliveryMethods({ activeOnly: true });
   const { sources: orderSources } = useOrderSources({ activeOnly: true });
+  const { buildVersionMap, handleConflictResponse, conflict, clearConflict } = useBulkConflict();
 
   const allExecutives = [
     ...members.map((m) => ({ id: m.userId, name: m.name })),
@@ -51,13 +54,21 @@ export default function BulkSingleFieldDialog({ open, onOpenChange, fieldType, s
 
   const count = selectedIds.size;
 
+  const handleReload = async () => {
+    clearConflict();
+    await refreshOrders();
+    toast({ title: "Data Reloaded", description: "Latest order data has been fetched." });
+  };
+
   const handleSubmit = async () => {
     if (!value) return;
     setConfirmOpen(false);
     setSaving(true);
+    clearConflict();
 
     try {
       const ids = Array.from(selectedIds);
+      const versions = buildVersionMap(ids);
       const updatePayload: Record<string, any> = {};
       let detail = "";
 
@@ -88,9 +99,10 @@ export default function BulkSingleFieldDialog({ open, onOpenChange, fieldType, s
         }
       }
 
-      // Use atomic bulk update RPC for transactional safety
-      const { data: affectedCount, error } = await supabase.rpc("bulk_update_orders", {
+      // Use version-checked atomic bulk update
+      const { data: result, error } = await supabase.rpc("bulk_update_orders_with_lock", {
         p_order_ids: ids,
+        p_versions: versions,
         p_updates: updatePayload,
       });
 
@@ -99,7 +111,27 @@ export default function BulkSingleFieldDialog({ open, onOpenChange, fieldType, s
         throw error;
       }
 
-      console.info(`[BulkSingleField:${fieldType}] Atomically updated ${affectedCount} orders`);
+      // Check for conflicts
+      if (handleConflictResponse(result as any)) {
+        const conflictResult = result as any;
+        addLog({
+          actionType: `Bulk ${TITLES[fieldType]} Failed`,
+          userName: profile?.full_name || "Admin User",
+          role: role || "unknown",
+          entity: `${count} orders`,
+          details: `Conflict on ${conflictResult.conflict_ids.length} record(s). Batch aborted.`,
+        });
+        onConflict?.(new Set(conflictResult.conflict_ids));
+        toast({
+          title: "Conflict Detected",
+          description: "Some records were modified by another user. Entire batch aborted.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const successResult = result as any;
+      console.info(`[BulkSingleField:${fieldType}] Atomically updated ${successResult.affected_count} orders`);
       await refreshOrders();
 
       addLog({
@@ -110,13 +142,15 @@ export default function BulkSingleFieldDialog({ open, onOpenChange, fieldType, s
         details: detail,
       });
 
-      toast({ title: "Bulk Update Complete", description: `${affectedCount} order(s): ${detail}` });
+      toast({ title: "Bulk Update Complete", description: `${successResult.affected_count} order(s): ${detail}` });
       setValue("");
       onComplete();
       onOpenChange(false);
     } catch (err: any) {
       console.error(`[BulkSingleField:${fieldType}] Error:`, err);
-      toast({ title: "Error", description: err.message + ". No records were modified.", variant: "destructive" });
+      if (!conflict.hasConflict) {
+        toast({ title: "Error", description: err.message + ". No records were modified.", variant: "destructive" });
+      }
     } finally {
       setSaving(false);
     }
@@ -158,11 +192,28 @@ export default function BulkSingleFieldDialog({ open, onOpenChange, fieldType, s
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) clearConflict(); onOpenChange(v); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>{TITLES[fieldType]}</DialogTitle>
         </DialogHeader>
+
+        {/* Conflict Banner */}
+        {conflict.hasConflict && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-destructive">Conflict Detected</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{conflict.message}</p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs h-7" onClick={handleReload}>
+              <RefreshCw className="h-3 w-3" /> Reload Data
+            </Button>
+          </div>
+        )}
+
         <div className="rounded-lg bg-muted/50 p-3 mb-3">
           <p className="text-sm font-medium">{count} order{count !== 1 ? "s" : ""} selected</p>
         </div>
@@ -171,7 +222,7 @@ export default function BulkSingleFieldDialog({ open, onOpenChange, fieldType, s
           {renderField()}
         </div>
         <div className="flex justify-end gap-2 pt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+          <Button variant="outline" onClick={() => { clearConflict(); onOpenChange(false); }} disabled={saving}>Cancel</Button>
           {!confirmOpen ? (
             <Button onClick={() => setConfirmOpen(true)} disabled={!value || saving}>
               Apply to {count}

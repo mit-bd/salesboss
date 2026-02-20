@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useDeliveryMethods } from "@/hooks/useDeliveryMethods";
 import { useOrderSources } from "@/hooks/useOrderSources";
@@ -15,12 +15,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/contexts/AuditLogContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
+import { useBulkConflict } from "@/hooks/useBulkConflict";
 
 interface BulkEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedIds: Set<string>;
   onComplete: () => void;
+  onConflict?: (conflictIds: Set<string>) => void;
 }
 
 interface FieldState {
@@ -28,7 +30,7 @@ interface FieldState {
   value: string;
 }
 
-export default function BulkEditDialog({ open, onOpenChange, selectedIds, onComplete }: BulkEditDialogProps) {
+export default function BulkEditDialog({ open, onOpenChange, selectedIds, onComplete, onConflict }: BulkEditDialogProps) {
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const { toast } = useToast();
@@ -38,6 +40,7 @@ export default function BulkEditDialog({ open, onOpenChange, selectedIds, onComp
   const { members } = useTeamMembers();
   const { methods: deliveryMethods } = useDeliveryMethods({ activeOnly: true });
   const { sources: orderSources } = useOrderSources({ activeOnly: true });
+  const { buildVersionMap, handleConflictResponse, conflict, clearConflict } = useBulkConflict();
 
   const allExecutives = [
     ...members.map((m) => ({ id: m.userId, name: m.name })),
@@ -64,13 +67,21 @@ export default function BulkEditDialog({ open, onOpenChange, selectedIds, onComp
   const enabledCount = Object.values(fields).filter((f) => f.enabled && f.value).length;
   const count = selectedIds.size;
 
+  const handleReload = async () => {
+    clearConflict();
+    await refreshOrders();
+    toast({ title: "Data Reloaded", description: "Latest order data has been fetched." });
+  };
+
   const handleSubmit = async () => {
     if (enabledCount === 0) return;
     setConfirmOpen(false);
     setSaving(true);
+    clearConflict();
 
     try {
       const ids = Array.from(selectedIds);
+      const versions = buildVersionMap(ids);
       const updatePayload: Record<string, any> = {};
       const changes: string[] = [];
 
@@ -110,9 +121,10 @@ export default function BulkEditDialog({ open, onOpenChange, selectedIds, onComp
 
       if (Object.keys(updatePayload).length === 0) return;
 
-      // Use atomic bulk update RPC for transactional safety
-      const { data: affectedCount, error } = await supabase.rpc("bulk_update_orders", {
+      // Use version-checked atomic bulk update
+      const { data: result, error } = await supabase.rpc("bulk_update_orders_with_lock", {
         p_order_ids: ids,
+        p_versions: versions,
         p_updates: updatePayload,
       });
 
@@ -121,21 +133,40 @@ export default function BulkEditDialog({ open, onOpenChange, selectedIds, onComp
         throw error;
       }
 
-      console.info(`[BulkEdit] Atomically updated ${affectedCount} orders`);
+      // Check for conflicts
+      if (handleConflictResponse(result as any)) {
+        const conflictResult = result as any;
+        // Log failed attempt
+        addLog({
+          actionType: "Bulk Edit Failed",
+          userName: profile?.full_name || "Admin User",
+          role: role || "unknown",
+          entity: `${count} orders`,
+          details: `Conflict detected on ${conflictResult.conflict_ids.length} record(s). Batch aborted.`,
+        });
+        onConflict?.(new Set(conflictResult.conflict_ids));
+        toast({
+          title: "Conflict Detected",
+          description: "Some records were modified by another user. Entire batch aborted.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const successResult = result as any;
+      console.info(`[BulkEdit] Atomically updated ${successResult.affected_count} orders`);
       await refreshOrders();
 
-      const userName = profile?.full_name || "Admin User";
       addLog({
         actionType: "Bulk Edit",
-        userName,
+        userName: profile?.full_name || "Admin User",
         role: role || "unknown",
         entity: `${count} orders`,
         details: changes.join("; "),
       });
 
-      toast({ title: "Bulk Update Complete", description: `${affectedCount} order(s) updated: ${changes.join(", ")}` });
+      toast({ title: "Bulk Update Complete", description: `${successResult.affected_count} order(s) updated: ${changes.join(", ")}` });
 
-      // Reset
       setFields({
         assignedTo: { enabled: false, value: "" },
         deliveryMethod: { enabled: false, value: "" },
@@ -148,20 +179,40 @@ export default function BulkEditDialog({ open, onOpenChange, selectedIds, onComp
       onOpenChange(false);
     } catch (err: any) {
       console.error("[BulkEdit] Error:", err);
-      toast({ title: "Bulk Update Failed", description: err.message || "An error occurred. No records were modified.", variant: "destructive" });
+      if (!conflict.hasConflict) {
+        toast({ title: "Bulk Update Failed", description: err.message || "An error occurred. No records were modified.", variant: "destructive" });
+      }
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) clearConflict(); onOpenChange(v); }}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Bulk Edit — {count} Order{count !== 1 ? "s" : ""}
           </DialogTitle>
         </DialogHeader>
+
+        {/* Conflict Banner */}
+        {conflict.hasConflict && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-destructive">Conflict Detected</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{conflict.message}</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="gap-1.5 text-xs h-7" onClick={handleReload}>
+                <RefreshCw className="h-3 w-3" /> Reload Data
+              </Button>
+            </div>
+          </div>
+        )}
 
         <p className="text-xs text-muted-foreground mb-4">
           Check the fields you want to update. Only checked fields will be modified across all selected orders.
@@ -269,7 +320,7 @@ export default function BulkEditDialog({ open, onOpenChange, selectedIds, onComp
             {enabledCount > 0 ? `${enabledCount} field(s) will be updated` : "Select at least one field"}
           </p>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>
+            <Button variant="outline" size="sm" onClick={() => { clearConflict(); onOpenChange(false); }} disabled={saving}>
               Cancel
             </Button>
             {!confirmOpen ? (

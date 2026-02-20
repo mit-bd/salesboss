@@ -547,9 +547,25 @@ export type Database = {
         }
         Returns: number
       }
+      bulk_complete_followups_with_lock: {
+        Args: {
+          p_completed_by: string
+          p_completed_by_name: string
+          p_next_followup_date: string
+          p_note: string
+          p_order_ids: string[]
+          p_step_number: number
+          p_versions: Json
+        }
+        Returns: Json
+      }
       bulk_update_orders: {
         Args: { p_order_ids: string[]; p_updates: Json }
         Returns: number
+      }
+      bulk_update_orders_with_lock: {
+        Args: { p_order_ids: string[]; p_updates: Json; p_versions: Json }
+        Returns: Json
       }
       find_or_create_customer: {
         Args: { p_address: string; p_mobile: string; p_name: string }
