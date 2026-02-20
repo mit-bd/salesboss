@@ -79,6 +79,7 @@ function mapRow(row: any): Order {
     orderSequenceNumber: row.order_sequence_number || 0,
     generatedOrderId: row.generated_order_id || "",
     customerId: row.customer_id || "",
+    updatedAt: row.updated_at || "",
   };
 }
 
@@ -547,7 +548,8 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
   const updateOrder = useCallback(
     async (updated: Order) => {
-      const { data, error } = await supabase
+      // Optimistic concurrency control: only update if updated_at matches
+      let query = supabase
         .from("orders")
         .update({
           customer_name: updated.customerName, mobile: updated.mobile, address: updated.address,
@@ -559,10 +561,26 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
           delivery_method: updated.deliveryMethod, health: updated.health,
           current_status: updated.currentStatus || "pending",
         })
-        .eq("id", updated.id)
-        .select()
-        .single();
+        .eq("id", updated.id);
+
+      // If we have the updatedAt timestamp, use it as a concurrency guard
+      if (updated.updatedAt) {
+        query = query.eq("updated_at", updated.updatedAt);
+      }
+
+      const { data, error, count } = await query.select().single();
+
       if (error) {
+        // PGRST116 = no rows returned, meaning updated_at didn't match (stale data)
+        if (error.code === "PGRST116" && updated.updatedAt) {
+          console.warn("[OrderStore] Concurrency conflict detected for order:", updated.id);
+          toast({
+            title: "Conflict Detected",
+            description: "This order has been updated by another user. Please reload.",
+            variant: "destructive",
+          });
+          throw new Error("CONCURRENCY_CONFLICT");
+        }
         console.error("[OrderStore] Update error:", error);
         toast({ title: "Error updating order", description: error.message, variant: "destructive" });
         throw error;

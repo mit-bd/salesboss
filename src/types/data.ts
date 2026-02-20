@@ -39,6 +39,7 @@ export interface Order {
   orderSequenceNumber?: number;
   generatedOrderId?: string;
   customerId?: string;
+  updatedAt?: string;
 }
 
 export interface FollowupStep {
