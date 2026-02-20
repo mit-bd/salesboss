@@ -37,9 +37,10 @@ interface OrderTableProps {
   pageSize?: number;
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
+  conflictIds?: Set<string>;
 }
 
-export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup, pageSize = 20, selectedIds, onSelectionChange }: OrderTableProps) {
+export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup, pageSize = 20, selectedIds, onSelectionChange, conflictIds }: OrderTableProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { updateOrder, activeOrders } = useOrderStore();
@@ -145,9 +146,10 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
             {pageOrders.map((order) => {
               const isCompleted = order.followupDate <= today;
               const isAssigned = !!(order.assignedTo && order.assignedToName);
+              const hasConflict = conflictIds?.has(order.id) ?? false;
 
               return (
-                <tr key={order.id} onClick={(e) => handleRowClick(order.id, e)} className="border-b border-border last:border-0 hover:bg-muted/30 transition-fast cursor-pointer group">
+                <tr key={order.id} onClick={(e) => handleRowClick(order.id, e)} className={cn("border-b border-border last:border-0 hover:bg-muted/30 transition-fast cursor-pointer group", hasConflict && "bg-destructive/5 hover:bg-destructive/10")}>
                   <td className="px-3 py-3" data-action="true">
                     <Checkbox checked={selected.has(order.id)} onCheckedChange={() => toggleOne(order.id)} data-action="true" />
                   </td>
@@ -155,6 +157,11 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                   {/* Status */}
                   <td className="px-3 py-3">
                     <div className="flex flex-col gap-1">
+                      {hasConflict && (
+                        <Badge variant="outline" className="text-[9px] h-4 px-1 border-destructive/40 text-destructive bg-destructive/5 w-fit">
+                          Conflict
+                        </Badge>
+                      )}
                       <span className={cn("inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold w-fit", stepColors[order.followupStep - 1])}>
                         Step {order.followupStep}
                       </span>

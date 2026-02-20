@@ -54,6 +54,7 @@ export default function FollowupsPage() {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [completeOrder, setCompleteOrder] = useState<Order | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [conflictIds, setConflictIds] = useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [singleFieldOpen, setSingleFieldOpen] = useState(false);
   const [singleFieldType, setSingleFieldType] = useState<BulkFieldType>("assignExecutive");
@@ -82,7 +83,7 @@ export default function FollowupsPage() {
     setSingleFieldOpen(true);
   };
 
-  const clearSelection = () => setSelectedIds(new Set());
+  const clearSelection = () => { setSelectedIds(new Set()); setConflictIds(new Set()); };
 
   return (
     <AppLayout>
@@ -160,6 +161,7 @@ export default function FollowupsPage() {
           onCompleteFollowup={activeTab === "pending" ? (order) => setCompleteOrder(order) : undefined}
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
+          conflictIds={conflictIds}
         />
       </div>
 
@@ -192,6 +194,7 @@ export default function FollowupsPage() {
             onOpenChange={setBulkEditOpen}
             selectedIds={selectedIds}
             onComplete={clearSelection}
+            onConflict={setConflictIds}
           />
           <BulkSingleFieldDialog
             open={singleFieldOpen}
@@ -199,6 +202,7 @@ export default function FollowupsPage() {
             fieldType={singleFieldType}
             selectedIds={selectedIds}
             onComplete={clearSelection}
+            onConflict={setConflictIds}
           />
           <BulkCompleteFollowupDialog
             open={bulkCompleteOpen}
@@ -206,6 +210,7 @@ export default function FollowupsPage() {
             selectedIds={selectedIds}
             activeStep={activeStep}
             onComplete={clearSelection}
+            onConflict={setConflictIds}
           />
         </>
       )}
