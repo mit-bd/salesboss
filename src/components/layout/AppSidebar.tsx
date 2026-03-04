@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import ThemeSwitcher from "@/components/ThemeSwitcher";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -216,6 +217,11 @@ export default function AppSidebar() {
           </div>
         ))}
       </nav>
+
+      {/* Theme Switcher */}
+      <div className="border-t border-sidebar-border px-4 py-2.5 shrink-0">
+        <ThemeSwitcher />
+      </div>
 
       {/* User Footer */}
       <div className="border-t border-sidebar-border p-4 shrink-0">
