@@ -23,7 +23,12 @@ export default function LoginPage() {
     );
   }
 
-  if (session) return <Navigate to="/" replace />;
+  // Redirect based on role if already logged in
+  if (session) {
+    const { role } = useAuth();
+    if (role === "owner") return <Navigate to="/owner" replace />;
+    return <Navigate to="/" replace />;
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
