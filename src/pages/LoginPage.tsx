@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -14,21 +14,6 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [adminExists, setAdminExists] = useState(true);
-
-  useEffect(() => {
-    const checkAdmin = async () => {
-      try {
-        const { data } = await supabase.functions.invoke("manage-team", {
-          body: { action: "check_admin_exists" },
-        });
-        setAdminExists(data?.adminExists ?? true);
-      } catch {
-        setAdminExists(true);
-      }
-    };
-    checkAdmin();
-  }, []);
 
   if (authLoading) {
     return (

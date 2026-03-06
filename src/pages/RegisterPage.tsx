@@ -12,27 +12,30 @@ export default function RegisterPage() {
   const { session, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
-  const [adminExists, setAdminExists] = useState(false);
+  const [ownerExists, setOwnerExists] = useState(false);
+
+  // Form fields
+  const [businessName, setBusinessName] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
 
   useEffect(() => {
-    const checkAdmin = async () => {
+    const checkOwner = async () => {
       try {
         const { data } = await supabase.functions.invoke("manage-team", {
-          body: { action: "check_admin_exists" },
+          body: { action: "check_owner_exists" },
         });
-        setAdminExists(data?.adminExists || false);
+        setOwnerExists(data?.ownerExists || false);
       } catch {
-        // If edge function fails, allow registration as fallback
-        setAdminExists(false);
+        setOwnerExists(false);
       }
       setChecking(false);
     };
-    checkAdmin();
+    checkOwner();
   }, []);
 
   if (authLoading || checking) {
@@ -45,28 +48,6 @@ export default function RegisterPage() {
 
   if (session) return <Navigate to="/" replace />;
 
-  // If admin already exists, block self-registration
-  if (adminExists) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <div className="w-full max-w-sm space-y-6 text-center">
-          <div className="flex flex-col items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-              <PhoneForwarded className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <h1 className="text-xl font-semibold text-foreground">Registration Closed</h1>
-            <p className="text-sm text-muted-foreground">
-              New accounts are created by your Admin. Please contact your administrator for access.
-            </p>
-          </div>
-          <Link to="/login">
-            <Button variant="outline" className="w-full">Back to Login</Button>
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password.length < 6) {
@@ -75,11 +56,19 @@ export default function RegisterPage() {
     }
     setLoading(true);
 
+    const metadata: Record<string, string> = { full_name: fullName };
+
+    if (ownerExists) {
+      // Business registration — include business info for trigger
+      metadata.business_name = businessName;
+      metadata.phone = phone;
+    }
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        data: metadata,
         emailRedirectTo: window.location.origin,
       },
     });
@@ -99,13 +88,31 @@ export default function RegisterPage() {
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
             <PhoneForwarded className="h-5 w-5 text-primary-foreground" />
           </div>
-          <h1 className="text-xl font-semibold text-foreground">Create Admin Account</h1>
-          <p className="text-sm text-muted-foreground">Set up the first administrator account</p>
+          <h1 className="text-xl font-semibold text-foreground">
+            {ownerExists ? "Register Your Business" : "Create Owner Account"}
+          </h1>
+          <p className="text-sm text-muted-foreground text-center">
+            {ownerExists
+              ? "Register your business. Access will be granted after approval."
+              : "Set up the system owner account"}
+          </p>
         </div>
 
         <form onSubmit={handleRegister} className="space-y-4">
+          {ownerExists && (
+            <div>
+              <Label className="text-xs">Business Name</Label>
+              <Input
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                placeholder="Your business name"
+                required
+                className="mt-1"
+              />
+            </div>
+          )}
           <div>
-            <Label className="text-xs">Full Name</Label>
+            <Label className="text-xs">{ownerExists ? "Owner Name" : "Full Name"}</Label>
             <Input
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
@@ -125,6 +132,19 @@ export default function RegisterPage() {
               className="mt-1"
             />
           </div>
+          {ownerExists && (
+            <div>
+              <Label className="text-xs">Phone</Label>
+              <Input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Phone number"
+                required
+                className="mt-1"
+              />
+            </div>
+          )}
           <div>
             <Label className="text-xs">Password</Label>
             <Input
@@ -139,7 +159,7 @@ export default function RegisterPage() {
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create Admin Account
+            {ownerExists ? "Submit Registration" : "Create Owner Account"}
           </Button>
         </form>
 

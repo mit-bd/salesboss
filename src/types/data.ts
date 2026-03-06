@@ -127,7 +127,7 @@ export interface DeliveryPartner {
   active: boolean;
 }
 
-export type UserRole = "admin" | "sub_admin" | "sales_executive";
+export type UserRole = "admin" | "sub_admin" | "sales_executive" | "owner";
 
 // Backup types
 export interface BackupEntry {

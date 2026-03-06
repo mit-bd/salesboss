@@ -71,7 +71,6 @@ function mapRow(row: any): Order {
     isUpsell: row.is_upsell || false,
     health: row.health || "new",
     isDeleted: row.is_deleted || false,
-    
     invoiceId: row.invoice_id || row.id,
     currentStatus: row.current_status || "pending",
     itemDescription: row.item_description || "",
@@ -138,6 +137,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
   const { user, profile, role } = useAuth();
   const { toast } = useToast();
   const isMounted = useRef(true);
+  const projectId = profile?.project_id;
 
   useEffect(() => {
     isMounted.current = true;
@@ -147,10 +147,13 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
   const userName = profile?.full_name || user?.email || "Admin User";
 
   const fetchOrders = useCallback(async () => {
-    const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
+    if (!projectId) { setLoading(false); return; }
+    let query = supabase.from("orders").select("*").order("created_at", { ascending: false });
+    query = (query as any).eq("project_id", projectId);
+    const { data, error } = await query;
     if (error) { console.error("[OrderStore] Fetch error:", error); return; }
     if (isMounted.current) { setOrders((data || []).map(mapRow)); setLoading(false); }
-  }, []);
+  }, [projectId]);
 
   const fetchHistory = useCallback(async () => {
     const { data, error } = await supabase.from("followup_history").select("*").order("step_number", { ascending: true });
@@ -172,6 +175,8 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
   // Realtime subscriptions
   useEffect(() => {
+    if (!projectId) { setLoading(false); return; }
+
     fetchOrders();
     fetchHistory();
     fetchUpsells();
@@ -182,6 +187,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
         if (!isMounted.current) return;
         const newOrder = mapRow(payload.new);
+        if ((payload.new as any).project_id !== projectId) return;
         setOrders((prev) => { if (prev.some((o) => o.id === newOrder.id)) return prev; return [newOrder, ...prev]; });
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
@@ -249,7 +255,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       supabase.removeChannel(upsellChannel);
       supabase.removeChannel(repeatChannel);
     };
-  }, [fetchOrders, fetchHistory, fetchUpsells, fetchRepeats]);
+  }, [projectId, fetchOrders, fetchHistory, fetchUpsells, fetchRepeats]);
 
   const activeOrders = orders.filter((o) => !o.isDeleted);
   const deletedOrders = orders.filter((o) => o.isDeleted);
@@ -271,7 +277,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
   const addOrder = useCallback(
     async (order: Omit<Order, "id">) => {
-      // Find or create customer using the DB function
       const { data: customerId, error: customerError } = await supabase
         .rpc("find_or_create_customer", {
           p_name: order.customerName,
@@ -285,31 +290,37 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Also set project_id on customer
+      if (projectId && customerId) {
+        await (supabase.from("customers") as any).update({ project_id: projectId }).eq("id", customerId);
+      }
+
       const insertPayload: any = {
-          customer_name: order.customerName,
-          mobile: order.mobile,
-          address: order.address,
-          order_source: order.orderSource,
-          product_id: order.productId || null,
-          product_title: order.productTitle,
-          price: order.price,
-          note: order.note,
-          followup_step: 1,
-          current_status: "pending",
-          followup_date: order.followupDate || null,
-          assigned_to: order.assignedTo || null,
-          assigned_to_name: order.assignedToName,
-          order_date: order.orderDate,
-          delivery_date: order.deliveryDate || null,
-          delivery_method: order.deliveryMethod,
-          parent_order_id: order.parentOrderId || null,
-          is_repeat: order.isRepeat || false,
-          is_upsell: order.isUpsell || false,
-          health: "new",
-          created_by: user?.id,
-          item_description: order.itemDescription || "",
-          customer_id: customerId,
-        };
+        customer_name: order.customerName,
+        mobile: order.mobile,
+        address: order.address,
+        order_source: order.orderSource,
+        product_id: order.productId || null,
+        product_title: order.productTitle,
+        price: order.price,
+        note: order.note,
+        followup_step: 1,
+        current_status: "pending",
+        followup_date: order.followupDate || null,
+        assigned_to: order.assignedTo || null,
+        assigned_to_name: order.assignedToName,
+        order_date: order.orderDate,
+        delivery_date: order.deliveryDate || null,
+        delivery_method: order.deliveryMethod,
+        parent_order_id: order.parentOrderId || null,
+        is_repeat: order.isRepeat || false,
+        is_upsell: order.isUpsell || false,
+        health: "new",
+        created_by: user?.id,
+        item_description: order.itemDescription || "",
+        customer_id: customerId,
+        project_id: projectId,
+      };
 
       const { data, error } = await supabase
         .from("orders")
@@ -328,7 +339,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       toast({ title: "Order created" });
       addLog({ actionType: "Order Created", userName, role: role || "unknown", entity: `Order #${data.invoice_id}`, details: `Customer: ${order.customerName}` });
     },
-    [addLog, user, userName, role, toast]
+    [addLog, user, userName, role, toast, projectId]
   );
 
   const completeFollowup = useCallback(
@@ -343,7 +354,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       upsellEntries: UpsellEntry[];
       repeatOrderEntries: RepeatOrderEntry[];
     }) => {
-      // 1. Insert followup history record
       const { data: historyData, error: historyError } = await supabase
         .from("followup_history")
         .insert({
@@ -368,7 +378,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
       const followupId = historyData.id;
 
-      // 2. Insert upsell records
       if (data.upsellEntries.length > 0) {
         const upsellRows = data.upsellEntries.map((e) => ({
           followup_id: followupId,
@@ -382,31 +391,30 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
         if (upsellError) console.error("[OrderStore] Upsell insert error:", upsellError);
       }
 
-      // 3. Create repeat child orders and records
       const parentOrder = orders.find((o) => o.id === data.orderId);
       for (const entry of data.repeatOrderEntries) {
-        // Create child order inheriting customer info and customer_id
         const childPayload: any = {
-            customer_name: parentOrder?.customerName || "",
-            mobile: parentOrder?.mobile || "",
-            address: parentOrder?.address || "",
-            order_source: parentOrder?.orderSource || "Website",
-            product_id: entry.productId || null,
-            product_title: entry.productName,
-            price: entry.price,
-            note: entry.note,
-            followup_step: 1,
-            current_status: "pending",
-            assigned_to: parentOrder?.assignedTo || null,
-            assigned_to_name: parentOrder?.assignedToName || "",
-            order_date: new Date().toISOString().split("T")[0],
-            delivery_method: parentOrder?.deliveryMethod || "",
-            parent_order_id: data.orderId,
-            is_repeat: true,
-            health: "new",
-            created_by: user?.id,
-            customer_id: parentOrder?.customerId || null,
-          };
+          customer_name: parentOrder?.customerName || "",
+          mobile: parentOrder?.mobile || "",
+          address: parentOrder?.address || "",
+          order_source: parentOrder?.orderSource || "Website",
+          product_id: entry.productId || null,
+          product_title: entry.productName,
+          price: entry.price,
+          note: entry.note,
+          followup_step: 1,
+          current_status: "pending",
+          assigned_to: parentOrder?.assignedTo || null,
+          assigned_to_name: parentOrder?.assignedToName || "",
+          order_date: new Date().toISOString().split("T")[0],
+          delivery_method: parentOrder?.deliveryMethod || "",
+          parent_order_id: data.orderId,
+          is_repeat: true,
+          health: "new",
+          created_by: user?.id,
+          customer_id: parentOrder?.customerId || null,
+          project_id: projectId,
+        };
         const { data: childData, error: childError } = await supabase
           .from("orders")
           .insert(childPayload)
@@ -418,7 +426,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
           continue;
         }
 
-        // Insert repeat_order_record
         await (supabase.from as any)("repeat_order_records").insert({
           followup_id: followupId,
           product_id: entry.productId || null,
@@ -430,7 +437,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
         });
       }
 
-      // 4. Update order status to completed
       const isFinalStep = data.stepNumber === 5;
       const updatePayload: any = {
         current_status: "completed",
@@ -451,7 +457,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
         throw orderError;
       }
 
-      // Optimistic local updates
       const newHistoryEntry = mapHistoryRow(historyData);
       setFollowupHistory((prev) => { if (prev.some((h) => h.id === newHistoryEntry.id)) return prev; return [...prev, newHistoryEntry]; });
 
@@ -461,17 +466,17 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       toast({ title: `Step ${data.stepNumber} completed`, description: isFinalStep ? "Followup lifecycle fully completed!" : `Next followup on ${data.nextFollowupDate}` });
       addLog({ actionType: "Followup Completed", userName, role: role || "unknown", entity: `Order #${data.orderId}`, details: `Step ${data.stepNumber} completed${data.upsellEntries.length > 0 ? ` with ${data.upsellEntries.length} upsell(s)` : ""}${data.repeatOrderEntries.length > 0 ? `, ${data.repeatOrderEntries.length} repeat order(s)` : ""}` });
     },
-    [user, userName, role, toast, addLog, orders]
+    [user, userName, role, toast, addLog, orders, projectId]
   );
 
   const editFollowup = useCallback(
     async (data: { followupId: string; note: string; problemsDiscussed: string }) => {
       const { error } = await (supabase.from("followup_history").update as any)({
-          note: data.note,
-          problems_discussed: data.problemsDiscussed,
-          edited_by: user?.id || null,
-          edited_at: new Date().toISOString(),
-        }).eq("id", data.followupId);
+        note: data.note,
+        problems_discussed: data.problemsDiscussed,
+        edited_by: user?.id || null,
+        edited_at: new Date().toISOString(),
+      }).eq("id", data.followupId);
 
       if (error) {
         console.error("[OrderStore] Edit followup error:", error);
@@ -548,7 +553,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
   const updateOrder = useCallback(
     async (updated: Order) => {
-      // Optimistic concurrency control: only update if updated_at matches
       let query = supabase
         .from("orders")
         .update({
@@ -563,15 +567,13 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
         })
         .eq("id", updated.id);
 
-      // If we have the updatedAt timestamp, use it as a concurrency guard
       if (updated.updatedAt) {
         query = query.eq("updated_at", updated.updatedAt);
       }
 
-      const { data, error, count } = await query.select().single();
+      const { data, error } = await query.select().single();
 
       if (error) {
-        // PGRST116 = no rows returned, meaning updated_at didn't match (stale data)
         if (error.code === "PGRST116" && updated.updatedAt) {
           console.warn("[OrderStore] Concurrency conflict detected for order:", updated.id);
           toast({
@@ -650,7 +652,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
         note: data.note,
       }).eq("id", id);
       if (error) { toast({ title: "Error updating repeat order", description: error.message, variant: "destructive" }); throw error; }
-      // Also update the child order if it exists
       if (record?.childOrderId) {
         await supabase.from("orders").update({
           product_id: data.productId || null,
@@ -671,7 +672,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       const record = repeatOrderRecords.find((r) => r.id === id);
       const { error } = await (supabase.from as any)("repeat_order_records").delete().eq("id", id);
       if (error) { toast({ title: "Error deleting repeat order", description: error.message, variant: "destructive" }); throw error; }
-      // Soft-delete the child order if it exists
       if (record?.childOrderId) {
         await supabase.from("orders").update({ is_deleted: true }).eq("id", record.childOrderId);
       }
