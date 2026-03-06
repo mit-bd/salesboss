@@ -97,15 +97,12 @@ export default function LoginPage() {
             Sign In
           </Button>
         </form>
-
-        {!adminExists && (
-          <p className="text-center text-sm text-muted-foreground">
-            First time?{" "}
-            <Link to="/register" className="text-primary font-medium hover:underline">
-              Set up Admin account
-            </Link>
-          </p>
-        )}
+        <p className="text-center text-sm text-muted-foreground">
+          Don't have an account?{" "}
+          <Link to="/register" className="text-primary font-medium hover:underline">
+            Sign up
+          </Link>
+        </p>
       </div>
     </div>
   );
