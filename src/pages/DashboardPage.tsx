@@ -1,26 +1,16 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader, { KpiCard } from "@/components/layout/PageHeader";
-import { mockDashboardMetrics, mockSalesExecutives } from "@/data/mockData";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { ShoppingCart, DollarSign, TrendingUp, RefreshCw, PhoneForwarded, Zap, Search, X } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import GlobalFilters, { FilterState, EMPTY_FILTERS } from "@/components/GlobalFilters";
 import { Input } from "@/components/ui/input";
 
-const m = mockDashboardMetrics;
-
 const STEP_LABELS = ["1st Followup", "2nd Followup", "3rd Followup", "4th Followup", "5th Followup"];
-const performanceData = mockSalesExecutives.map((se) => ({ name: se.name.split(" ")[0], orders: se.assignedOrders, followups: se.completedFollowups }));
-const sourceData = [
-  { name: "Website", value: 45 },
-  { name: "Phone", value: 25 },
-  { name: "Referral", value: 18 },
-  { name: "Social", value: 12 },
-];
-
-const PIE_COLORS = ["hsl(215, 80%, 52%)", "hsl(152, 60%, 42%)", "hsl(38, 92%, 50%)", "hsl(280, 60%, 55%)"];
+const PIE_COLORS = ["hsl(215, 80%, 52%)", "hsl(152, 60%, 42%)", "hsl(38, 92%, 50%)", "hsl(280, 60%, 55%)", "hsl(340, 65%, 52%)"];
 const STEP_COLORS = ["hsl(215, 80%, 52%)", "hsl(199, 89%, 48%)", "hsl(38, 92%, 50%)", "hsl(280, 60%, 55%)", "hsl(152, 60%, 42%)"];
 
 export default function DashboardPage() {
@@ -29,8 +19,32 @@ export default function DashboardPage() {
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const { activeOrders } = useOrderStore();
+  const { activeOrders, followupHistory } = useOrderStore();
+  const { members } = useTeamMembers();
+
   const todayFollowups = activeOrders.filter(o => o.followupDate === new Date().toISOString().split("T")[0] && (o.currentStatus || "pending") === "pending").length;
+
+  // Calculate real metrics from live data
+  const metrics = useMemo(() => {
+    const total = activeOrders.length;
+    const repeatOrders = activeOrders.filter(o => o.isRepeat);
+    const repeatRate = total > 0 ? ((repeatOrders.length / total) * 100) : 0;
+    
+    const completedFollowups = followupHistory.length;
+    const totalFollowupSlots = total * 5; // 5 steps per order
+    const followupCompletion = totalFollowupSlots > 0 ? ((completedFollowups / totalFollowupSlots) * 100) : 0;
+
+    const upsellOrders = activeOrders.filter(o => o.isUpsell);
+    const upsellRate = total > 0 ? ((upsellOrders.length / total) * 100) : 0;
+
+    // Conversion: orders with status completed at any step / total
+    const convertedOrders = activeOrders.filter(o => (o.currentStatus || "pending") === "completed");
+    const conversionRate = total > 0 ? ((convertedOrders.length / total) * 100) : 0;
+
+    const revenue = activeOrders.reduce((s, o) => s + o.price, 0);
+
+    return { total, revenue, conversionRate, repeatRate, followupCompletion, upsellRate };
+  }, [activeOrders, followupHistory]);
 
   // Live followup step data
   const liveFollowupSteps = [1, 2, 3, 4, 5].map((step) => {
@@ -43,6 +57,40 @@ export default function DashboardPage() {
     };
   });
   const funnelData = liveFollowupSteps.map((s) => ({ name: s.label, pending: s.pending, completed: s.completed }));
+
+  // Real order source distribution
+  const sourceData = useMemo(() => {
+    if (activeOrders.length === 0) return [];
+    const counts: Record<string, number> = {};
+    activeOrders.forEach(o => {
+      const src = o.orderSource || "Unknown";
+      counts[src] = (counts[src] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, count]) => ({
+        name,
+        value: Math.round((count / activeOrders.length) * 100),
+      }));
+  }, [activeOrders]);
+
+  // Real team performance
+  const performanceData = useMemo(() => {
+    if (members.length === 0) return [];
+    return members
+      .filter(m => m.role === "sales_executive" || m.role === "sub_admin")
+      .map(m => {
+        const assigned = activeOrders.filter(o => o.assignedTo === m.id);
+        const completedFu = followupHistory.filter(h => h.completedBy === m.id);
+        return {
+          name: (m.fullName || m.email || "").split(" ")[0] || "User",
+          orders: assigned.length,
+          followups: completedFu.length,
+        };
+      })
+      .filter(d => d.orders > 0 || d.followups > 0);
+  }, [members, activeOrders, followupHistory]);
 
   const searchResults = search.trim()
     ? activeOrders.filter(
@@ -94,12 +142,12 @@ export default function DashboardPage() {
       <GlobalFilters filters={filters} onChange={setFilters} />
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-        <div className="cursor-pointer" onClick={() => navigate("/orders")}><KpiCard label="Total Orders" value={activeOrders.length} change="+12 this week" changeType="positive" icon={<ShoppingCart className="h-5 w-5" />} color="hsl(215,80%,52%)" /></div>
-        <KpiCard label="Revenue" value={`৳${(activeOrders.reduce((s, o) => s + o.price, 0) / 1000).toFixed(1)}K`} change="+8.2% vs last month" changeType="positive" icon={<DollarSign className="h-5 w-5" />} color="hsl(152,60%,42%)" />
-        <KpiCard label="Conversion" value={`${m.conversionRate}%`} change="+2.1%" changeType="positive" icon={<TrendingUp className="h-5 w-5" />} color="hsl(280,60%,55%)" />
-        <div className="cursor-pointer" onClick={() => navigate("/repeat-orders")}><KpiCard label="Repeat Rate" value={`${m.repeatOrderRate}%`} change="+4.5%" changeType="positive" icon={<RefreshCw className="h-5 w-5" />} color="hsl(38,92%,50%)" /></div>
-        <div className="cursor-pointer" onClick={() => navigate("/followups")}><KpiCard label="Followup Done" value={`${m.followupCompletion}%`} change={`${todayFollowups} due today`} changeType="neutral" icon={<PhoneForwarded className="h-5 w-5" />} color="hsl(199,89%,48%)" /></div>
-        <KpiCard label="Upsell Rate" value={`${m.upsellSuccessRate}%`} change="+1.8%" changeType="positive" icon={<Zap className="h-5 w-5" />} color="hsl(340,65%,52%)" />
+        <div className="cursor-pointer" onClick={() => navigate("/orders")}><KpiCard label="Total Orders" value={metrics.total} change={`${todayFollowups} due today`} changeType="neutral" icon={<ShoppingCart className="h-5 w-5" />} color="hsl(215,80%,52%)" /></div>
+        <KpiCard label="Revenue" value={`৳${(metrics.revenue / 1000).toFixed(1)}K`} change="" changeType="neutral" icon={<DollarSign className="h-5 w-5" />} color="hsl(152,60%,42%)" />
+        <KpiCard label="Conversion" value={`${metrics.conversionRate.toFixed(1)}%`} change="" changeType="neutral" icon={<TrendingUp className="h-5 w-5" />} color="hsl(280,60%,55%)" />
+        <div className="cursor-pointer" onClick={() => navigate("/repeat-orders")}><KpiCard label="Repeat Rate" value={`${metrics.repeatRate.toFixed(1)}%`} change="" changeType="neutral" icon={<RefreshCw className="h-5 w-5" />} color="hsl(38,92%,50%)" /></div>
+        <div className="cursor-pointer" onClick={() => navigate("/followups")}><KpiCard label="Followup Done" value={`${metrics.followupCompletion.toFixed(1)}%`} change={`${todayFollowups} due today`} changeType="neutral" icon={<PhoneForwarded className="h-5 w-5" />} color="hsl(199,89%,48%)" /></div>
+        <KpiCard label="Upsell Rate" value={`${metrics.upsellRate.toFixed(1)}%`} change="" changeType="neutral" icon={<Zap className="h-5 w-5" />} color="hsl(340,65%,52%)" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -118,38 +166,48 @@ export default function DashboardPage() {
         </div>
         <div className="rounded-xl border border-border bg-card p-5 card-shadow animate-fade-in">
           <h2 className="text-sm font-semibold text-card-foreground mb-4">Order Sources</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={sourceData} cx="50%" cy="50%" innerRadius={55} outerRadius={80} dataKey="value" paddingAngle={3}>
-                {sourceData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
-              </Pie>
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid hsl(214,20%,90%)', fontSize: 13 }} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="flex flex-wrap gap-3 mt-2 justify-center">
-            {sourceData.map((s, i) => (
-              <div key={s.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PIE_COLORS[i] }} />
-                {s.name} ({s.value}%)
+          {sourceData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={sourceData} cx="50%" cy="50%" innerRadius={55} outerRadius={80} dataKey="value" paddingAngle={3}>
+                    {sourceData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid hsl(214,20%,90%)', fontSize: 13 }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex flex-wrap gap-3 mt-2 justify-center">
+                {sourceData.map((s, i) => (
+                  <div key={s.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    {s.name} ({s.value}%)
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-[200px] text-sm text-muted-foreground">No order data yet</div>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="rounded-xl border border-border bg-card p-5 card-shadow animate-fade-in">
           <h2 className="text-sm font-semibold text-card-foreground mb-4">Team Performance</h2>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={performanceData} layout="vertical" barGap={2}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(214,20%,90%)" />
-              <XAxis type="number" tick={{ fontSize: 12 }} stroke="hsl(215,12%,52%)" />
-              <YAxis dataKey="name" type="category" tick={{ fontSize: 12 }} stroke="hsl(215,12%,52%)" width={60} />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid hsl(214,20%,90%)', fontSize: 13 }} />
-              <Bar dataKey="orders" name="Orders" fill="hsl(215,80%,52%)" radius={[0, 4, 4, 0]} />
-              <Bar dataKey="followups" name="Followups" fill="hsl(199,89%,48%)" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {performanceData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={performanceData} layout="vertical" barGap={2}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(214,20%,90%)" />
+                <XAxis type="number" tick={{ fontSize: 12 }} stroke="hsl(215,12%,52%)" />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 12 }} stroke="hsl(215,12%,52%)" width={60} />
+                <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid hsl(214,20%,90%)', fontSize: 13 }} />
+                <Bar dataKey="orders" name="Orders" fill="hsl(215,80%,52%)" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="followups" name="Followups" fill="hsl(199,89%,48%)" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[220px] text-sm text-muted-foreground">No team activity yet</div>
+          )}
         </div>
         <div className="rounded-xl border border-border bg-card p-5 card-shadow animate-fade-in">
           <h2 className="text-sm font-semibold text-card-foreground mb-4">Followup Step Overview</h2>
