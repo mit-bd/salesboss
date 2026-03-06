@@ -46,6 +46,7 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
   const { user, profile, role } = useAuth();
   const { toast } = useToast();
   const isMounted = useRef(true);
+  const projectId = profile?.project_id;
 
   useEffect(() => {
     isMounted.current = true;
@@ -53,11 +54,10 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchProducts = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .order("created_at", { ascending: false });
-
+    if (!projectId) { setLoading(false); return; }
+    let query = supabase.from("products").select("*").order("created_at", { ascending: false });
+    query = (query as any).eq("project_id", projectId);
+    const { data, error } = await query;
     if (error) {
       console.error("Failed to fetch products:", error);
       return;
@@ -66,15 +66,18 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
       setProducts((data || []).map(mapRow));
       setLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
+    if (!projectId) { setLoading(false); return; }
+
     fetchProducts();
 
     const channel = supabase
       .channel("products-changes")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "products" }, (payload) => {
         if (!isMounted.current) return;
+        if ((payload.new as any).project_id !== projectId) return;
         const p = mapRow(payload.new);
         setProducts((prev) => {
           if (prev.some((x) => x.id === p.id)) return prev;
@@ -94,7 +97,7 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [fetchProducts]);
+  }, [projectId, fetchProducts]);
 
   const userName = profile?.full_name || user?.email || "Unknown";
 
@@ -110,17 +113,20 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      const insertPayload: any = {
+        title: product.title,
+        sku: product.sku,
+        price: product.price,
+        package_duration: product.packageDuration,
+        info: product.info,
+        image_url: imageUrl,
+        created_by: user?.id,
+        project_id: projectId,
+      };
+
       const { data, error } = await supabase
         .from("products")
-        .insert({
-          title: product.title,
-          sku: product.sku,
-          price: product.price,
-          package_duration: product.packageDuration,
-          info: product.info,
-          image_url: imageUrl,
-          created_by: user?.id,
-        })
+        .insert(insertPayload)
         .select()
         .single();
 
@@ -130,7 +136,6 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Immediate local state update
       const newProduct = mapRow(data);
       setProducts((prev) => {
         if (prev.some((x) => x.id === newProduct.id)) return prev;
@@ -146,7 +151,7 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
         details: `SKU: ${product.sku}, Price: ৳${product.price}`,
       });
     },
-    [addLog, user, userName, role, toast]
+    [addLog, user, userName, role, toast, projectId]
   );
 
   const updateProduct = useCallback(
@@ -181,7 +186,6 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
         throw error;
       }
 
-      // Replace local state with confirmed DB data
       if (data) {
         const confirmed = mapRow(data);
         setProducts((list) => list.map((p) => (p.id === confirmed.id ? confirmed : p)));

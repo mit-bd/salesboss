@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface DeliveryMethod {
   id: string;
@@ -17,6 +18,8 @@ interface UseDeliveryMethodsOptions {
 export function useDeliveryMethods(options: UseDeliveryMethodsOptions = {}) {
   const [methods, setMethods] = useState<DeliveryMethod[]>([]);
   const [loading, setLoading] = useState(true);
+  const { profile } = useAuth();
+  const projectId = profile?.project_id;
 
   const mapRow = (row: any): DeliveryMethod => ({
     id: row.id,
@@ -28,7 +31,8 @@ export function useDeliveryMethods(options: UseDeliveryMethodsOptions = {}) {
   });
 
   const fetchMethods = async () => {
-    let query = (supabase.from as any)("delivery_methods").select("*").order("created_at", { ascending: true });
+    if (!projectId) { setLoading(false); return; }
+    let query = (supabase.from as any)("delivery_methods").select("*").eq("project_id", projectId).order("created_at", { ascending: true });
     if (options.activeOnly) {
       query = query.eq("is_active", true);
     }
@@ -40,30 +44,26 @@ export function useDeliveryMethods(options: UseDeliveryMethodsOptions = {}) {
   };
 
   useEffect(() => {
+    if (!projectId) { setLoading(false); return; }
     fetchMethods();
 
     const channel = supabase
       .channel("delivery_methods_changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "delivery_methods" },
-        () => {
-          fetchMethods();
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "delivery_methods" }, () => {
+        fetchMethods();
+      })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options.activeOnly]);
+  }, [options.activeOnly, projectId]);
 
   const addMethod = async (data: { name: string; contactInfo: string; notes: string }) => {
     const { error } = await (supabase.from as any)("delivery_methods").insert({
       name: data.name,
       contact_info: data.contactInfo,
       notes: data.notes,
+      project_id: projectId,
     });
     return { error };
   };

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface OrderSource {
   id: string;
@@ -16,6 +17,8 @@ interface UseOrderSourcesOptions {
 export function useOrderSources(options: UseOrderSourcesOptions = {}) {
   const [sources, setSources] = useState<OrderSource[]>([]);
   const [loading, setLoading] = useState(true);
+  const { profile } = useAuth();
+  const projectId = profile?.project_id;
 
   const mapRow = (row: any): OrderSource => ({
     id: row.id,
@@ -26,7 +29,8 @@ export function useOrderSources(options: UseOrderSourcesOptions = {}) {
   });
 
   const fetchSources = async () => {
-    let query = (supabase.from as any)("order_sources").select("*").order("created_at", { ascending: true });
+    if (!projectId) { setLoading(false); return; }
+    let query = (supabase.from as any)("order_sources").select("*").eq("project_id", projectId).order("created_at", { ascending: true });
     if (options.activeOnly) {
       query = query.eq("is_active", true);
     }
@@ -38,27 +42,22 @@ export function useOrderSources(options: UseOrderSourcesOptions = {}) {
   };
 
   useEffect(() => {
+    if (!projectId) { setLoading(false); return; }
     fetchSources();
 
     const channel = supabase
       .channel("order_sources_changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "order_sources" },
-        () => {
-          fetchSources();
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_sources" }, () => {
+        fetchSources();
+      })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options.activeOnly]);
+  }, [options.activeOnly, projectId]);
 
   const addSource = async (name: string) => {
-    const { error } = await (supabase.from as any)("order_sources").insert({ name });
+    const { error } = await (supabase.from as any)("order_sources").insert({ name, project_id: projectId });
     return { error };
   };
 

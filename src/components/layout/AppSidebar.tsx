@@ -22,7 +22,9 @@ import {
   KeyRound,
   ChevronDown,
   Globe,
-  User,
+  Building2,
+  UserPlus,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -98,6 +100,18 @@ const navCategories: NavCategory[] = [
   },
 ];
 
+const ownerCategories: NavCategory[] = [
+  {
+    label: "Platform",
+    key: "platform",
+    items: [
+      { label: "Owner Dashboard", icon: LayoutDashboard, path: "/owner" },
+      { label: "Registration Requests", icon: UserPlus, path: "/owner/requests" },
+      { label: "Projects", icon: Building2, path: "/owner/projects" },
+    ],
+  },
+];
+
 const STORAGE_KEY = "sidebar-expanded";
 
 function getInitialExpanded(): Record<string, boolean> {
@@ -105,8 +119,7 @@ function getInitialExpanded(): Record<string, boolean> {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) return JSON.parse(stored);
   } catch {}
-  // Default: all expanded
-  return Object.fromEntries(navCategories.map((c) => [c.key, true]));
+  return Object.fromEntries([...navCategories, ...ownerCategories].map((c) => [c.key, true]));
 }
 
 export default function AppSidebar() {
@@ -135,7 +148,10 @@ export default function AppSidebar() {
 
   const isSubItem = (item: NavItem) => item.path.includes("?step=");
 
-  const visibleCategories = navCategories
+  const isOwner = role === "owner";
+  const categories = isOwner ? ownerCategories : navCategories;
+
+  const visibleCategories = categories
     .map((cat) => ({
       ...cat,
       items: cat.items.filter((item) => {
@@ -169,7 +185,6 @@ export default function AppSidebar() {
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
         {visibleCategories.map((cat) => (
           <div key={cat.key}>
-            {/* Category Header */}
             <button
               onClick={() => toggleCategory(cat.key)}
               className="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted hover:text-sidebar-foreground transition-fast"
@@ -183,7 +198,6 @@ export default function AppSidebar() {
               />
             </button>
 
-            {/* Category Items */}
             <div
               className={cn(
                 "overflow-hidden transition-all duration-200",

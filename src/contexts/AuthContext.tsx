@@ -7,8 +7,10 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   role: UserRole | null;
-  profile: { full_name: string; phone: string; avatar_url: string } | null;
+  profile: { full_name: string; phone: string; avatar_url: string; project_id: string | null } | null;
   loading: boolean;
+  roleChecked: boolean;
+  requestStatus: string | null;
   signOut: () => Promise<void>;
   refreshRole: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -20,6 +22,8 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   profile: null,
   loading: true,
+  roleChecked: false,
+  requestStatus: null,
   signOut: async () => {},
   refreshRole: async () => {},
   refreshProfile: async () => {},
@@ -29,8 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
-  const [profile, setProfile] = useState<{ full_name: string; phone: string; avatar_url: string } | null>(null);
+  const [profile, setProfile] = useState<{ full_name: string; phone: string; avatar_url: string; project_id: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [roleChecked, setRoleChecked] = useState(false);
+  const [requestStatus, setRequestStatus] = useState<string | null>(null);
 
   const fetchRole = async (userId: string) => {
     const { data } = await supabase
@@ -39,15 +45,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq("user_id", userId)
       .maybeSingle();
     setRole((data?.role as UserRole) ?? null);
+    setRoleChecked(true);
   };
 
   const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("full_name, phone, avatar_url")
+    const { data } = await (supabase.from("profiles") as any)
+      .select("full_name, phone, avatar_url, project_id")
       .eq("user_id", userId)
       .maybeSingle();
     setProfile(data ?? null);
+  };
+
+  const fetchRequestStatus = async (userId: string) => {
+    const { data } = await (supabase.from as any)("project_requests")
+      .select("status")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setRequestStatus(data?.status ?? null);
   };
 
   const refreshRole = async () => {
@@ -59,33 +75,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Set up auth listener BEFORE checking session
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          // Use setTimeout to avoid Supabase client deadlock
           setTimeout(() => {
             fetchRole(session.user.id);
             fetchProfile(session.user.id);
+            fetchRequestStatus(session.user.id);
           }, 0);
         } else {
           setRole(null);
           setProfile(null);
+          setRoleChecked(false);
+          setRequestStatus(null);
         }
         setLoading(false);
       }
     );
 
-    // Check existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchRole(session.user.id);
         fetchProfile(session.user.id);
+        fetchRequestStatus(session.user.id);
       }
       setLoading(false);
     });
@@ -99,10 +116,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setRole(null);
     setProfile(null);
+    setRoleChecked(false);
+    setRequestStatus(null);
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, role, profile, loading, signOut, refreshRole, refreshProfile }}>
+    <AuthContext.Provider value={{ session, user, role, profile, loading, roleChecked, requestStatus, signOut, refreshRole, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
