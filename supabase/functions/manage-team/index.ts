@@ -37,10 +37,11 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return json({ error: "Unauthorized" }, 401);
 
+    const token = authHeader.replace("Bearer ", "");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const callerClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-    const { data: { user: caller } } = await callerClient.auth.getUser();
-    if (!caller) return json({ error: "Unauthorized" }, 401);
+    const { data: { user: caller }, error: userError } = await callerClient.auth.getUser(token);
+    if (userError || !caller) return json({ error: "Unauthorized" }, 401);
 
     const { data: roleData } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", caller.id).maybeSingle();
     const callerRole = roleData?.role;
