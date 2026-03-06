@@ -1,1 +1,13 @@
 project_id = "exxonqrcomkgyilhvoyt"
+
+[functions.manage-team]
+verify_jwt = false
+
+[functions.advance-followups]
+verify_jwt = false
+
+[functions.seed-demo-data]
+verify_jwt = false
+
+[functions.seed-demo-users]
+verify_jwt = false
