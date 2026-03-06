@@ -147,7 +147,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
   const userName = profile?.full_name || user?.email || "Admin User";
 
   const fetchOrders = useCallback(async () => {
-    if (!projectId) { setLoading(false); return; }
+    if (role === "owner" || !projectId) { setLoading(false); return; }
     let query = supabase.from("orders").select("*").order("created_at", { ascending: false });
     query = (query as any).eq("project_id", projectId);
     const { data, error } = await query;
@@ -173,9 +173,9 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
     if (isMounted.current) setRepeatOrderRecords((data || []).map(mapRepeatRow));
   }, []);
 
-  // Realtime subscriptions
   useEffect(() => {
-    if (!projectId) { setLoading(false); return; }
+    // Owner users don't belong to a project, skip data loading
+    if (role === "owner" || !projectId) { setLoading(false); return; }
 
     fetchOrders();
     fetchHistory();

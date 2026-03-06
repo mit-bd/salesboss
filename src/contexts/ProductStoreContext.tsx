@@ -54,7 +54,7 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchProducts = useCallback(async () => {
-    if (!projectId) { setLoading(false); return; }
+    if (role === "owner" || !projectId) { setLoading(false); return; }
     let query = supabase.from("products").select("*").order("created_at", { ascending: false });
     query = (query as any).eq("project_id", projectId);
     const { data, error } = await query;
@@ -69,7 +69,7 @@ export function ProductStoreProvider({ children }: { children: ReactNode }) {
   }, [projectId]);
 
   useEffect(() => {
-    if (!projectId) { setLoading(false); return; }
+    if (role === "owner" || !projectId) { setLoading(false); return; }
 
     fetchProducts();
 
