@@ -21,11 +21,22 @@ export default function OwnerDashboardPage() {
 
   useEffect(() => {
     const fetchStats = async () => {
-      const { data } = await supabase.functions.invoke("manage-team", {
-        body: { action: "dashboard_stats" },
-      });
-      if (data) setStats(data);
-      setLoading(false);
+      try {
+        console.log("[OwnerDashboard] Fetching stats...");
+        const { data, error } = await supabase.functions.invoke("manage-team", {
+          body: { action: "dashboard_stats" },
+        });
+        if (error) {
+          console.error("[OwnerDashboard] Stats error:", error);
+        } else if (data) {
+          console.log("[OwnerDashboard] Stats loaded:", data);
+          setStats(data);
+        }
+      } catch (err) {
+        console.error("[OwnerDashboard] Stats fetch failed:", err);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchStats();
   }, []);
