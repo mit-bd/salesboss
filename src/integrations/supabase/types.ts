@@ -21,6 +21,7 @@ export type Database = {
           id: string
           mobile_number: string
           name: string
+          project_id: string | null
           updated_at: string
         }
         Insert: {
@@ -29,6 +30,7 @@ export type Database = {
           id?: string
           mobile_number: string
           name?: string
+          project_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -37,9 +39,18 @@ export type Database = {
           id?: string
           mobile_number?: string
           name?: string
+          project_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "customers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       delivery_methods: {
         Row: {
@@ -50,6 +61,7 @@ export type Database = {
           is_active: boolean
           name: string
           notes: string
+          project_id: string | null
         }
         Insert: {
           contact_info?: string
@@ -59,6 +71,7 @@ export type Database = {
           is_active?: boolean
           name: string
           notes?: string
+          project_id?: string | null
         }
         Update: {
           contact_info?: string
@@ -68,8 +81,17 @@ export type Database = {
           is_active?: boolean
           name?: string
           notes?: string
+          project_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "delivery_methods_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       followup_history: {
         Row: {
@@ -137,6 +159,7 @@ export type Database = {
           is_active: boolean
           is_system: boolean
           name: string
+          project_id: string | null
         }
         Insert: {
           created_at?: string
@@ -144,6 +167,7 @@ export type Database = {
           is_active?: boolean
           is_system?: boolean
           name: string
+          project_id?: string | null
         }
         Update: {
           created_at?: string
@@ -151,8 +175,17 @@ export type Database = {
           is_active?: boolean
           is_system?: boolean
           name?: string
+          project_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "order_sources_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       orders: {
         Row: {
@@ -187,6 +220,7 @@ export type Database = {
           product_id: string | null
           product_sku: string
           product_title: string
+          project_id: string | null
           updated_at: string
         }
         Insert: {
@@ -221,6 +255,7 @@ export type Database = {
           product_id?: string | null
           product_sku?: string
           product_title?: string
+          project_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -255,6 +290,7 @@ export type Database = {
           product_id?: string | null
           product_sku?: string
           product_title?: string
+          project_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -277,6 +313,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -314,6 +357,7 @@ export type Database = {
           info: string | null
           package_duration: number
           price: number
+          project_id: string | null
           sku: string
           title: string
           updated_at: string
@@ -326,6 +370,7 @@ export type Database = {
           info?: string | null
           package_duration?: number
           price?: number
+          project_id?: string | null
           sku: string
           title: string
           updated_at?: string
@@ -338,11 +383,20 @@ export type Database = {
           info?: string | null
           package_duration?: number
           price?: number
+          project_id?: string | null
           sku?: string
           title?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "products_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -351,6 +405,7 @@ export type Database = {
           full_name: string | null
           id: string
           phone: string | null
+          project_id: string | null
           updated_at: string
           user_id: string
         }
@@ -360,6 +415,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           phone?: string | null
+          project_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -369,8 +425,94 @@ export type Database = {
           full_name?: string | null
           id?: string
           phone?: string | null
+          project_id?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_requests: {
+        Row: {
+          business_name: string
+          created_at: string
+          email: string
+          id: string
+          owner_name: string
+          phone: string
+          project_id: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          business_name: string
+          created_at?: string
+          email: string
+          id?: string
+          owner_name: string
+          phone?: string
+          project_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          business_name?: string
+          created_at?: string
+          email?: string
+          id?: string
+          owner_name?: string
+          phone?: string
+          project_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          business_name: string
+          created_at: string
+          id: string
+          is_active: boolean
+          owner_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          business_name: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          owner_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          business_name?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          owner_user_id?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -572,6 +714,7 @@ export type Database = {
         Returns: string
       }
       get_next_sku_sequence: { Args: { p_sku: string }; Returns: number }
+      get_user_project_id: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
