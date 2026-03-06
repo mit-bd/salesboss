@@ -14,7 +14,8 @@ export default function ProtectedRoute({ children, allowedRoles, requiredPermiss
   const { session, role, loading, roleChecked, requestStatus } = useAuth();
   const { hasPermission, loading: permLoading } = usePermissions();
 
-  if (loading || permLoading) {
+  // Wait for auth to finish loading
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -46,12 +47,27 @@ export default function ProtectedRoute({ children, allowedRoles, requiredPermiss
 
   // Owner accessing regular routes → redirect to owner dashboard
   if (role === "owner" && !ownerOnly) {
+    console.log("[ProtectedRoute] Owner redirecting to /owner");
     return <Navigate to="/owner" replace />;
   }
 
   // Non-owner accessing owner routes → redirect to home
   if (role !== "owner" && ownerOnly) {
     return <Navigate to="/" replace />;
+  }
+
+  // Owner routes don't need permission checks
+  if (role === "owner" && ownerOnly) {
+    return <>{children}</>;
+  }
+
+  // Wait for permissions only for non-owner users
+  if (permLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
   }
 
   if (allowedRoles && !allowedRoles.includes(role)) {

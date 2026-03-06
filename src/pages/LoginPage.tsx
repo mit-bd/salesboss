@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { PhoneForwarded, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
-  const { session, loading: authLoading } = useAuth();
+  const { session, role, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,7 +23,10 @@ export default function LoginPage() {
     );
   }
 
-  if (session) return <Navigate to="/" replace />;
+  if (session) {
+    if (role === "owner") return <Navigate to="/owner" replace />;
+    return <Navigate to="/" replace />;
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
