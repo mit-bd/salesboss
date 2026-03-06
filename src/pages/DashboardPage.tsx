@@ -84,7 +84,7 @@ export default function DashboardPage() {
         const assigned = activeOrders.filter(o => o.assignedTo === m.id);
         const completedFu = followupHistory.filter(h => h.completedBy === m.id);
         return {
-          name: (m.fullName || m.email || "").split(" ")[0] || "User",
+          name: (m.name || m.email || "").split(" ")[0] || "User",
           orders: assigned.length,
           followups: completedFu.length,
         };
