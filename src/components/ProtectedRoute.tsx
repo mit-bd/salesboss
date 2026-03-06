@@ -25,6 +25,7 @@ export default function ProtectedRoute({ children, allowedRoles, requiredPermiss
 
   if (!session) return <Navigate to="/login" replace />;
 
+  // Wait for role to be checked
   if (!roleChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -33,32 +34,23 @@ export default function ProtectedRoute({ children, allowedRoles, requiredPermiss
     );
   }
 
+  // Owner routes: handle immediately, no permission checks needed
+  if (ownerOnly) {
+    if (role === "owner") return <>{children}</>;
+    return <Navigate to="/" replace />;
+  }
+
+  // Owner accessing non-owner routes → redirect to owner dashboard
+  if (role === "owner") {
+    return <Navigate to="/owner" replace />;
+  }
+
   // No role assigned — check request status
   if (role === null) {
     if (requestStatus === "pending" || requestStatus === "rejected") {
       return <Navigate to="/pending-approval" replace />;
     }
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  // Owner accessing regular routes → redirect to owner dashboard
-  if (role === "owner" && !ownerOnly) {
-    console.log("[ProtectedRoute] Owner redirecting to /owner");
-    return <Navigate to="/owner" replace />;
-  }
-
-  // Non-owner accessing owner routes → redirect to home
-  if (role !== "owner" && ownerOnly) {
-    return <Navigate to="/" replace />;
-  }
-
-  // Owner routes don't need permission checks
-  if (role === "owner" && ownerOnly) {
-    return <>{children}</>;
+    return <Navigate to="/pending-approval" replace />;
   }
 
   // Wait for permissions only for non-owner users
