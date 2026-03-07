@@ -17,6 +17,8 @@ import PendingApprovalPage from "./pages/PendingApprovalPage";
 import OwnerDashboardPage from "./pages/OwnerDashboardPage";
 import RegistrationRequestsPage from "./pages/RegistrationRequestsPage";
 import OwnerProjectsPage from "./pages/OwnerProjectsPage";
+import OwnerUsersPage from "./pages/OwnerUsersPage";
+import OwnerSystemLogsPage from "./pages/OwnerSystemLogsPage";
 import DashboardPage from "./pages/DashboardPage";
 import OrdersPage from "./pages/OrdersPage";
 import OrderDetailPage from "./pages/OrderDetailPage";
@@ -65,6 +67,8 @@ const App = () => (
                       <Route path="/owner" element={<ProtectedRoute ownerOnly><OwnerDashboardPage /></ProtectedRoute>} />
                       <Route path="/owner/requests" element={<ProtectedRoute ownerOnly><RegistrationRequestsPage /></ProtectedRoute>} />
                       <Route path="/owner/projects" element={<ProtectedRoute ownerOnly><OwnerProjectsPage /></ProtectedRoute>} />
+                      <Route path="/owner/users" element={<ProtectedRoute ownerOnly><OwnerUsersPage /></ProtectedRoute>} />
+                      <Route path="/owner/logs" element={<ProtectedRoute ownerOnly><OwnerSystemLogsPage /></ProtectedRoute>} />
 
                       {/* Protected routes */}
                       <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
