@@ -179,7 +179,7 @@ export default function FollowupsPage() {
             await completeFollowup(data);
             setCompleteOrder(null);
           }}
-          testMode={testMode}
+          
         />
       )}
 
