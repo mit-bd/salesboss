@@ -186,6 +186,12 @@ export default function CompleteFollowupDialog({
     setError("");
     setSaving(true);
     try {
+      // Build datetime if test mode and time is set
+      let nextFollowupDatetime: string | null = null;
+      if (testMode && nextDate && nextTime) {
+        nextFollowupDatetime = new Date(`${nextDate}T${nextTime}`).toISOString();
+      }
+
       await onComplete({
         orderId: order.id,
         stepNumber: order.followupStep,
@@ -194,6 +200,7 @@ export default function CompleteFollowupDialog({
         upsellAttempted: addUpsell && upsellEntries.length > 0,
         upsellDetails: addUpsell ? upsellEntries.map((e) => e.productName).join(", ") : "",
         nextFollowupDate: isFinalStep ? null : nextDate,
+        nextFollowupDatetime: isFinalStep ? null : nextFollowupDatetime,
         upsellEntries: addUpsell ? upsellEntries : [],
         repeatOrderEntries: addRepeat ? repeatEntries : [],
       });
@@ -205,6 +212,7 @@ export default function CompleteFollowupDialog({
       setAddRepeat(false);
       setRepeatEntries([]);
       setNextDate("");
+      setNextTime("");
       onOpenChange(false);
     } catch {
       // Error handled by caller
