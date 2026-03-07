@@ -41,8 +41,8 @@ export default function BulkSingleFieldDialog({ open, onOpenChange, fieldType, s
   const [confirmOpen, setConfirmOpen] = useState(false);
   const { toast } = useToast();
   const { addLog } = useAuditLog();
-  const { profile, role } = useAuth();
-  const { refreshOrders } = useOrderStore();
+  const { profile, role, user } = useAuth();
+  const { refreshOrders, activeOrders } = useOrderStore();
   const { members } = useTeamMembers();
   const { methods: deliveryMethods } = useDeliveryMethods({ activeOnly: true });
   const { sources: orderSources } = useOrderSources({ activeOnly: true });
