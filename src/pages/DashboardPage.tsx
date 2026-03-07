@@ -4,7 +4,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import PageHeader, { KpiCard } from "@/components/layout/PageHeader";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { ShoppingCart, DollarSign, TrendingUp, RefreshCw, PhoneForwarded, Zap, Search, X } from "lucide-react";
+import { ShoppingCart, DollarSign, TrendingUp, RefreshCw, PhoneForwarded, Zap, Search, X, AlertTriangle, Bell, CalendarCheck } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import GlobalFilters, { FilterState, EMPTY_FILTERS } from "@/components/GlobalFilters";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,10 @@ export default function DashboardPage() {
   const { activeOrders, followupHistory } = useOrderStore();
   const { members } = useTeamMembers();
 
-  const todayFollowups = activeOrders.filter(o => o.followupDate === new Date().toISOString().split("T")[0] && (o.currentStatus || "pending") === "pending").length;
+  const today = new Date().toISOString().split("T")[0];
+  const todayFollowups = activeOrders.filter(o => o.followupDate === today && (o.currentStatus || "pending") === "pending").length;
+  const overdueFollowups = activeOrders.filter(o => o.followupDate && o.followupDate < today && (o.currentStatus || "pending") === "pending").length;
+  const newAssignedToday = activeOrders.filter(o => o.createdAt && o.createdAt.startsWith(today) && o.assignedTo).length;
 
   // Calculate real metrics from live data
   const metrics = useMemo(() => {
@@ -149,6 +152,39 @@ export default function DashboardPage() {
         <div className="cursor-pointer" onClick={() => navigate("/followups")}><KpiCard label="Followup Done" value={`${metrics.followupCompletion.toFixed(1)}%`} change={`${todayFollowups} due today`} changeType="neutral" icon={<PhoneForwarded className="h-5 w-5" />} color="hsl(199,89%,48%)" /></div>
         <KpiCard label="Upsell Rate" value={`${metrics.upsellRate.toFixed(1)}%`} change="" changeType="neutral" icon={<Zap className="h-5 w-5" />} color="hsl(340,65%,52%)" />
       </div>
+
+      {/* Dashboard Alerts */}
+      {(todayFollowups > 0 || overdueFollowups > 0 || newAssignedToday > 0) && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          {todayFollowups > 0 && (
+            <div onClick={() => navigate("/followups")} className="flex items-center gap-3 rounded-xl border border-warning/30 bg-warning/5 p-4 cursor-pointer hover:bg-warning/10 transition-fast">
+              <CalendarCheck className="h-5 w-5 text-warning shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-foreground">{todayFollowups} Followups Due Today</p>
+                <p className="text-xs text-muted-foreground">Click to view pending followups</p>
+              </div>
+            </div>
+          )}
+          {overdueFollowups > 0 && (
+            <div onClick={() => navigate("/followups")} className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 cursor-pointer hover:bg-destructive/10 transition-fast">
+              <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-foreground">{overdueFollowups} Overdue Followups</p>
+                <p className="text-xs text-muted-foreground">Followups past their due date</p>
+              </div>
+            </div>
+          )}
+          {newAssignedToday > 0 && (
+            <div onClick={() => navigate("/orders")} className="flex items-center gap-3 rounded-xl border border-info/30 bg-info/5 p-4 cursor-pointer hover:bg-info/10 transition-fast">
+              <Bell className="h-5 w-5 text-info shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-foreground">{newAssignedToday} Orders Assigned Today</p>
+                <p className="text-xs text-muted-foreground">New assignments created today</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <div className="lg:col-span-2 rounded-xl border border-border bg-card p-5 card-shadow animate-fade-in">
