@@ -574,7 +574,7 @@ export default function OrderDetailPage() {
         </>
       )}
 
-      <CompleteFollowupDialog order={order} open={followupOpen} onOpenChange={setFollowupOpen} onComplete={completeFollowup} />
+      <CompleteFollowupDialog order={order} open={followupOpen} onOpenChange={setFollowupOpen} onComplete={completeFollowup} testMode={testMode} />
 
       {isAdmin && (
         <>
