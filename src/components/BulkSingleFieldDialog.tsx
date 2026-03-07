@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createAssignmentNotifications } from "@/hooks/useNotifications";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,6 +134,26 @@ export default function BulkSingleFieldDialog({ open, onOpenChange, fieldType, s
       const successResult = result as any;
       console.info(`[BulkSingleField:${fieldType}] Atomically updated ${successResult.affected_count} orders`);
       await refreshOrders();
+
+      // Create notifications for bulk assignment
+      if (fieldType === "assignExecutive" && value !== "__unassign__" && user && profile?.project_id) {
+        const exec = allExecutives.find((e) => e.id === value);
+        if (exec) {
+          for (const orderId of ids) {
+            const order = activeOrders.find((o) => o.id === orderId);
+            if (order) {
+              await createAssignmentNotifications({
+                orderId,
+                orderName: order.customerName,
+                assignedToId: value,
+                assignedToName: exec.name,
+                assignedById: user.id,
+                projectId: profile.project_id,
+              });
+            }
+          }
+        }
+      }
 
       addLog({
         actionType: `Bulk ${TITLES[fieldType]}`,
