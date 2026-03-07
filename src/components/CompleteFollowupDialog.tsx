@@ -24,9 +24,11 @@ interface CompleteFollowupDialogProps {
     upsellAttempted: boolean;
     upsellDetails: string;
     nextFollowupDate: string | null;
+    nextFollowupDatetime: string | null;
     upsellEntries: UpsellEntry[];
     repeatOrderEntries: RepeatOrderEntry[];
   }) => Promise<void>;
+  testMode?: boolean;
 }
 
 function ProductEntryCard({
