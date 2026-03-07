@@ -108,11 +108,13 @@ export default function CompleteFollowupDialog({
   open,
   onOpenChange,
   onComplete,
+  testMode = false,
 }: CompleteFollowupDialogProps) {
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
   const [problems, setProblems] = useState("");
   const [nextDate, setNextDate] = useState("");
+  const [nextTime, setNextTime] = useState("");
   const [error, setError] = useState("");
 
   // Upsell state
