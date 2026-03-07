@@ -26,7 +26,6 @@ interface OrderStoreContextType {
     upsellAttempted: boolean;
     upsellDetails: string;
     nextFollowupDate: string | null;
-    nextFollowupDatetime?: string | null;
     upsellEntries: UpsellEntry[];
     repeatOrderEntries: RepeatOrderEntry[];
   }) => Promise<void>;
@@ -164,7 +163,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
   const fetchOrders = useCallback(async () => {
     if (role === "owner" || !projectId) { setLoading(false); return; }
-    let query = supabase.from("orders").select("*").order("created_at", { ascending: false });
+    let query = supabase.from("orders").select("*").order("updated_at", { ascending: false });
     query = (query as any).eq("project_id", projectId);
     const { data, error } = await query;
     if (error) { console.error("[OrderStore] Fetch error:", error); return; }
@@ -368,7 +367,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       upsellAttempted: boolean;
       upsellDetails: string;
       nextFollowupDate: string | null;
-      nextFollowupDatetime?: string | null;
       upsellEntries: UpsellEntry[];
       repeatOrderEntries: RepeatOrderEntry[];
     }) => {
@@ -459,7 +457,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       const updatePayload: any = {
         current_status: "completed",
         followup_date: data.nextFollowupDate || null,
-        next_followup_datetime: data.nextFollowupDatetime || null,
       };
       if (isFinalStep) updatePayload.health = "good";
 

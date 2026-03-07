@@ -31,11 +31,13 @@ const ACTION_COLORS: Record<string, string> = {
   "Assignment Transferred": "bg-info/10 text-info",
 };
 
-function formatTimestamp(iso: string): { date: string; time: string } {
+function formatTimestamp(iso: string): string {
   const d = new Date(iso);
-  const date = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-  const time = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-  return { date, time };
+  const day = d.getDate().toString().padStart(2, "0");
+  const month = d.toLocaleDateString("en-GB", { month: "short" });
+  const year = d.getFullYear();
+  const time = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+  return `${day} ${month} ${year} • ${time}`;
 }
 
 interface Props {
@@ -77,7 +79,7 @@ export default function OrderActivityTimeline({ orderId }: Props) {
           {logs.map((log, i) => {
             const Icon = ACTION_ICONS[log.actionType] || Clock;
             const colorClass = ACTION_COLORS[log.actionType] || "bg-muted text-muted-foreground";
-            const { date, time } = formatTimestamp(log.createdAt);
+            const timestamp = formatTimestamp(log.createdAt);
 
             return (
               <div key={log.id} className="flex gap-3">
@@ -90,10 +92,7 @@ export default function OrderActivityTimeline({ orderId }: Props) {
                 <div className="pb-4 flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium text-foreground truncate">{log.actionType}</p>
-                    <div className="text-right shrink-0">
-                      <p className="text-[10px] text-muted-foreground">{date}</p>
-                      <p className="text-[10px] text-muted-foreground">{time}</p>
-                    </div>
+                    <p className="text-[10px] text-muted-foreground shrink-0">{timestamp}</p>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{log.userName}</p>
                   {log.actionDescription && (
