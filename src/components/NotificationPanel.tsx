@@ -1,53 +1,50 @@
 import { useState } from "react";
-import { Bell, X, Check, ShoppingCart, PhoneForwarded, RefreshCw, UserPlus, Edit } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Bell, X, Check, ShoppingCart, PhoneForwarded, RefreshCw, UserPlus, Edit, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useNotifications, AppNotification } from "@/hooks/useNotifications";
+import { formatDistanceToNow } from "date-fns";
 
-interface Notification {
-  id: string;
-  type: "order_assigned" | "followup_completed" | "repeat_order" | "order_edited" | "team_added";
-  title: string;
-  message: string;
-  time: string;
-  read: boolean;
-}
-
-const MOCK_NOTIFICATIONS: Notification[] = [
-  { id: "n1", type: "order_assigned", title: "Order Assigned", message: "ORD-005 assigned to Rahul Sharma", time: "2 min ago", read: false },
-  { id: "n2", type: "followup_completed", title: "Followup Completed", message: "Step 2 completed for Vikram Mehta", time: "15 min ago", read: false },
-  { id: "n3", type: "repeat_order", title: "Repeat Order Created", message: "Vikram Mehta placed a repeat order", time: "1 hr ago", read: false },
-  { id: "n4", type: "order_edited", title: "Order Updated", message: "ORD-003 details updated by Admin", time: "2 hrs ago", read: true },
-  { id: "n5", type: "team_added", title: "Team Member Added", message: "Neha Singh joined as Sales Executive", time: "1 day ago", read: true },
-];
-
-const ICON_MAP = {
+const ICON_MAP: Record<string, any> = {
   order_assigned: ShoppingCart,
+  followup_due: PhoneForwarded,
   followup_completed: PhoneForwarded,
   repeat_order: RefreshCw,
   order_edited: Edit,
   team_added: UserPlus,
+  info: Info,
 };
 
-const COLOR_MAP = {
+const COLOR_MAP: Record<string, string> = {
   order_assigned: "text-info bg-info/10",
+  followup_due: "text-warning bg-warning/10",
   followup_completed: "text-success bg-success/10",
   repeat_order: "text-warning bg-warning/10",
   order_edited: "text-primary bg-primary/10",
   team_added: "text-accent-foreground bg-accent",
+  info: "text-muted-foreground bg-muted",
 };
 
 export default function NotificationPanel() {
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+  const navigate = useNavigate();
+  const { notifications, unreadCount, markAsRead, markAllRead, loading } = useNotifications();
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  const markAsRead = (id: string) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+  const handleClick = (n: AppNotification) => {
+    markAsRead(n.id);
+    if (n.order_id) {
+      navigate(`/orders/${n.order_id}`);
+      setOpen(false);
+    }
   };
 
-  const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  const timeAgo = (dateStr: string) => {
+    try {
+      return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+    } catch {
+      return "";
+    }
   };
 
   return (
@@ -87,27 +84,34 @@ export default function NotificationPanel() {
 
             {/* List */}
             <div className="flex-1 overflow-y-auto">
+              {loading && (
+                <div className="p-6 text-center text-sm text-muted-foreground">Loading...</div>
+              )}
+              {!loading && notifications.length === 0 && (
+                <div className="p-6 text-center text-sm text-muted-foreground">No notifications yet</div>
+              )}
               {notifications.map((n) => {
-                const Icon = ICON_MAP[n.type];
+                const Icon = ICON_MAP[n.type] || Info;
+                const colorClass = COLOR_MAP[n.type] || COLOR_MAP.info;
                 return (
                   <div
                     key={n.id}
-                    onClick={() => markAsRead(n.id)}
+                    onClick={() => handleClick(n)}
                     className={cn(
                       "flex items-start gap-3 p-4 border-b border-border cursor-pointer transition-fast hover:bg-muted/30",
-                      !n.read && "bg-primary/5"
+                      !n.is_read && "bg-primary/5"
                     )}
                   >
-                    <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", COLOR_MAP[n.type])}>
+                    <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", colorClass)}>
                       <Icon className="h-4 w-4" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className={cn("text-sm font-medium", !n.read ? "text-foreground" : "text-muted-foreground")}>{n.title}</p>
-                        {!n.read && <div className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />}
+                        <p className={cn("text-sm font-medium", !n.is_read ? "text-foreground" : "text-muted-foreground")}>{n.title}</p>
+                        {!n.is_read && <div className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>
-                      <p className="text-[11px] text-muted-foreground/70 mt-1">{n.time}</p>
+                      <p className="text-[11px] text-muted-foreground/70 mt-1">{timeAgo(n.created_at)}</p>
                     </div>
                   </div>
                 );
