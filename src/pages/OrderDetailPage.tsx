@@ -68,21 +68,7 @@ export default function OrderDetailPage() {
   const [editRepeatOpen, setEditRepeatOpen] = useState(false);
   const [editRepeatFollowupId, setEditRepeatFollowupId] = useState("");
   const userName = profile?.full_name || "Admin User";
-  const [testMode, setTestMode] = useState(false);
 
-  // Load test mode from project
-  useEffect(() => {
-    const loadTestMode = async () => {
-      if (!profile?.project_id) return;
-      const { data } = await supabase
-        .from("projects")
-        .select("followup_test_mode")
-        .eq("id", profile.project_id)
-        .single();
-      if (data) setTestMode(!!(data as any).followup_test_mode);
-    };
-    loadTestMode();
-  }, [profile?.project_id]);
 
   const allExecutives = [
     ...members.map((m) => ({ id: m.userId, name: m.name })),
@@ -599,7 +585,7 @@ export default function OrderDetailPage() {
         </>
       )}
 
-      <CompleteFollowupDialog order={order} open={followupOpen} onOpenChange={setFollowupOpen} onComplete={completeFollowup} testMode={testMode} />
+      <CompleteFollowupDialog order={order} open={followupOpen} onOpenChange={setFollowupOpen} onComplete={completeFollowup} />
 
       {isAdmin && (
         <>
