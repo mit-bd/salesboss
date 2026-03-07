@@ -109,6 +109,7 @@ export default function OrderDetailPage() {
     await refreshOrders();
     toast({ title: isUnassign ? "Assignment Removed" : "Assignment Updated" });
     addLog({ actionType: isUnassign ? "Assignment Removed" : "Assignment Transferred", userName, role: role || "unknown", entity: `Order #${order.invoiceId || order.id}`, details: `${oldName} → ${newName}` });
+    await logActivity({ orderId: order.id, actionType: isUnassign ? "Assignment Removed" : "Order Assigned", actionDescription: `${oldName} → ${newName}` });
 
     // Create notifications for assignment
     if (!isUnassign && exec && user && profile?.project_id) {
