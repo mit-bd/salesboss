@@ -22,7 +22,8 @@ function applyFilters(orders: Order[], filters: FilterState, search: string): Or
     if (search && !o.customerName.toLowerCase().includes(search.toLowerCase()) && !o.id.toLowerCase().includes(search.toLowerCase()) && !o.mobile.includes(search)) return false;
     if (filters.dateFrom && o.orderDate < filters.dateFrom) return false;
     if (filters.dateTo && o.orderDate > filters.dateTo) return false;
-    if (filters.salesExecutive && o.assignedTo !== filters.salesExecutive) return false;
+    if (filters.salesExecutive === "__unassigned__" && o.assignedTo) return false;
+    if (filters.salesExecutive && filters.salesExecutive !== "__unassigned__" && o.assignedTo !== filters.salesExecutive) return false;
     if (filters.product && o.productId !== filters.product) return false;
     if (filters.orderSource && o.orderSource !== filters.orderSource) return false;
     if (filters.followupStep && o.followupStep !== Number(filters.followupStep)) return false;

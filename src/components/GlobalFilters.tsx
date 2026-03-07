@@ -84,6 +84,7 @@ export default function GlobalFilters({ filters, onChange, showStepFilter = true
               <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="All" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
+                <SelectItem value="__unassigned__">Unassigned</SelectItem>
                 {mockSalesExecutives.map((se) => (
                   <SelectItem key={se.id} value={se.id}>{se.name}</SelectItem>
                 ))}

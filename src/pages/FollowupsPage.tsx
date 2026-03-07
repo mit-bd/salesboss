@@ -29,7 +29,8 @@ function applyFilters(orders: Order[], filters: FilterState): Order[] {
   return orders.filter((o) => {
     if (filters.dateFrom && o.orderDate < filters.dateFrom) return false;
     if (filters.dateTo && o.orderDate > filters.dateTo) return false;
-    if (filters.salesExecutive && o.assignedTo !== filters.salesExecutive) return false;
+    if (filters.salesExecutive === "__unassigned__" && o.assignedTo) return false;
+    if (filters.salesExecutive && filters.salesExecutive !== "__unassigned__" && o.assignedTo !== filters.salesExecutive) return false;
     if (filters.product && o.productId !== filters.product) return false;
     if (filters.orderSource && o.orderSource !== filters.orderSource) return false;
     if (filters.deliveryMethod && o.deliveryMethod !== filters.deliveryMethod) return false;
