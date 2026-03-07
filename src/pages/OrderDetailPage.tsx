@@ -225,6 +225,7 @@ export default function OrderDetailPage() {
               Repeat Orders
               {allRepeats.length > 0 && <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">{allRepeats.length}</Badge>}
             </TabsTrigger>
+            <TabsTrigger value="activity">Activity</TabsTrigger>
           </TabsList>
 
           {/* Order Info Tab */}
@@ -581,6 +582,11 @@ export default function OrderDetailPage() {
                 </div>
               )}
             </div>
+          </TabsContent>
+
+          {/* Activity Tab */}
+          <TabsContent value="activity">
+            <OrderActivityTimeline orderId={order.id} />
           </TabsContent>
         </Tabs>
       </div>
