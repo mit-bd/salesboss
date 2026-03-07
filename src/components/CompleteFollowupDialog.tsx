@@ -366,15 +366,31 @@ export default function CompleteFollowupDialog({
 
           {/* Next Followup Date */}
           {!isFinalStep && (
-            <div>
-              <Label className="text-xs">Next Followup Date *</Label>
-              <Input
-                type="date"
-                value={nextDate}
-                onChange={(e) => { setNextDate(e.target.value); if (error) setError(""); }}
-                className="mt-1"
-                min={new Date().toISOString().split("T")[0]}
-              />
+            <div className="space-y-2">
+              <div>
+                <Label className="text-xs">Next Followup Date *</Label>
+                <Input
+                  type="date"
+                  value={nextDate}
+                  onChange={(e) => { setNextDate(e.target.value); if (error) setError(""); }}
+                  className="mt-1"
+                  min={new Date().toISOString().split("T")[0]}
+                />
+              </div>
+              {testMode && (
+                <div>
+                  <Label className="text-xs">Followup Time (Test Mode)</Label>
+                  <Input
+                    type="time"
+                    value={nextTime}
+                    onChange={(e) => setNextTime(e.target.value)}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Set a specific time for minute-level testing. Leave empty for date-only.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
