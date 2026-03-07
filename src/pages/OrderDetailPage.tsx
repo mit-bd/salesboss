@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { createAssignmentNotifications } from "@/hooks/useNotifications";
+import { useActivityLog } from "@/hooks/useActivityLog";
+import OrderActivityTimeline from "@/components/OrderActivityTimeline";
 import { useParams, useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
@@ -51,6 +53,7 @@ export default function OrderDetailPage() {
   const { activeOrders, orders, softDelete, updateOrder, completeFollowup, editFollowup, getOrderHistory, getUpsellsForFollowup, getRepeatOrdersForFollowup, refreshOrders } = useOrderStore();
   const { toast } = useToast();
   const { addLog } = useAuditLog();
+  const { logActivity } = useActivityLog();
   const { user, profile, role } = useAuth();
   const { members } = useTeamMembers();
   const { methods: deliveryMethods } = useDeliveryMethods({ activeOnly: false });
@@ -106,6 +109,7 @@ export default function OrderDetailPage() {
     await refreshOrders();
     toast({ title: isUnassign ? "Assignment Removed" : "Assignment Updated" });
     addLog({ actionType: isUnassign ? "Assignment Removed" : "Assignment Transferred", userName, role: role || "unknown", entity: `Order #${order.invoiceId || order.id}`, details: `${oldName} → ${newName}` });
+    await logActivity({ orderId: order.id, actionType: isUnassign ? "Assignment Removed" : "Order Assigned", actionDescription: `${oldName} → ${newName}` });
 
     // Create notifications for assignment
     if (!isUnassign && exec && user && profile?.project_id) {
@@ -221,6 +225,7 @@ export default function OrderDetailPage() {
               Repeat Orders
               {allRepeats.length > 0 && <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">{allRepeats.length}</Badge>}
             </TabsTrigger>
+            <TabsTrigger value="activity">Activity</TabsTrigger>
           </TabsList>
 
           {/* Order Info Tab */}
@@ -577,6 +582,11 @@ export default function OrderDetailPage() {
                 </div>
               )}
             </div>
+          </TabsContent>
+
+          {/* Activity Tab */}
+          <TabsContent value="activity">
+            <OrderActivityTimeline orderId={order.id} />
           </TabsContent>
         </Tabs>
       </div>
