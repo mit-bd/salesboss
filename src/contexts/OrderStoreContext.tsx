@@ -355,16 +355,6 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       upsellEntries: UpsellEntry[];
       repeatOrderEntries: RepeatOrderEntry[];
     }) => {
-      orderId: string;
-      stepNumber: number;
-      note: string;
-      problemsDiscussed: string;
-      upsellAttempted: boolean;
-      upsellDetails: string;
-      nextFollowupDate: string | null;
-      upsellEntries: UpsellEntry[];
-      repeatOrderEntries: RepeatOrderEntry[];
-    }) => {
       const { data: historyData, error: historyError } = await supabase
         .from("followup_history")
         .insert({
