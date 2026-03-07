@@ -1,0 +1,1 @@
+ALTER TABLE public.projects ADD COLUMN followup_test_mode boolean NOT NULL DEFAULT false;

@@ -261,6 +261,7 @@ export type Database = {
           is_upsell: boolean
           item_description: string
           mobile: string
+          next_followup_datetime: string | null
           note: string
           order_date: string
           order_sequence_number: number
@@ -296,6 +297,7 @@ export type Database = {
           is_upsell?: boolean
           item_description?: string
           mobile: string
+          next_followup_datetime?: string | null
           note?: string
           order_date?: string
           order_sequence_number?: number
@@ -331,6 +333,7 @@ export type Database = {
           is_upsell?: boolean
           item_description?: string
           mobile?: string
+          next_followup_datetime?: string | null
           note?: string
           order_date?: string
           order_sequence_number?: number
@@ -544,6 +547,7 @@ export type Database = {
         Row: {
           business_name: string
           created_at: string
+          followup_test_mode: boolean
           id: string
           is_active: boolean
           owner_user_id: string
@@ -552,6 +556,7 @@ export type Database = {
         Insert: {
           business_name: string
           created_at?: string
+          followup_test_mode?: boolean
           id?: string
           is_active?: boolean
           owner_user_id: string
@@ -560,6 +565,7 @@ export type Database = {
         Update: {
           business_name?: string
           created_at?: string
+          followup_test_mode?: boolean
           id?: string
           is_active?: boolean
           owner_user_id?: string
