@@ -288,6 +288,39 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Followup Test Mode */}
+        {isAdmin && (
+          <div className="rounded-xl border border-border bg-card p-5 card-shadow">
+            <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+              <FlaskConical className="h-4 w-4" /> Followup Reminder Test Mode
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Enable Time-Based Followups</p>
+                  <p className="text-xs text-muted-foreground">
+                    When enabled, followup reminders support minute-level precision. The system checks every minute.
+                  </p>
+                </div>
+                <Switch
+                  checked={testMode}
+                  onCheckedChange={toggleTestMode}
+                  disabled={testModeLoading}
+                />
+              </div>
+              {testMode && (
+                <div className="rounded-lg bg-warning/10 border border-warning/20 p-3">
+                  <p className="text-xs font-medium text-warning">Test Mode Active</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    When completing a followup, you'll see a time picker to set minute-level reminders.
+                    Disable this to revert to date-only followups.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Notifications */}
         <div className="rounded-xl border border-border bg-card p-5 card-shadow">
           <h3 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
