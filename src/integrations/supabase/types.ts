@@ -544,6 +544,7 @@ export type Database = {
         Row: {
           business_name: string
           created_at: string
+          followup_test_mode: boolean
           id: string
           is_active: boolean
           owner_user_id: string
@@ -552,6 +553,7 @@ export type Database = {
         Insert: {
           business_name: string
           created_at?: string
+          followup_test_mode?: boolean
           id?: string
           is_active?: boolean
           owner_user_id: string
@@ -560,6 +562,7 @@ export type Database = {
         Update: {
           business_name?: string
           created_at?: string
+          followup_test_mode?: boolean
           id?: string
           is_active?: boolean
           owner_user_id?: string
