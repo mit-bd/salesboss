@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { createAssignmentNotifications } from "@/hooks/useNotifications";
+import { useActivityLog } from "@/hooks/useActivityLog";
+import OrderActivityTimeline from "@/components/OrderActivityTimeline";
 import { useParams, useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
@@ -51,6 +53,7 @@ export default function OrderDetailPage() {
   const { activeOrders, orders, softDelete, updateOrder, completeFollowup, editFollowup, getOrderHistory, getUpsellsForFollowup, getRepeatOrdersForFollowup, refreshOrders } = useOrderStore();
   const { toast } = useToast();
   const { addLog } = useAuditLog();
+  const { logActivity } = useActivityLog();
   const { user, profile, role } = useAuth();
   const { members } = useTeamMembers();
   const { methods: deliveryMethods } = useDeliveryMethods({ activeOnly: false });
