@@ -52,6 +52,40 @@ export default function SettingsPage() {
     }
   }, [profile]);
 
+  // Load test mode from project
+  useEffect(() => {
+    const loadTestMode = async () => {
+      if (!profile?.project_id) return;
+      const { data } = await supabase
+        .from("projects")
+        .select("followup_test_mode")
+        .eq("id", profile.project_id)
+        .single();
+      if (data) setTestMode(!!(data as any).followup_test_mode);
+    };
+    loadTestMode();
+  }, [profile?.project_id]);
+
+  const toggleTestMode = async (checked: boolean) => {
+    if (!profile?.project_id) return;
+    setTestModeLoading(true);
+    const { error } = await (supabase.from("projects") as any)
+      .update({ followup_test_mode: checked })
+      .eq("id", profile.project_id);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      setTestMode(checked);
+      toast({
+        title: checked ? "Test Mode Enabled" : "Test Mode Disabled",
+        description: checked
+          ? "You can now set followup times down to the minute. The system checks every minute."
+          : "Reverted to date-only followups. Reminders trigger at the start of the day.",
+      });
+    }
+    setTestModeLoading(false);
+  };
+
   const isDirty = useMemo(() => {
     return form.name !== originalForm.name || form.phone !== originalForm.phone || imageFile !== null;
   }, [form, originalForm, imageFile]);
