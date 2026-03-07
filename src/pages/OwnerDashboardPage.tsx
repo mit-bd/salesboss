@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Loader2, Building2, Users, Clock, CheckCircle, LogOut, XCircle, ShoppingCart } from "lucide-react";
-import ThemeSwitcher from "@/components/ThemeSwitcher";
-import { Link } from "react-router-dom";
+import { Loader2, Building2, Users, Clock, CheckCircle, XCircle, ShoppingCart } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
+import OwnerLayout from "@/components/owner/OwnerLayout";
 
 interface Stats {
   totalProjects: number;
@@ -14,10 +12,10 @@ interface Stats {
   pendingRequests: number;
   totalUsers: number;
   totalOrders: number;
+  chartData: { month: string; orders: number; projects: number }[];
 }
 
 export default function OwnerDashboardPage() {
-  const { signOut } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -27,11 +25,7 @@ export default function OwnerDashboardPage() {
         const { data, error } = await supabase.functions.invoke("manage-team", {
           body: { action: "dashboard_stats" },
         });
-        if (error) {
-          console.error("[OwnerDashboard] Stats error:", error);
-        } else if (data) {
-          setStats(data);
-        }
+        if (!error && data) setStats(data);
       } catch (err) {
         console.error("[OwnerDashboard] Stats fetch failed:", err);
       } finally {
@@ -44,72 +38,91 @@ export default function OwnerDashboardPage() {
   const statCards = [
     { label: "Total Projects", value: stats?.totalProjects ?? 0, icon: Building2, color: "text-primary" },
     { label: "Active Projects", value: stats?.activeProjects ?? 0, icon: CheckCircle, color: "text-green-500" },
-    { label: "Suspended Projects", value: stats?.suspendedProjects ?? 0, icon: XCircle, color: "text-destructive" },
-    { label: "Pending Requests", value: stats?.pendingRequests ?? 0, icon: Clock, color: "text-warning" },
-    { label: "Total Users", value: stats?.totalUsers ?? 0, icon: Users, color: "text-info" },
+    { label: "Suspended", value: stats?.suspendedProjects ?? 0, icon: XCircle, color: "text-destructive" },
+    { label: "Pending Requests", value: stats?.pendingRequests ?? 0, icon: Clock, color: "text-yellow-500" },
+    { label: "Total Users", value: stats?.totalUsers ?? 0, icon: Users, color: "text-blue-500" },
     { label: "Total Orders", value: stats?.totalOrders ?? 0, icon: ShoppingCart, color: "text-primary" },
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">Owner Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Platform management overview</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <ThemeSwitcher />
-            <Button variant="outline" size="sm" onClick={signOut}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
-            </Button>
-          </div>
+    <OwnerLayout title="Owner Dashboard" subtitle="Platform management overview" pendingCount={stats?.pendingRequests}>
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
-      </header>
-
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
-        <div className="flex gap-3">
-          <Link to="/owner">
-            <Button variant="default" size="sm">Dashboard</Button>
-          </Link>
-          <Link to="/owner/requests">
-            <Button variant="outline" size="sm">
-              Registration Requests
-              {(stats?.pendingRequests ?? 0) > 0 && (
-                <span className="ml-2 rounded-full bg-destructive px-2 py-0.5 text-xs text-destructive-foreground">
-                  {stats?.pendingRequests}
-                </span>
-              )}
-            </Button>
-          </Link>
-          <Link to="/owner/projects">
-            <Button variant="outline" size="sm">Projects</Button>
-          </Link>
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      ) : (
+        <div className="space-y-6">
+          {/* Stat Cards */}
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {statCards.map((card) => (
               <Card key={card.label}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">{card.label}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-3">
-                    <card.icon className={`h-8 w-8 ${card.color}`} />
-                    <span className="text-3xl font-bold text-foreground">{card.value}</span>
+                <CardContent className="pt-5 pb-4 px-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{card.label}</p>
+                    <card.icon className={`h-4 w-4 ${card.color}`} />
                   </div>
+                  <p className="text-2xl font-bold text-foreground">{card.value}</p>
                 </CardContent>
               </Card>
             ))}
           </div>
-        )}
-      </div>
-    </div>
+
+          {/* Charts */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Orders Growth (Last 6 Months)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[250px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={stats?.chartData || []}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="month" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                      <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} allowDecimals={false} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                          color: 'hsl(var(--foreground))',
+                        }}
+                      />
+                      <Bar dataKey="orders" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">New Projects per Month</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[250px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={stats?.chartData || []}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="month" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                      <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} allowDecimals={false} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                          color: 'hsl(var(--foreground))',
+                        }}
+                      />
+                      <Line type="monotone" dataKey="projects" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={{ r: 4 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+    </OwnerLayout>
   );
 }
