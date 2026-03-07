@@ -1,0 +1,1 @@
+ALTER TABLE public.followup_history DROP CONSTRAINT IF EXISTS followup_history_order_id_step_number_key;
