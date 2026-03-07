@@ -13,8 +13,10 @@ import BulkEditDialog from "@/components/BulkEditDialog";
 import BulkSingleFieldDialog, { BulkFieldType } from "@/components/BulkSingleFieldDialog";
 import BulkCompleteFollowupDialog from "@/components/BulkCompleteFollowupDialog";
 import { useRole } from "@/contexts/RoleContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Order } from "@/types/data";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 
 const STEP_LABELS = ["1st Followup", "2nd Followup", "3rd Followup", "4th Followup", "5th Followup"];
 const STEP_COLORS = [
@@ -61,7 +63,23 @@ export default function FollowupsPage() {
   const [singleFieldType, setSingleFieldType] = useState<BulkFieldType>("assignExecutive");
   const [bulkCompleteOpen, setBulkCompleteOpen] = useState(false);
   const { isAdmin } = useRole();
+  const { profile } = useAuth();
   const { activeOrders, completeFollowup } = useOrderStore();
+  const [testMode, setTestMode] = useState(false);
+
+  // Load test mode from project
+  useEffect(() => {
+    const loadTestMode = async () => {
+      if (!profile?.project_id) return;
+      const { data } = await supabase
+        .from("projects")
+        .select("followup_test_mode")
+        .eq("id", profile.project_id)
+        .single();
+      if (data) setTestMode(!!(data as any).followup_test_mode);
+    };
+    loadTestMode();
+  }, [profile?.project_id]);
 
   const filteredOrders = applyFilters(activeOrders, filters);
   const stepOrders = filteredOrders.filter((o) => o.followupStep === activeStep);
@@ -175,6 +193,7 @@ export default function FollowupsPage() {
             await completeFollowup(data);
             setCompleteOrder(null);
           }}
+          testMode={testMode}
         />
       )}
 

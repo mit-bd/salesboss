@@ -26,6 +26,7 @@ interface OrderStoreContextType {
     upsellAttempted: boolean;
     upsellDetails: string;
     nextFollowupDate: string | null;
+    nextFollowupDatetime?: string | null;
     upsellEntries: UpsellEntry[];
     repeatOrderEntries: RepeatOrderEntry[];
   }) => Promise<void>;
@@ -351,6 +352,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       upsellAttempted: boolean;
       upsellDetails: string;
       nextFollowupDate: string | null;
+      nextFollowupDatetime?: string | null;
       upsellEntries: UpsellEntry[];
       repeatOrderEntries: RepeatOrderEntry[];
     }) => {
@@ -441,6 +443,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       const updatePayload: any = {
         current_status: "completed",
         followup_date: data.nextFollowupDate || null,
+        next_followup_datetime: data.nextFollowupDatetime || null,
       };
       if (isFinalStep) updatePayload.health = "good";
 

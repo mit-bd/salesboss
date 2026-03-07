@@ -13,16 +13,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Upload, User, Mail, Bell, Loader2 } from "lucide-react";
+import { Upload, User, Mail, Bell, Loader2, FlaskConical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { mockEmailReportConfig } from "@/data/mockData";
 import { EmailReportConfig } from "@/types/data";
+import { useRole } from "@/contexts/RoleContext";
 
 export default function SettingsPage() {
   const { toast } = useToast();
   const { user, profile, refreshProfile } = useAuth();
+  const { isAdmin } = useRole();
   const [profileImage, setProfileImage] = useState<string>("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -32,6 +34,10 @@ export default function SettingsPage() {
   // Email report state
   const [emailConfig, setEmailConfig] = useState<EmailReportConfig>({ ...mockEmailReportConfig });
   const [newRecipient, setNewRecipient] = useState("");
+
+  // Followup test mode
+  const [testMode, setTestMode] = useState(false);
+  const [testModeLoading, setTestModeLoading] = useState(false);
 
   // Hydrate from DB profile
   useEffect(() => {
@@ -45,6 +51,40 @@ export default function SettingsPage() {
       setProfileImage(profile.avatar_url || "");
     }
   }, [profile]);
+
+  // Load test mode from project
+  useEffect(() => {
+    const loadTestMode = async () => {
+      if (!profile?.project_id) return;
+      const { data } = await supabase
+        .from("projects")
+        .select("followup_test_mode")
+        .eq("id", profile.project_id)
+        .single();
+      if (data) setTestMode(!!(data as any).followup_test_mode);
+    };
+    loadTestMode();
+  }, [profile?.project_id]);
+
+  const toggleTestMode = async (checked: boolean) => {
+    if (!profile?.project_id) return;
+    setTestModeLoading(true);
+    const { error } = await (supabase.from("projects") as any)
+      .update({ followup_test_mode: checked })
+      .eq("id", profile.project_id);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      setTestMode(checked);
+      toast({
+        title: checked ? "Test Mode Enabled" : "Test Mode Disabled",
+        description: checked
+          ? "You can now set followup times down to the minute. The system checks every minute."
+          : "Reverted to date-only followups. Reminders trigger at the start of the day.",
+      });
+    }
+    setTestModeLoading(false);
+  };
 
   const isDirty = useMemo(() => {
     return form.name !== originalForm.name || form.phone !== originalForm.phone || imageFile !== null;
@@ -247,6 +287,39 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Followup Test Mode */}
+        {isAdmin && (
+          <div className="rounded-xl border border-border bg-card p-5 card-shadow">
+            <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+              <FlaskConical className="h-4 w-4" /> Followup Reminder Test Mode
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Enable Time-Based Followups</p>
+                  <p className="text-xs text-muted-foreground">
+                    When enabled, followup reminders support minute-level precision. The system checks every minute.
+                  </p>
+                </div>
+                <Switch
+                  checked={testMode}
+                  onCheckedChange={toggleTestMode}
+                  disabled={testModeLoading}
+                />
+              </div>
+              {testMode && (
+                <div className="rounded-lg bg-warning/10 border border-warning/20 p-3">
+                  <p className="text-xs font-medium text-warning">Test Mode Active</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    When completing a followup, you'll see a time picker to set minute-level reminders.
+                    Disable this to revert to date-only followups.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Notifications */}
         <div className="rounded-xl border border-border bg-card p-5 card-shadow">

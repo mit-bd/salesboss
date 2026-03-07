@@ -24,9 +24,11 @@ interface CompleteFollowupDialogProps {
     upsellAttempted: boolean;
     upsellDetails: string;
     nextFollowupDate: string | null;
+    nextFollowupDatetime: string | null;
     upsellEntries: UpsellEntry[];
     repeatOrderEntries: RepeatOrderEntry[];
   }) => Promise<void>;
+  testMode?: boolean;
 }
 
 function ProductEntryCard({
@@ -106,11 +108,13 @@ export default function CompleteFollowupDialog({
   open,
   onOpenChange,
   onComplete,
+  testMode = false,
 }: CompleteFollowupDialogProps) {
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
   const [problems, setProblems] = useState("");
   const [nextDate, setNextDate] = useState("");
+  const [nextTime, setNextTime] = useState("");
   const [error, setError] = useState("");
 
   // Upsell state
@@ -182,6 +186,12 @@ export default function CompleteFollowupDialog({
     setError("");
     setSaving(true);
     try {
+      // Build datetime if test mode and time is set
+      let nextFollowupDatetime: string | null = null;
+      if (testMode && nextDate && nextTime) {
+        nextFollowupDatetime = new Date(`${nextDate}T${nextTime}`).toISOString();
+      }
+
       await onComplete({
         orderId: order.id,
         stepNumber: order.followupStep,
@@ -190,6 +200,7 @@ export default function CompleteFollowupDialog({
         upsellAttempted: addUpsell && upsellEntries.length > 0,
         upsellDetails: addUpsell ? upsellEntries.map((e) => e.productName).join(", ") : "",
         nextFollowupDate: isFinalStep ? null : nextDate,
+        nextFollowupDatetime: isFinalStep ? null : nextFollowupDatetime,
         upsellEntries: addUpsell ? upsellEntries : [],
         repeatOrderEntries: addRepeat ? repeatEntries : [],
       });
@@ -201,6 +212,7 @@ export default function CompleteFollowupDialog({
       setAddRepeat(false);
       setRepeatEntries([]);
       setNextDate("");
+      setNextTime("");
       onOpenChange(false);
     } catch {
       // Error handled by caller
@@ -354,15 +366,31 @@ export default function CompleteFollowupDialog({
 
           {/* Next Followup Date */}
           {!isFinalStep && (
-            <div>
-              <Label className="text-xs">Next Followup Date *</Label>
-              <Input
-                type="date"
-                value={nextDate}
-                onChange={(e) => { setNextDate(e.target.value); if (error) setError(""); }}
-                className="mt-1"
-                min={new Date().toISOString().split("T")[0]}
-              />
+            <div className="space-y-2">
+              <div>
+                <Label className="text-xs">Next Followup Date *</Label>
+                <Input
+                  type="date"
+                  value={nextDate}
+                  onChange={(e) => { setNextDate(e.target.value); if (error) setError(""); }}
+                  className="mt-1"
+                  min={new Date().toISOString().split("T")[0]}
+                />
+              </div>
+              {testMode && (
+                <div>
+                  <Label className="text-xs">Followup Time (Test Mode)</Label>
+                  <Input
+                    type="time"
+                    value={nextTime}
+                    onChange={(e) => setNextTime(e.target.value)}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Set a specific time for minute-level testing. Leave empty for date-only.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
