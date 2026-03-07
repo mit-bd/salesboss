@@ -88,34 +88,29 @@ serve(async (req) => {
 
       if (action === "list_projects") {
         const { data: projects } = await supabaseAdmin.from("projects").select("*").order("created_at", { ascending: false });
-        
-        // Enrich each project with admin name, user count, order count
         const enriched = await Promise.all((projects || []).map(async (project: any) => {
-          // Get admin profile (the owner_user_id of the project)
           const { data: adminProfile } = await supabaseAdmin.from("profiles")
             .select("full_name")
             .eq("user_id", project.owner_user_id)
             .maybeSingle();
-
-          // Count users in this project
           const { count: userCount } = await supabaseAdmin.from("profiles")
             .select("*", { count: "exact", head: true })
             .eq("project_id", project.id);
-
-          // Count orders in this project
           const { count: orderCount } = await supabaseAdmin.from("orders")
             .select("*", { count: "exact", head: true })
             .eq("project_id", project.id)
             .eq("is_deleted", false);
-
+          // Get admin email
+          const { data: { users: adminUsers } } = await supabaseAdmin.auth.admin.listUsers();
+          const adminUser = adminUsers?.find((u: any) => u.id === project.owner_user_id);
           return {
             ...project,
             admin_name: adminProfile?.full_name || "Unknown",
+            admin_email: adminUser?.email || "",
             total_users: userCount || 0,
             total_orders: orderCount || 0,
           };
         }));
-
         return json({ projects: enriched });
       }
 
@@ -128,8 +123,41 @@ serve(async (req) => {
       if (action === "delete_project") {
         const { projectId } = body;
         if (!projectId) return json({ error: "projectId required" }, 400);
-        // Soft-delete: just deactivate. For hard delete, would need cascade cleanup.
+        // Clean up project data
+        await supabaseAdmin.from("orders").delete().eq("project_id", projectId);
+        await supabaseAdmin.from("customers").delete().eq("project_id", projectId);
+        await supabaseAdmin.from("products").delete().eq("project_id", projectId);
+        await supabaseAdmin.from("delivery_methods").delete().eq("project_id", projectId);
+        await supabaseAdmin.from("order_sources").delete().eq("project_id", projectId).eq("is_system", false);
+        // Remove user associations
+        const { data: projectProfiles } = await supabaseAdmin.from("profiles").select("user_id").eq("project_id", projectId);
+        if (projectProfiles) {
+          for (const p of projectProfiles) {
+            await supabaseAdmin.from("user_roles").delete().eq("user_id", p.user_id);
+          }
+        }
+        await supabaseAdmin.from("profiles").update({ project_id: null }).eq("project_id", projectId);
         await supabaseAdmin.from("projects").delete().eq("id", projectId);
+        return json({ success: true });
+      }
+
+      if (action === "reset_project") {
+        const { projectId } = body;
+        if (!projectId) return json({ error: "projectId required" }, 400);
+        // Delete all operational data but keep the project and users
+        await supabaseAdmin.from("orders").delete().eq("project_id", projectId);
+        await supabaseAdmin.from("customers").delete().eq("project_id", projectId);
+        await supabaseAdmin.from("products").delete().eq("project_id", projectId);
+        await supabaseAdmin.from("delivery_methods").delete().eq("project_id", projectId);
+        return json({ success: true });
+      }
+
+      if (action === "update_project") {
+        const { projectId, businessName } = body;
+        if (!projectId) return json({ error: "projectId required" }, 400);
+        const updates: any = {};
+        if (businessName) updates.business_name = businessName;
+        await supabaseAdmin.from("projects").update(updates).eq("id", projectId);
         return json({ success: true });
       }
 
@@ -149,6 +177,45 @@ serve(async (req) => {
           supabaseAdmin.from("user_roles").select("*", { count: "exact", head: true }).neq("role", "owner"),
           supabaseAdmin.from("orders").select("*", { count: "exact", head: true }).eq("is_deleted", false),
         ]);
+
+        // Get orders per month for chart (last 6 months)
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        const { data: recentOrders } = await supabaseAdmin.from("orders")
+          .select("created_at")
+          .eq("is_deleted", false)
+          .gte("created_at", sixMonthsAgo.toISOString());
+        
+        const ordersByMonth: Record<string, number> = {};
+        (recentOrders || []).forEach((o: any) => {
+          const d = new Date(o.created_at);
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          ordersByMonth[key] = (ordersByMonth[key] || 0) + 1;
+        });
+
+        // Get projects per month
+        const { data: allProjects } = await supabaseAdmin.from("projects").select("created_at");
+        const projectsByMonth: Record<string, number> = {};
+        (allProjects || []).forEach((p: any) => {
+          const d = new Date(p.created_at);
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          projectsByMonth[key] = (projectsByMonth[key] || 0) + 1;
+        });
+
+        // Build chart data for last 6 months
+        const chartData = [];
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date();
+          d.setMonth(d.getMonth() - i);
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          const monthName = d.toLocaleString('en', { month: 'short' });
+          chartData.push({
+            month: monthName,
+            orders: ordersByMonth[key] || 0,
+            projects: projectsByMonth[key] || 0,
+          });
+        }
+
         return json({
           totalProjects: totalProjects || 0,
           pendingRequests: pendingRequests || 0,
@@ -156,7 +223,228 @@ serve(async (req) => {
           suspendedProjects: suspendedProjects || 0,
           totalUsers: totalUsers || 0,
           totalOrders: totalOrders || 0,
+          chartData,
         });
+      }
+
+      // ---- OWNER: ALL USERS MANAGEMENT ----
+      if (action === "owner_list_users") {
+        const { projectId } = body;
+        const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
+        if (error) return json({ error: error.message }, 400);
+
+        const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id, role");
+        const roleMap = new Map((roles || []).map((r: any) => [r.user_id, r.role]));
+        const { data: profiles } = await supabaseAdmin.from("profiles").select("user_id, full_name, project_id, phone");
+        const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
+        const { data: allProjects } = await supabaseAdmin.from("projects").select("id, business_name");
+        const projMap = new Map((allProjects || []).map((p: any) => [p.id, p.business_name]));
+
+        const result = users
+          .filter((u: any) => {
+            const userRole = roleMap.get(u.id);
+            if (userRole === "owner") return false;
+            if (projectId) {
+              const prof = profileMap.get(u.id);
+              return prof?.project_id === projectId;
+            }
+            return true;
+          })
+          .map((u: any) => {
+            const prof = profileMap.get(u.id);
+            return {
+              id: u.id,
+              email: u.email,
+              fullName: prof?.full_name || u.user_metadata?.full_name || "",
+              phone: prof?.phone || "",
+              role: roleMap.get(u.id) || null,
+              projectId: prof?.project_id || null,
+              projectName: prof?.project_id ? projMap.get(prof.project_id) || "Unknown" : "Unassigned",
+              createdAt: u.created_at,
+              lastSignIn: u.last_sign_in_at,
+              emailConfirmed: !!u.email_confirmed_at,
+              banned: u.banned_until ? new Date(u.banned_until) > new Date() : false,
+            };
+          });
+        return json({ users: result });
+      }
+
+      if (action === "owner_create_user") {
+        const { email, password, fullName, role, projectId } = body;
+        if (!email || !password || !role) return json({ error: "email, password, and role are required" }, 400);
+
+        const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+          email, password, email_confirm: true,
+          user_metadata: { full_name: fullName || "" },
+        });
+        if (createError) return json({ error: createError.message }, 400);
+
+        await supabaseAdmin.from("user_roles").insert({ user_id: newUser.user.id, role });
+        if (projectId) {
+          await supabaseAdmin.from("profiles").update({ project_id: projectId }).eq("user_id", newUser.user.id);
+        }
+        return json({ success: true, userId: newUser.user.id });
+      }
+
+      if (action === "owner_update_user") {
+        const { userId, fullName, email, phone } = body;
+        if (!userId) return json({ error: "userId required" }, 400);
+        const updates: any = {};
+        if (email) updates.email = email;
+        if (fullName !== undefined) updates.user_metadata = { full_name: fullName };
+        if (Object.keys(updates).length > 0) {
+          const { error } = await supabaseAdmin.auth.admin.updateUser(userId, updates);
+          if (error) return json({ error: error.message }, 400);
+        }
+        const profileUpdates: any = {};
+        if (fullName !== undefined) profileUpdates.full_name = fullName;
+        if (phone !== undefined) profileUpdates.phone = phone;
+        if (Object.keys(profileUpdates).length > 0) {
+          await supabaseAdmin.from("profiles").update(profileUpdates).eq("user_id", userId);
+        }
+        return json({ success: true });
+      }
+
+      if (action === "owner_update_role") {
+        const { userId, role } = body;
+        if (!userId || !role) return json({ error: "userId and role required" }, 400);
+        // Check if user has a role already
+        const { data: existingRole } = await supabaseAdmin.from("user_roles").select("id").eq("user_id", userId).maybeSingle();
+        if (existingRole) {
+          await supabaseAdmin.from("user_roles").update({ role }).eq("user_id", userId);
+        } else {
+          await supabaseAdmin.from("user_roles").insert({ user_id: userId, role });
+        }
+        return json({ success: true });
+      }
+
+      if (action === "owner_reset_password") {
+        const { userId, newPassword } = body;
+        if (!userId || !newPassword) return json({ error: "userId and newPassword required" }, 400);
+        const { error } = await supabaseAdmin.auth.admin.updateUser(userId, { password: newPassword });
+        if (error) return json({ error: error.message }, 400);
+        return json({ success: true });
+      }
+
+      if (action === "owner_toggle_ban") {
+        const { userId, ban } = body;
+        if (!userId) return json({ error: "userId required" }, 400);
+        const banData = ban ? { ban_duration: "876600h" } : { ban_duration: "none" };
+        const { error } = await supabaseAdmin.auth.admin.updateUser(userId, banData as any);
+        if (error) return json({ error: error.message }, 400);
+        return json({ success: true });
+      }
+
+      if (action === "owner_delete_user") {
+        const { userId } = body;
+        if (!userId) return json({ error: "userId required" }, 400);
+        await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+        await supabaseAdmin.from("profiles").delete().eq("user_id", userId);
+        const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+        if (error) return json({ error: error.message }, 400);
+        return json({ success: true });
+      }
+
+      if (action === "owner_transfer_admin") {
+        const { projectId, newAdminUserId } = body;
+        if (!projectId || !newAdminUserId) return json({ error: "projectId and newAdminUserId required" }, 400);
+        // Get current admin
+        const { data: project } = await supabaseAdmin.from("projects").select("owner_user_id").eq("id", projectId).single();
+        if (!project) return json({ error: "Project not found" }, 404);
+        // Downgrade old admin to sub_admin
+        await supabaseAdmin.from("user_roles").update({ role: "sub_admin" }).eq("user_id", project.owner_user_id);
+        // Upgrade new admin
+        await supabaseAdmin.from("user_roles").update({ role: "admin" }).eq("user_id", newAdminUserId);
+        // Update project owner
+        await supabaseAdmin.from("projects").update({ owner_user_id: newAdminUserId }).eq("id", projectId);
+        return json({ success: true });
+      }
+
+      // ---- OWNER: SYSTEM LOGS ----
+      if (action === "owner_system_logs") {
+        const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
+        const userMap = new Map((users || []).map((u: any) => [u.id, { email: u.email, name: u.user_metadata?.full_name || u.email }]));
+        
+        // Get recent auth events via user last sign in
+        const logs: any[] = [];
+        
+        // Recent order changes
+        const { data: recentOrders } = await supabaseAdmin.from("orders")
+          .select("id, customer_name, created_at, created_by, updated_at, current_status, project_id")
+          .order("updated_at", { ascending: false })
+          .limit(50);
+        
+        (recentOrders || []).forEach((o: any) => {
+          const user = userMap.get(o.created_by);
+          logs.push({
+            id: `order-${o.id}`,
+            type: "order",
+            action: `Order for ${o.customer_name} (${o.current_status})`,
+            userId: o.created_by,
+            userName: user?.name || "System",
+            userEmail: user?.email || "",
+            projectId: o.project_id,
+            timestamp: o.updated_at,
+          });
+        });
+
+        // Recent project changes
+        const { data: recentProjects } = await supabaseAdmin.from("projects")
+          .select("id, business_name, created_at, updated_at")
+          .order("updated_at", { ascending: false })
+          .limit(20);
+        
+        (recentProjects || []).forEach((p: any) => {
+          logs.push({
+            id: `project-${p.id}`,
+            type: "project",
+            action: `Project "${p.business_name}"`,
+            userId: null,
+            userName: "System",
+            userEmail: "",
+            projectId: p.id,
+            timestamp: p.updated_at,
+          });
+        });
+
+        // User logins
+        (users || []).filter((u: any) => u.last_sign_in_at).forEach((u: any) => {
+          logs.push({
+            id: `login-${u.id}`,
+            type: "login",
+            action: `User login`,
+            userId: u.id,
+            userName: u.user_metadata?.full_name || u.email,
+            userEmail: u.email,
+            projectId: null,
+            timestamp: u.last_sign_in_at,
+          });
+        });
+
+        // Role changes (from user_roles created_at)
+        const { data: roleChanges } = await supabaseAdmin.from("user_roles")
+          .select("user_id, role, created_at")
+          .order("created_at", { ascending: false })
+          .limit(20);
+        
+        (roleChanges || []).forEach((r: any) => {
+          const user = userMap.get(r.user_id);
+          logs.push({
+            id: `role-${r.user_id}-${r.created_at}`,
+            type: "role",
+            action: `Role assigned: ${r.role}`,
+            userId: r.user_id,
+            userName: user?.name || "Unknown",
+            userEmail: user?.email || "",
+            projectId: null,
+            timestamp: r.created_at,
+          });
+        });
+
+        // Sort all logs by timestamp desc
+        logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+        return json({ logs: logs.slice(0, 100) });
       }
 
       return json({ error: "Unknown action" }, 400);
@@ -165,30 +453,22 @@ serve(async (req) => {
     // ============ ADMIN ACTIONS ============
     if (callerRole !== "admin") return json({ error: "Forbidden: Admin only" }, 403);
 
-    // Get caller's project_id for project isolation
     const { data: callerProfile } = await supabaseAdmin.from("profiles").select("project_id").eq("user_id", caller.id).maybeSingle();
     const callerProjectId = callerProfile?.project_id;
 
     if (action === "create") {
       const { email, password, fullName, role } = body;
       if (!email || !password || !role) return json({ error: "email, password, and role are required" }, 400);
-
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
+        email, password, email_confirm: true,
         user_metadata: { full_name: fullName || "" },
       });
       if (createError) return json({ error: createError.message }, 400);
-
       const { error: roleError } = await supabaseAdmin.from("user_roles").insert({ user_id: newUser.user.id, role });
       if (roleError) return json({ error: roleError.message }, 400);
-
-      // Assign same project_id as the admin
       if (callerProjectId) {
         await supabaseAdmin.from("profiles").update({ project_id: callerProjectId }).eq("user_id", newUser.user.id);
       }
-
       return json({ success: true, userId: newUser.user.id });
     }
 
@@ -228,20 +508,16 @@ serve(async (req) => {
     if (action === "list_users") {
       const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
       if (error) return json({ error: error.message }, 400);
-
       const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id, role");
       const roleMap = new Map((roles || []).map((r: any) => [r.user_id, r.role]));
-
       const { data: profiles } = await supabaseAdmin.from("profiles").select("user_id, full_name, project_id");
       const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
-
-      // Filter users by project_id
       const result = users
         .filter((u: any) => {
           const prof = profileMap.get(u.id);
           const userRole = roleMap.get(u.id);
-          if (userRole === "owner") return false; // Don't show owner in admin's list
-          if (!callerProjectId) return true; // No project filter
+          if (userRole === "owner") return false;
+          if (!callerProjectId) return true;
           return prof?.project_id === callerProjectId;
         })
         .map((u: any) => ({
@@ -254,7 +530,6 @@ serve(async (req) => {
           emailConfirmed: !!u.email_confirmed_at,
           banned: u.banned_until ? new Date(u.banned_until) > new Date() : false,
         }));
-
       return json({ users: result });
     }
 
