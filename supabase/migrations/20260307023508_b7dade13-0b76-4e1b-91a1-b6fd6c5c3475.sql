@@ -1,0 +1,1 @@
+ALTER TABLE public.orders ADD COLUMN next_followup_datetime timestamptz DEFAULT NULL;

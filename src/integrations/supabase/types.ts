@@ -261,6 +261,7 @@ export type Database = {
           is_upsell: boolean
           item_description: string
           mobile: string
+          next_followup_datetime: string | null
           note: string
           order_date: string
           order_sequence_number: number
@@ -296,6 +297,7 @@ export type Database = {
           is_upsell?: boolean
           item_description?: string
           mobile: string
+          next_followup_datetime?: string | null
           note?: string
           order_date?: string
           order_sequence_number?: number
@@ -331,6 +333,7 @@ export type Database = {
           is_upsell?: boolean
           item_description?: string
           mobile?: string
+          next_followup_datetime?: string | null
           note?: string
           order_date?: string
           order_sequence_number?: number
