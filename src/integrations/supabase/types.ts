@@ -203,6 +203,54 @@ export type Database = {
           },
         ]
       }
+      order_activity_logs: {
+        Row: {
+          action_description: string
+          action_type: string
+          created_at: string
+          id: string
+          order_id: string
+          project_id: string | null
+          user_id: string | null
+          user_name: string
+        }
+        Insert: {
+          action_description?: string
+          action_type?: string
+          created_at?: string
+          id?: string
+          order_id: string
+          project_id?: string | null
+          user_id?: string | null
+          user_name?: string
+        }
+        Update: {
+          action_description?: string
+          action_type?: string
+          created_at?: string
+          id?: string
+          order_id?: string
+          project_id?: string | null
+          user_id?: string | null
+          user_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_activity_logs_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_activity_logs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_sources: {
         Row: {
           created_at: string
