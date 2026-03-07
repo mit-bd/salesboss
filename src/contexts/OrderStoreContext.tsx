@@ -148,6 +148,21 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
   const userName = profile?.full_name || user?.email || "Admin User";
 
+  const logOrderActivity = useCallback(
+    async (orderId: string, actionType: string, actionDescription: string) => {
+      if (!user) return;
+      await (supabase.from("order_activity_logs" as any) as any).insert({
+        order_id: orderId,
+        project_id: projectId,
+        user_id: user.id,
+        user_name: userName,
+        action_type: actionType,
+        action_description: actionDescription,
+      });
+    },
+    [user, userName, projectId]
+  );
+
   const fetchOrders = useCallback(async () => {
     if (role === "owner" || !projectId) { setLoading(false); return; }
     let query = supabase.from("orders").select("*").order("created_at", { ascending: false });
