@@ -42,7 +42,7 @@ interface ImportResult {
 
 // --- Constants ---
 
-const REQUIRED_COLUMNS = ["customerName", "mobile", "address", "orderSource", "product", "price", "orderDate", "deliveryDate", "deliveryMethod", "itemDescription"];
+const REQUIRED_COLUMNS = ["customerName", "mobile", "address"];
 
 const AUTO_MAP: Record<string, string[]> = {
   customerName: ["customer name", "name", "customer"],
@@ -65,22 +65,23 @@ function parseCSV(text: string): { headers: string[]; rows: string[][] } {
   return { headers: lines[0] || [], rows: lines.slice(1) };
 }
 
-function validateRow(row: Record<string, string>, activeDeliveryMethodNames: string[]): string | undefined {
+function validateRow(row: Record<string, string>): string | undefined {
   if (!row.customerName?.trim()) return "Missing customer name";
   if (!row.mobile?.trim()) return "Missing mobile";
   if (!/^\d{10,15}$/.test(row.mobile.replace(/\s/g, ""))) return "Invalid mobile number";
   if (!row.address?.trim()) return "Missing address";
-  if (!row.orderSource?.trim()) return "Missing order source";
-  if (!row.product?.trim()) return "Missing product";
-  if (!row.price?.trim()) return "Missing price";
-  if (!row.orderDate?.trim()) return "Missing order date";
-  else if (!/^\d{4}-\d{2}-\d{2}$/.test(row.orderDate.trim())) return "Invalid order date format (YYYY-MM-DD)";
-  if (!row.deliveryDate?.trim()) return "Missing delivery date";
-  else if (!/^\d{4}-\d{2}-\d{2}$/.test(row.deliveryDate.trim())) return "Invalid delivery date format (YYYY-MM-DD)";
-  if (!row.deliveryMethod?.trim()) return "Missing delivery method";
-  else if (!activeDeliveryMethodNames.some((m) => m.toLowerCase() === row.deliveryMethod!.trim().toLowerCase())) return "Invalid delivery method";
-  if (!row.itemDescription?.trim()) return "Missing item description";
   return undefined;
+}
+
+function safeDate(val: string | undefined): string | null {
+  if (!val?.trim()) return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(val.trim()) ? val.trim() : null;
+}
+
+function safePrice(val: string | undefined): number {
+  if (!val?.trim()) return 0;
+  const n = parseFloat(val);
+  return isNaN(n) ? 0 : n;
 }
 
 function autoMapColumns(headers: string[]): Record<string, string> {
@@ -136,14 +137,13 @@ export default function BulkImportPage() {
   };
 
   const handlePreview = () => {
-    const deliveryMethodNames = activeDeliveryMethods.map((dm) => dm.name);
     const rows: ParsedRow[] = rawRows.map((row, idx) => {
       const obj: Record<string, string> = {};
       rawHeaders.forEach((h, i) => { obj[h] = row[i] || ""; });
       const mapped: Record<string, string> = {};
       Object.entries(columnMapping).forEach(([key, col]) => { mapped[key] = obj[col] || ""; });
-      const error = validateRow(mapped, deliveryMethodNames);
-      return { ...mapped, rowNumber: idx + 2, error } as ParsedRow; // +2 for 1-indexed + header
+      const error = validateRow(mapped);
+      return { ...mapped, rowNumber: idx + 2, error } as ParsedRow;
     });
     setParsedData(rows);
     setImportResults(null);
@@ -185,23 +185,28 @@ export default function BulkImportPage() {
           ? activeDeliveryMethods.find((dm) => dm.id === assignDeliveryMethod)?.name || row.deliveryMethod || ""
           : row.deliveryMethod || "";
 
+        const orderDate = safeDate(row.orderDate);
+        const deliveryDate = safeDate(row.deliveryDate);
+
         const { error: insertErr } = await supabase.from("orders").insert({
           customer_name: row.customerName,
           mobile: row.mobile.replace(/\s/g, ""),
           address: row.address,
-          order_source: row.orderSource,
-          product_title: row.product || "",
-          price: parseFloat(row.price || "0"),
-          order_date: row.orderDate,
-          delivery_date: row.deliveryDate,
-          delivery_method: dmName,
-          item_description: row.itemDescription || "",
-          note: row.note || "",
+          order_source: row.orderSource?.trim() || "Website",
+          product_title: row.product?.trim() || "",
+          price: safePrice(row.price),
+          order_date: orderDate || new Date().toISOString().slice(0, 10),
+          delivery_date: deliveryDate,
+          delivery_method: dmName || "",
+          item_description: row.itemDescription?.trim() || "",
+          note: row.note?.trim() || "",
           customer_id: customerId,
           project_id: profile.project_id,
           created_by: user.id,
           assigned_to: (assignToExec && assignToExec !== "__none__") ? assignToExec : null,
           assigned_to_name: execName,
+          current_status: "pending",
+          followup_step: 1,
         });
 
         if (insertErr) throw new Error(insertErr.message);
@@ -269,19 +274,26 @@ export default function BulkImportPage() {
             </div>
 
             <div className="mt-6 rounded-xl border border-border bg-card p-5 card-shadow">
-              <h3 className="text-sm font-semibold text-foreground mb-3">Required Columns</h3>
-              <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-                <span>• Customer Name *</span>
-                <span>• Mobile Number *</span>
-                <span>• Address *</span>
-                <span>• Order Source *</span>
-                <span>• Product *</span>
-                <span>• Price *</span>
-                <span>• Order Date *</span>
-                <span>• Delivery Date *</span>
-                <span>• Delivery Method *</span>
-                <span>• Item Description *</span>
-                <span>• Order Note</span>
+              <h3 className="text-sm font-semibold text-foreground mb-3">Column Guide</h3>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Required:</p>
+                <div className="grid grid-cols-3 gap-1">
+                  <span>• Customer Name *</span>
+                  <span>• Mobile Number *</span>
+                  <span>• Address *</span>
+                </div>
+                <p className="font-medium text-foreground mt-2">Optional:</p>
+                <div className="grid grid-cols-3 gap-1">
+                  <span>• Order Source</span>
+                  <span>• Product</span>
+                  <span>• Price</span>
+                  <span>• Order Date</span>
+                  <span>• Delivery Date</span>
+                  <span>• Delivery Method</span>
+                  <span>• Item Description</span>
+                  <span>• Order Note</span>
+                </div>
+                <p className="text-xs text-muted-foreground/70 mt-1">Orders with only required fields will appear in Step 1 Followup Pending and can be edited later.</p>
               </div>
             </div>
           </>
