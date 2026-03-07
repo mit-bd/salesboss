@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuditLog } from "./AuditLogContext";
 import { useAuth } from "./AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { supabase as supabaseClient } from "@/integrations/supabase/client";
 
 interface OrderStoreContextType {
   orders: Order[];
