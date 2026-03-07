@@ -3,33 +3,33 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Building2, Users, Clock, CheckCircle, LogOut } from "lucide-react";
+import { Loader2, Building2, Users, Clock, CheckCircle, LogOut, XCircle, ShoppingCart } from "lucide-react";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import { Link } from "react-router-dom";
 
 interface Stats {
   totalProjects: number;
-  pendingRequests: number;
   activeProjects: number;
+  suspendedProjects: number;
+  pendingRequests: number;
   totalUsers: number;
+  totalOrders: number;
 }
 
 export default function OwnerDashboardPage() {
-  const { signOut, profile } = useAuth();
+  const { signOut } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        console.log("[OwnerDashboard] Fetching stats...");
         const { data, error } = await supabase.functions.invoke("manage-team", {
           body: { action: "dashboard_stats" },
         });
         if (error) {
           console.error("[OwnerDashboard] Stats error:", error);
         } else if (data) {
-          console.log("[OwnerDashboard] Stats loaded:", data);
           setStats(data);
         }
       } catch (err) {
@@ -43,14 +43,15 @@ export default function OwnerDashboardPage() {
 
   const statCards = [
     { label: "Total Projects", value: stats?.totalProjects ?? 0, icon: Building2, color: "text-primary" },
-    { label: "Active Projects", value: stats?.activeProjects ?? 0, icon: CheckCircle, color: "text-green-600" },
-    { label: "Pending Requests", value: stats?.pendingRequests ?? 0, icon: Clock, color: "text-amber-600" },
-    { label: "Total Users", value: stats?.totalUsers ?? 0, icon: Users, color: "text-blue-600" },
+    { label: "Active Projects", value: stats?.activeProjects ?? 0, icon: CheckCircle, color: "text-green-500" },
+    { label: "Suspended Projects", value: stats?.suspendedProjects ?? 0, icon: XCircle, color: "text-destructive" },
+    { label: "Pending Requests", value: stats?.pendingRequests ?? 0, icon: Clock, color: "text-warning" },
+    { label: "Total Users", value: stats?.totalUsers ?? 0, icon: Users, color: "text-info" },
+    { label: "Total Orders", value: stats?.totalOrders ?? 0, icon: ShoppingCart, color: "text-primary" },
   ];
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div>
@@ -68,7 +69,6 @@ export default function OwnerDashboardPage() {
       </header>
 
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
-        {/* Navigation */}
         <div className="flex gap-3">
           <Link to="/owner">
             <Button variant="default" size="sm">Dashboard</Button>
@@ -88,13 +88,12 @@ export default function OwnerDashboardPage() {
           </Link>
         </div>
 
-        {/* Stats */}
         {loading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {statCards.map((card) => (
               <Card key={card.label}>
                 <CardHeader className="pb-2">
