@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createAssignmentNotifications } from "@/hooks/useNotifications";
 import { useParams, useNavigate } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
@@ -90,6 +91,18 @@ export default function OrderDetailPage() {
     await refreshOrders();
     toast({ title: isUnassign ? "Assignment Removed" : "Assignment Updated" });
     addLog({ actionType: isUnassign ? "Assignment Removed" : "Assignment Transferred", userName, role: role || "unknown", entity: `Order #${order.invoiceId || order.id}`, details: `${oldName} → ${newName}` });
+
+    // Create notifications for assignment
+    if (!isUnassign && exec && user && profile?.project_id) {
+      await createAssignmentNotifications({
+        orderId: order.id,
+        orderName: order.customerName,
+        assignedToId: execId,
+        assignedToName: exec.name,
+        assignedById: user.id,
+        projectId: profile.project_id,
+      });
+    }
   };
 
   if (!order) {
