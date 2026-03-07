@@ -355,6 +355,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       setOrders((prev) => { if (prev.some((o) => o.id === newOrder.id)) return prev; return [newOrder, ...prev]; });
       toast({ title: "Order created" });
       addLog({ actionType: "Order Created", userName, role: role || "unknown", entity: `Order #${data.invoice_id}`, details: `Customer: ${order.customerName}` });
+      await logOrderActivity(data.id, "Order Created", `Created order for ${order.customerName}`);
     },
     [addLog, user, userName, role, toast, projectId]
   );
@@ -484,6 +485,13 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
       toast({ title: `Step ${data.stepNumber} completed`, description: isFinalStep ? "Followup lifecycle fully completed!" : `Next followup on ${data.nextFollowupDate}` });
       addLog({ actionType: "Followup Completed", userName, role: role || "unknown", entity: `Order #${data.orderId}`, details: `Step ${data.stepNumber} completed${data.upsellEntries.length > 0 ? ` with ${data.upsellEntries.length} upsell(s)` : ""}${data.repeatOrderEntries.length > 0 ? `, ${data.repeatOrderEntries.length} repeat order(s)` : ""}` });
+      await logOrderActivity(data.orderId, "Followup Completed", `${userName} completed Step ${data.stepNumber} Followup`);
+      if (data.upsellEntries.length > 0) {
+        await logOrderActivity(data.orderId, "Upsell Added", `${data.upsellEntries.length} upsell(s) added during Step ${data.stepNumber}`);
+      }
+      if (data.repeatOrderEntries.length > 0) {
+        await logOrderActivity(data.orderId, "Repeat Order Created", `${data.repeatOrderEntries.length} repeat order(s) created during Step ${data.stepNumber}`);
+      }
     },
     [user, userName, role, toast, addLog, orders, projectId]
   );
@@ -513,6 +521,11 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
       toast({ title: "Followup record updated" });
       addLog({ actionType: "Followup Edited", userName, role: role || "unknown", entity: `Followup #${data.followupId}`, details: "Admin edited followup record" });
+      // Find orderId from the followup entry
+      const entry = followupHistory.find((h) => h.id === data.followupId);
+      if (entry) {
+        await logOrderActivity(entry.orderId, "Followup Edited", `${userName} edited Step ${entry.stepNumber} followup record`);
+      }
     },
     [user, userName, role, toast, addLog]
   );
@@ -530,6 +543,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       setOrders((prev) => prev.map((o) => idsToDelete.includes(o.id) ? { ...o, isDeleted: true } : o));
       toast({ title: "Order deleted" });
       addLog({ actionType: "Order Soft Deleted", userName, role: role || "unknown", entity: `Order #${orderId}` });
+      await logOrderActivity(orderId, "Order Deleted", `${userName} deleted the order`);
     },
     [orders, addLog, userName, role, toast]
   );
@@ -612,6 +626,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       }
       toast({ title: "Order updated" });
       addLog({ actionType: "Order Edited", userName, role: role || "unknown", entity: `Order #${updated.id}`, details: `Updated order for ${updated.customerName}` });
+      await logOrderActivity(updated.id, "Order Updated", `${userName} updated order details`);
     },
     [addLog, userName, role, toast]
   );
