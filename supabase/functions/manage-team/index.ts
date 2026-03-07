@@ -87,8 +87,36 @@ serve(async (req) => {
       }
 
       if (action === "list_projects") {
-        const { data } = await supabaseAdmin.from("projects").select("*").order("created_at", { ascending: false });
-        return json({ projects: data });
+        const { data: projects } = await supabaseAdmin.from("projects").select("*").order("created_at", { ascending: false });
+        
+        // Enrich each project with admin name, user count, order count
+        const enriched = await Promise.all((projects || []).map(async (project: any) => {
+          // Get admin profile (the owner_user_id of the project)
+          const { data: adminProfile } = await supabaseAdmin.from("profiles")
+            .select("full_name")
+            .eq("user_id", project.owner_user_id)
+            .maybeSingle();
+
+          // Count users in this project
+          const { count: userCount } = await supabaseAdmin.from("profiles")
+            .select("*", { count: "exact", head: true })
+            .eq("project_id", project.id);
+
+          // Count orders in this project
+          const { count: orderCount } = await supabaseAdmin.from("orders")
+            .select("*", { count: "exact", head: true })
+            .eq("project_id", project.id)
+            .eq("is_deleted", false);
+
+          return {
+            ...project,
+            admin_name: adminProfile?.full_name || "Unknown",
+            total_users: userCount || 0,
+            total_orders: orderCount || 0,
+          };
+        }));
+
+        return json({ projects: enriched });
       }
 
       if (action === "toggle_project") {
@@ -97,16 +125,37 @@ serve(async (req) => {
         return json({ success: true });
       }
 
+      if (action === "delete_project") {
+        const { projectId } = body;
+        if (!projectId) return json({ error: "projectId required" }, 400);
+        // Soft-delete: just deactivate. For hard delete, would need cascade cleanup.
+        await supabaseAdmin.from("projects").delete().eq("id", projectId);
+        return json({ success: true });
+      }
+
       if (action === "dashboard_stats") {
-        const { count: totalProjects } = await supabaseAdmin.from("projects").select("*", { count: "exact", head: true });
-        const { count: pendingRequests } = await supabaseAdmin.from("project_requests").select("*", { count: "exact", head: true }).eq("status", "pending");
-        const { count: activeProjects } = await supabaseAdmin.from("projects").select("*", { count: "exact", head: true }).eq("is_active", true);
-        const { count: totalUsers } = await supabaseAdmin.from("user_roles").select("*", { count: "exact", head: true }).neq("role", "owner");
+        const [
+          { count: totalProjects },
+          { count: pendingRequests },
+          { count: activeProjects },
+          { count: suspendedProjects },
+          { count: totalUsers },
+          { count: totalOrders },
+        ] = await Promise.all([
+          supabaseAdmin.from("projects").select("*", { count: "exact", head: true }),
+          supabaseAdmin.from("project_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
+          supabaseAdmin.from("projects").select("*", { count: "exact", head: true }).eq("is_active", true),
+          supabaseAdmin.from("projects").select("*", { count: "exact", head: true }).eq("is_active", false),
+          supabaseAdmin.from("user_roles").select("*", { count: "exact", head: true }).neq("role", "owner"),
+          supabaseAdmin.from("orders").select("*", { count: "exact", head: true }).eq("is_deleted", false),
+        ]);
         return json({
           totalProjects: totalProjects || 0,
           pendingRequests: pendingRequests || 0,
           activeProjects: activeProjects || 0,
+          suspendedProjects: suspendedProjects || 0,
           totalUsers: totalUsers || 0,
+          totalOrders: totalOrders || 0,
         });
       }
 

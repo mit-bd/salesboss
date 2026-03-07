@@ -6,7 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, LogOut } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Loader2, LogOut, Trash2, Users, ShoppingCart } from "lucide-react";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import { Link } from "react-router-dom";
 
@@ -16,6 +27,9 @@ interface Project {
   owner_user_id: string;
   is_active: boolean;
   created_at: string;
+  admin_name: string;
+  total_users: number;
+  total_orders: number;
 }
 
 export default function OwnerProjectsPage() {
@@ -44,6 +58,18 @@ export default function OwnerProjectsPage() {
       toast({ title: "Error", description: data?.error || error?.message, variant: "destructive" });
     } else {
       toast({ title: isActive ? "Project activated" : "Project suspended" });
+      fetchProjects();
+    }
+  };
+
+  const handleDelete = async (projectId: string) => {
+    const { data, error } = await supabase.functions.invoke("manage-team", {
+      body: { action: "delete_project", projectId },
+    });
+    if (error || data?.error) {
+      toast({ title: "Error", description: data?.error || error?.message, variant: "destructive" });
+    } else {
+      toast({ title: "Project deleted" });
       fetchProjects();
     }
   };
@@ -90,22 +116,57 @@ export default function OwnerProjectsPage() {
             {projects.map((project) => (
               <Card key={project.id}>
                 <CardContent className="p-5">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="font-semibold text-foreground">{project.business_name}</p>
                         <Badge variant={project.is_active ? "default" : "secondary"}>
                           {project.is_active ? "Active" : "Suspended"}
                         </Badge>
                       </div>
+                      <p className="text-sm text-muted-foreground">Admin: {project.admin_name}</p>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Users className="h-3.5 w-3.5" />
+                          {project.total_users} Users
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <ShoppingCart className="h-3.5 w-3.5" />
+                          {project.total_orders} Orders
+                        </span>
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         Created: {new Date(project.created_at).toLocaleDateString()}
                       </p>
                     </div>
-                    <Switch
-                      checked={project.is_active}
-                      onCheckedChange={(checked) => handleToggle(project.id, checked)}
-                    />
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">{project.is_active ? "Active" : "Suspended"}</span>
+                        <Switch
+                          checked={project.is_active}
+                          onCheckedChange={(checked) => handleToggle(project.id, checked)}
+                        />
+                      </div>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="icon" className="h-8 w-8">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Project</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete "{project.business_name}"? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(project.id)}>Delete</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
