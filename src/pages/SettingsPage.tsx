@@ -13,16 +13,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Upload, User, Mail, Bell, Loader2 } from "lucide-react";
+import { Upload, User, Mail, Bell, Loader2, FlaskConical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { mockEmailReportConfig } from "@/data/mockData";
 import { EmailReportConfig } from "@/types/data";
+import { useRole } from "@/contexts/RoleContext";
 
 export default function SettingsPage() {
   const { toast } = useToast();
   const { user, profile, refreshProfile } = useAuth();
+  const { isAdmin } = useRole();
   const [profileImage, setProfileImage] = useState<string>("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -32,6 +34,10 @@ export default function SettingsPage() {
   // Email report state
   const [emailConfig, setEmailConfig] = useState<EmailReportConfig>({ ...mockEmailReportConfig });
   const [newRecipient, setNewRecipient] = useState("");
+
+  // Followup test mode
+  const [testMode, setTestMode] = useState(false);
+  const [testModeLoading, setTestModeLoading] = useState(false);
 
   // Hydrate from DB profile
   useEffect(() => {
