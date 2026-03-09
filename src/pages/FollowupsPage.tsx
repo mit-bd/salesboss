@@ -4,7 +4,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { cn } from "@/lib/utils";
-import { CheckCircle, Clock, Phone } from "lucide-react";
+import { AlertTriangle, CalendarCheck, CheckCircle, Clock, Target } from "lucide-react";
 import GlobalFilters, { FilterState, EMPTY_FILTERS } from "@/components/GlobalFilters";
 import OrderTable from "@/components/OrderTable";
 import CompleteFollowupDialog from "@/components/CompleteFollowupDialog";
