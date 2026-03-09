@@ -414,7 +414,7 @@ export default function CommissionPage() {
                             <div className="flex items-center gap-2">
                               <Switch
                                 checked={config?.enabled ?? false}
-                                onCheckedChange={(e) => { e.preventDefault?.(); quickToggleCommission(exec.userId); }}
+                                onCheckedChange={() => quickToggleCommission(exec.userId)}
                                 onClick={(e) => e.stopPropagation()}
                               />
                               <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform" />
