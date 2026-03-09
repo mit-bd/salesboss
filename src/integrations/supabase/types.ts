@@ -14,6 +14,119 @@ export type Database = {
   }
   public: {
     Tables: {
+      commission_configs: {
+        Row: {
+          apply_on: string
+          auto_generate: boolean
+          created_at: string
+          enabled: boolean
+          executive_id: string
+          id: string
+          max_commission_cap: number | null
+          min_order_value: number
+          project_id: string | null
+          rate: number
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          apply_on?: string
+          auto_generate?: boolean
+          created_at?: string
+          enabled?: boolean
+          executive_id: string
+          id?: string
+          max_commission_cap?: number | null
+          min_order_value?: number
+          project_id?: string | null
+          rate?: number
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          apply_on?: string
+          auto_generate?: boolean
+          created_at?: string
+          enabled?: boolean
+          executive_id?: string
+          id?: string
+          max_commission_cap?: number | null
+          min_order_value?: number
+          project_id?: string | null
+          rate?: number
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_configs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commission_entries: {
+        Row: {
+          amount: number
+          created_at: string
+          executive_id: string
+          id: string
+          order_id: string | null
+          order_invoice: string
+          paid_by: string | null
+          paid_date: string | null
+          payment_note: string
+          project_id: string | null
+          source: string
+          status: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          executive_id: string
+          id?: string
+          order_id?: string | null
+          order_invoice?: string
+          paid_by?: string | null
+          paid_date?: string | null
+          payment_note?: string
+          project_id?: string | null
+          source?: string
+          status?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          executive_id?: string
+          id?: string
+          order_id?: string | null
+          order_invoice?: string
+          paid_by?: string | null
+          paid_date?: string | null
+          payment_note?: string
+          project_id?: string | null
+          source?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_entries_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address: string
@@ -705,6 +818,65 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "permissions"
             referencedColumns: ["key"]
+          },
+        ]
+      }
+      sales_targets: {
+        Row: {
+          created_at: string
+          end_date: string
+          executive_id: string
+          id: string
+          is_active: boolean
+          period_type: string
+          project_id: string | null
+          start_date: string
+          target_followups: number
+          target_orders: number
+          target_repeat_orders: number
+          target_revenue: number
+          target_upsell_count: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          executive_id: string
+          id?: string
+          is_active?: boolean
+          period_type?: string
+          project_id?: string | null
+          start_date: string
+          target_followups?: number
+          target_orders?: number
+          target_repeat_orders?: number
+          target_revenue?: number
+          target_upsell_count?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          executive_id?: string
+          id?: string
+          is_active?: boolean
+          period_type?: string
+          project_id?: string | null
+          start_date?: string
+          target_followups?: number
+          target_orders?: number
+          target_repeat_orders?: number
+          target_revenue?: number
+          target_upsell_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_targets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
           },
         ]
       }
