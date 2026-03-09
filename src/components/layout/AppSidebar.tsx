@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import {
@@ -21,21 +21,31 @@ import {
   LogOut,
   KeyRound,
   ChevronDown,
+  ChevronRight,
   Globe,
   Building2,
   UserPlus,
-  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/contexts/PermissionContext";
+import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface NavItem {
   label: string;
   icon: any;
   path: string;
   permission?: string;
+  children?: NavChildItem[];
+}
+
+interface NavChildItem {
+  label: string;
+  path: string;
+  permission?: string;
+  stepNumber: number;
 }
 
 interface NavCategory {
@@ -51,12 +61,19 @@ const navCategories: NavCategory[] = [
     items: [
       { label: "Dashboard", icon: LayoutDashboard, path: "/" },
       { label: "All Orders", icon: ShoppingCart, path: "/orders", permission: "orders.view" },
-      { label: "Followups", icon: PhoneForwarded, path: "/followups", permission: "followups.view" },
-      { label: "1st Followup", icon: PhoneForwarded, path: "/followups?step=1", permission: "followups.view" },
-      { label: "2nd Followup", icon: PhoneForwarded, path: "/followups?step=2", permission: "followups.view" },
-      { label: "3rd Followup", icon: PhoneForwarded, path: "/followups?step=3", permission: "followups.view" },
-      { label: "4th Followup", icon: PhoneForwarded, path: "/followups?step=4", permission: "followups.view" },
-      { label: "5th Followup", icon: PhoneForwarded, path: "/followups?step=5", permission: "followups.view" },
+      {
+        label: "Followups",
+        icon: PhoneForwarded,
+        path: "/followups",
+        permission: "followups.view",
+        children: [
+          { label: "1st Followup", path: "/followups?step=1", permission: "followups.view", stepNumber: 1 },
+          { label: "2nd Followup", path: "/followups?step=2", permission: "followups.view", stepNumber: 2 },
+          { label: "3rd Followup", path: "/followups?step=3", permission: "followups.view", stepNumber: 3 },
+          { label: "4th Followup", path: "/followups?step=4", permission: "followups.view", stepNumber: 4 },
+          { label: "5th Followup", path: "/followups?step=5", permission: "followups.view", stepNumber: 5 },
+        ],
+      },
       { label: "Repeat Orders", icon: RefreshCw, path: "/repeat-orders", permission: "orders.view" },
       { label: "Upsell", icon: ArrowUpRight, path: "/upsell", permission: "followups.view" },
       { label: "Deleted Orders", icon: Trash2, path: "/deleted-orders", permission: "orders.delete" },
@@ -113,6 +130,7 @@ const ownerCategories: NavCategory[] = [
 ];
 
 const STORAGE_KEY = "sidebar-expanded";
+const FOLLOWUP_KEY = "sidebar-followups-expanded";
 
 function getInitialExpanded(): Record<string, boolean> {
   try {
@@ -126,7 +144,15 @@ export default function AppSidebar() {
   const location = useLocation();
   const { user, profile, role, signOut } = useAuth();
   const { hasPermission } = usePermissions();
+  const { activeOrders } = useOrderStore();
   const [expanded, setExpanded] = useState<Record<string, boolean>>(getInitialExpanded);
+  const [followupsOpen, setFollowupsOpen] = useState(() => {
+    try {
+      return localStorage.getItem(FOLLOWUP_KEY) !== "false";
+    } catch {
+      return true;
+    }
+  });
 
   useEffect(() => {
     try {
@@ -134,19 +160,34 @@ export default function AppSidebar() {
     } catch {}
   }, [expanded]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(FOLLOWUP_KEY, String(followupsOpen));
+    } catch {}
+  }, [followupsOpen]);
+
+  const stepCounts = useMemo(() => {
+    const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const order of activeOrders) {
+      const step = order.followupStep;
+      if (step >= 1 && step <= 5 && order.currentStatus === "pending") {
+        counts[step]++;
+      }
+    }
+    return counts;
+  }, [activeOrders]);
+
   const toggleCategory = (key: string) => {
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const isActive = (item: NavItem) => {
-    const [itemPath, itemQuery] = item.path.split("?");
+  const isActive = (path: string) => {
+    const [itemPath, itemQuery] = path.split("?");
     if (itemQuery) {
       return location.pathname === itemPath && location.search === `?${itemQuery}`;
     }
     return location.pathname === itemPath && !location.search;
   };
-
-  const isSubItem = (item: NavItem) => item.path.includes("?step=");
 
   const isOwner = role === "owner";
   const categories = isOwner ? ownerCategories : navCategories;
@@ -168,6 +209,98 @@ export default function AppSidebar() {
     .join("")
     .toUpperCase()
     .slice(0, 2);
+
+  const renderNavItem = (item: NavItem) => {
+    if (item.children) {
+      const visibleChildren = item.children.filter((c) => !c.permission || hasPermission(c.permission));
+      if (visibleChildren.length === 0) return null;
+      const parentActive = isActive(item.path);
+      const anyChildActive = visibleChildren.some((c) => isActive(c.path));
+
+      return (
+        <div key={item.path}>
+          <div className="flex items-center">
+            <Link
+              to={item.path}
+              className={cn(
+                "flex flex-1 items-center gap-2.5 rounded-md px-3 py-1.5 text-sm font-medium transition-fast",
+                parentActive || anyChildActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+              )}
+            >
+              <item.icon className="h-4 w-4 shrink-0" />
+              <span className="truncate">{item.label}</span>
+            </Link>
+            <button
+              onClick={() => setFollowupsOpen((p) => !p)}
+              className="mr-1 rounded p-1 text-sidebar-muted hover:text-sidebar-foreground transition-fast"
+            >
+              <ChevronRight
+                className={cn(
+                  "h-3.5 w-3.5 transition-transform duration-200",
+                  followupsOpen && "rotate-90"
+                )}
+              />
+            </button>
+          </div>
+          <div
+            className={cn(
+              "overflow-hidden transition-all duration-200",
+              followupsOpen ? "max-h-[300px] opacity-100" : "max-h-0 opacity-0"
+            )}
+          >
+            <div className="space-y-0.5 pt-0.5">
+              {visibleChildren.map((child) => {
+                const active = isActive(child.path);
+                const count = stepCounts[child.stepNumber] || 0;
+                return (
+                  <Link
+                    key={child.path}
+                    to={child.path}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-md pl-9 pr-3 py-1.5 text-xs font-medium transition-fast",
+                      active
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                    )}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-sidebar-muted shrink-0" />
+                    <span className="truncate flex-1">{child.label}</span>
+                    {count > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className="h-5 min-w-[20px] px-1.5 text-[10px] font-semibold justify-center"
+                      >
+                        {count}
+                      </Badge>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const active = isActive(item.path);
+    return (
+      <Link
+        key={item.path}
+        to={item.path}
+        className={cn(
+          "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm font-medium transition-fast",
+          active
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+        )}
+      >
+        <item.icon className="h-4 w-4 shrink-0" />
+        <span className="truncate">{item.label}</span>
+      </Link>
+    );
+  };
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 flex w-60 flex-col bg-sidebar border-r border-sidebar-border">
@@ -205,27 +338,7 @@ export default function AppSidebar() {
               )}
             >
               <div className="space-y-0.5 pb-2">
-                {cat.items.map((item) => {
-                  const active = isActive(item);
-                  const sub = isSubItem(item);
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      className={cn(
-                        "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm font-medium transition-fast",
-                        sub && "pl-9 text-xs",
-                        active
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-                      )}
-                    >
-                      {!sub && <item.icon className="h-4 w-4 shrink-0" />}
-                      {sub && <span className="h-1.5 w-1.5 rounded-full bg-sidebar-muted shrink-0" />}
-                      <span className="truncate">{item.label}</span>
-                    </Link>
-                  );
-                })}
+                {cat.items.map((item) => renderNavItem(item))}
               </div>
             </div>
           </div>
