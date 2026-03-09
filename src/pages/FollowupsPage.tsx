@@ -67,11 +67,17 @@ export default function FollowupsPage() {
   const { activeOrders, completeFollowup } = useOrderStore();
 
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const filteredOrders = applyFilters(activeOrders, filters);
   const stepOrders = filteredOrders.filter((o) => o.followupStep === activeStep);
   const pendingOrders = stepOrders.filter((o) => (o.currentStatus || "pending") === "pending");
   const completedOrders = stepOrders.filter((o) => (o.currentStatus || "pending") === "completed");
   const displayOrders = activeTab === "pending" ? pendingOrders : completedOrders;
+
+  const todayPending = pendingOrders.filter((o) => o.followupDate === today);
+  const todayCompleted = completedOrders.filter((o) => o.followupDate === today);
+  const overdueOrders = pendingOrders.filter((o) => o.followupDate && o.followupDate < today);
 
   const stepCounts = [1, 2, 3, 4, 5].map((step) => {
     const atStep = filteredOrders.filter((o) => o.followupStep === step);
