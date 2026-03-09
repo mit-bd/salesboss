@@ -141,29 +141,45 @@ export default function FollowupsPage() {
         </button>
       </div>
 
-      {/* Followup action buttons for pending orders */}
-      {activeTab === "pending" && pendingOrders.length > 0 && selectedIds.size === 0 && (
-        <div className="mb-4 rounded-lg border border-border bg-card p-3 card-shadow">
-          <p className="text-xs text-muted-foreground mb-2">Click an order row to view details, or use the action below to complete followups:</p>
-          <div className="flex flex-wrap gap-2">
-            {pendingOrders.slice(0, 10).map((order) => (
-              <Button
-                key={order.id}
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-xs"
-                onClick={() => setCompleteOrder(order)}
-              >
-                <Phone className="h-3 w-3" />
-                {order.customerName}
-              </Button>
-            ))}
-            {pendingOrders.length > 10 && (
-              <span className="text-xs text-muted-foreground self-center">+{pendingOrders.length - 10} more</span>
-            )}
+      {/* Daily Target Summary for this step */}
+      <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="rounded-xl border border-border bg-card p-4 card-shadow flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <Target className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-foreground">{pendingOrders.length}</p>
+            <p className="text-xs text-muted-foreground">Total Pending</p>
           </div>
         </div>
-      )}
+        <div className="rounded-xl border border-border bg-card p-4 card-shadow flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
+            <CalendarCheck className="h-5 w-5 text-amber-500" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-foreground">{todayPending.length}</p>
+            <p className="text-xs text-muted-foreground">Due Today</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4 card-shadow flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10">
+            <CheckCircle className="h-5 w-5 text-emerald-500" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-foreground">{todayCompleted.length}</p>
+            <p className="text-xs text-muted-foreground">Done Today</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4 card-shadow flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-foreground">{overdueOrders.length}</p>
+            <p className="text-xs text-muted-foreground">Overdue</p>
+          </div>
+        </div>
+      </div>
 
       <div className="animate-fade-in" style={{ paddingBottom: selectedIds.size > 0 ? "72px" : undefined }}>
         <OrderTable
