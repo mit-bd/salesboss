@@ -543,6 +543,27 @@ serve(async (req) => {
       return json({ success: true });
     }
 
+    if (action === "delete_user") {
+      const { userId } = body;
+      if (!userId) return json({ error: "userId required" }, 400);
+      if (userId === caller.id) return json({ error: "Cannot delete yourself" }, 400);
+
+      // Unassign orders assigned to this user
+      await supabaseAdmin.from("orders").update({ assigned_to: null, assigned_to_name: "" }).eq("assigned_to", userId);
+
+      // Delete user_roles
+      await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+
+      // Delete profile
+      await supabaseAdmin.from("profiles").delete().eq("user_id", userId);
+
+      // Delete auth user
+      const { error: delError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (delError) return json({ error: delError.message }, 400);
+
+      return json({ success: true });
+    }
+
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
     return json({ error: err.message }, 500);
