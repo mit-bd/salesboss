@@ -12,6 +12,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import VerificationPendingPage from "./pages/VerificationPendingPage";
 import PendingApprovalPage from "./pages/PendingApprovalPage";
 import OwnerDashboardPage from "./pages/OwnerDashboardPage";
