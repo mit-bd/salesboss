@@ -18,8 +18,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { BarChart3, TrendingUp, Users, Loader2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { BarChart3, TrendingUp, Users, Loader2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useRole } from "@/contexts/RoleContext";
+import { useToast } from "@/hooks/use-toast";
+import AddTeamMemberDialog from "@/components/AddTeamMemberDialog";
 
 interface Executive {
   userId: string;
@@ -29,6 +49,8 @@ interface Executive {
 
 export default function SalesExecutivesPage() {
   const navigate = useNavigate();
+  const { isAdmin } = useRole();
+  const { toast } = useToast();
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [selectedExec, setSelectedExec] = useState("all");
@@ -37,10 +59,14 @@ export default function SalesExecutivesPage() {
   const [followups, setFollowups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Edit/Delete state
+  const [editMember, setEditMember] = useState<{ id: string; email: string; fullName: string; role: string | null } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Executive | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
 
-    // Get sales_executive user_ids
     const { data: roles } = await supabase
       .from("user_roles")
       .select("user_id")
@@ -56,14 +82,12 @@ export default function SalesExecutivesPage() {
       return;
     }
 
-    // Fetch profiles for these users
     const { data: profiles } = await supabase
       .from("profiles")
       .select("user_id, full_name");
 
     const profileMap = new Map((profiles || []).map((p) => [p.user_id, p.full_name || ""]));
 
-    // We need emails from manage-team edge function for display
     const execs: Executive[] = seUserIds.map((uid) => ({
       userId: uid,
       name: profileMap.get(uid) || "Unknown",
@@ -71,7 +95,6 @@ export default function SalesExecutivesPage() {
     }));
     setExecutives(execs);
 
-    // Fetch orders assigned to these executives
     const { data: ordersData } = await supabase
       .from("orders")
       .select("*")
@@ -80,7 +103,6 @@ export default function SalesExecutivesPage() {
 
     setOrders(ordersData || []);
 
-    // Fetch followup history for these orders
     const orderIds = (ordersData || []).map((o) => o.id);
     if (orderIds.length > 0) {
       const { data: fData } = await supabase
@@ -106,6 +128,24 @@ export default function SalesExecutivesPage() {
 
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("manage-team", {
+        body: { action: "delete_user", userId: deleteTarget.userId },
+      });
+      if (error || data?.error) throw new Error(data?.error || error?.message);
+      toast({ title: "Deleted", description: `${deleteTarget.name} has been removed.` });
+      setDeleteTarget(null);
+      fetchData();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Failed to delete.", variant: "destructive" });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const metrics = useMemo(() => {
     return executives
@@ -264,6 +304,7 @@ export default function SalesExecutivesPage() {
                   <TableHead className="text-right">Upsell</TableHead>
                   <TableHead className="text-right">Conv. Rate</TableHead>
                   <TableHead className="text-right">Revenue</TableHead>
+                  {isAdmin && <TableHead className="text-right w-12">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -299,11 +340,44 @@ export default function SalesExecutivesPage() {
                     <TableCell className="text-right font-semibold">
                       ৳{m.revenue.toLocaleString()}
                     </TableCell>
+                    {isAdmin && (
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                setEditMember({
+                                  id: m.userId,
+                                  email: m.email,
+                                  fullName: m.name,
+                                  role: "sales_executive",
+                                })
+                              }
+                            >
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setDeleteTarget({ userId: m.userId, name: m.name, email: m.email })}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
                 {metrics.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={isAdmin ? 9 : 8} className="h-24 text-center text-muted-foreground">
                       No sales executives found.
                     </TableCell>
                   </TableRow>
@@ -313,6 +387,39 @@ export default function SalesExecutivesPage() {
           </div>
         </>
       )}
+
+      {/* Edit Dialog */}
+      {editMember && (
+        <AddTeamMemberDialog
+          editMember={editMember}
+          onClose={() => setEditMember(null)}
+          onSuccess={() => fetchData()}
+        />
+      )}
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Sales Executive</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <span className="font-semibold">{deleteTarget?.name}</span>?
+              This will remove their account and unassign all their orders. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
