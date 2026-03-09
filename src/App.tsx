@@ -64,6 +64,8 @@ const App = () => (
                       <Route path="/register" element={<RegisterPage />} />
                       <Route path="/verification-pending" element={<VerificationPendingPage />} />
                       <Route path="/pending-approval" element={<PendingApprovalPage />} />
+                      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
                       {/* Owner routes */}
                       <Route path="/owner" element={<ProtectedRoute ownerOnly><OwnerDashboardPage /></ProtectedRoute>} />
