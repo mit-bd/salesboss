@@ -4,7 +4,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { cn } from "@/lib/utils";
-import { CheckCircle, Clock, Phone } from "lucide-react";
+import { AlertTriangle, CalendarCheck, CheckCircle, Clock, Target } from "lucide-react";
 import GlobalFilters, { FilterState, EMPTY_FILTERS } from "@/components/GlobalFilters";
 import OrderTable from "@/components/OrderTable";
 import CompleteFollowupDialog from "@/components/CompleteFollowupDialog";
@@ -15,7 +15,7 @@ import BulkCompleteFollowupDialog from "@/components/BulkCompleteFollowupDialog"
 import { useRole } from "@/contexts/RoleContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Order } from "@/types/data";
-import { Button } from "@/components/ui/button";
+
 
 
 const STEP_LABELS = ["1st Followup", "2nd Followup", "3rd Followup", "4th Followup", "5th Followup"];
@@ -67,11 +67,17 @@ export default function FollowupsPage() {
   const { activeOrders, completeFollowup } = useOrderStore();
 
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const filteredOrders = applyFilters(activeOrders, filters);
   const stepOrders = filteredOrders.filter((o) => o.followupStep === activeStep);
   const pendingOrders = stepOrders.filter((o) => (o.currentStatus || "pending") === "pending");
   const completedOrders = stepOrders.filter((o) => (o.currentStatus || "pending") === "completed");
   const displayOrders = activeTab === "pending" ? pendingOrders : completedOrders;
+
+  const todayPending = pendingOrders.filter((o) => o.followupDate === today);
+  const todayCompleted = completedOrders.filter((o) => o.followupDate === today);
+  const overdueOrders = pendingOrders.filter((o) => o.followupDate && o.followupDate < today);
 
   const stepCounts = [1, 2, 3, 4, 5].map((step) => {
     const atStep = filteredOrders.filter((o) => o.followupStep === step);
@@ -135,29 +141,45 @@ export default function FollowupsPage() {
         </button>
       </div>
 
-      {/* Followup action buttons for pending orders */}
-      {activeTab === "pending" && pendingOrders.length > 0 && selectedIds.size === 0 && (
-        <div className="mb-4 rounded-lg border border-border bg-card p-3 card-shadow">
-          <p className="text-xs text-muted-foreground mb-2">Click an order row to view details, or use the action below to complete followups:</p>
-          <div className="flex flex-wrap gap-2">
-            {pendingOrders.slice(0, 10).map((order) => (
-              <Button
-                key={order.id}
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-xs"
-                onClick={() => setCompleteOrder(order)}
-              >
-                <Phone className="h-3 w-3" />
-                {order.customerName}
-              </Button>
-            ))}
-            {pendingOrders.length > 10 && (
-              <span className="text-xs text-muted-foreground self-center">+{pendingOrders.length - 10} more</span>
-            )}
+      {/* Daily Target Summary for this step */}
+      <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="rounded-xl border border-border bg-card p-4 card-shadow flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <Target className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-foreground">{pendingOrders.length}</p>
+            <p className="text-xs text-muted-foreground">Total Pending</p>
           </div>
         </div>
-      )}
+        <div className="rounded-xl border border-border bg-card p-4 card-shadow flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
+            <CalendarCheck className="h-5 w-5 text-amber-500" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-foreground">{todayPending.length}</p>
+            <p className="text-xs text-muted-foreground">Due Today</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4 card-shadow flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10">
+            <CheckCircle className="h-5 w-5 text-emerald-500" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-foreground">{todayCompleted.length}</p>
+            <p className="text-xs text-muted-foreground">Done Today</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4 card-shadow flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-foreground">{overdueOrders.length}</p>
+            <p className="text-xs text-muted-foreground">Overdue</p>
+          </div>
+        </div>
+      </div>
 
       <div className="animate-fade-in" style={{ paddingBottom: selectedIds.size > 0 ? "72px" : undefined }}>
         <OrderTable
