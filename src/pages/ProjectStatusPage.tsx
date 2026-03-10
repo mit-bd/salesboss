@@ -14,9 +14,13 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Loader2, LogIn, Pencil, Calendar, CalendarPlus, Pause, Play } from "lucide-react";
+import { Loader2, LogIn, Pencil, Calendar, CalendarPlus, Pause, Play, Download, RotateCcw } from "lucide-react";
 import OwnerLayout from "@/components/owner/OwnerLayout";
 
 interface Project {
@@ -50,6 +54,11 @@ function getDaysRemaining(expiryDate: string | null): string {
   return `${days}d`;
 }
 
+function getNextDueDate(expiryDate: string | null): string {
+  if (!expiryDate) return "—";
+  return new Date(expiryDate).toLocaleDateString();
+}
+
 export default function ProjectStatusPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -63,6 +72,7 @@ export default function ProjectStatusPage() {
   const [extendProject, setExtendProject] = useState<Project | null>(null);
   const [extendDays, setExtendDays] = useState("30");
   const [actionLoading, setActionLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const fetchProjects = useCallback(async () => {
     const { data } = await supabase.functions.invoke("manage-team", { body: { action: "list_projects" } });
@@ -108,12 +118,50 @@ export default function ProjectStatusPage() {
     if (ok) setExtendProject(null);
   };
 
+  const handleExportProject = async (project: Project) => {
+    const { data, error } = await supabase.functions.invoke("manage-team", {
+      body: { action: "export_project_data", projectId: project.id },
+    });
+    if (error || !data) {
+      toast({ title: "Error", description: "Failed to export", variant: "destructive" });
+      return;
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.business_name.replace(/\s+/g, "_")}_export.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Project data exported" });
+  };
+
+  const filteredProjects = projects.filter((p) => {
+    if (statusFilter === "all") return true;
+    const status = getProjectStatus(p).label.toLowerCase();
+    return status === statusFilter;
+  });
+
   return (
     <OwnerLayout title="Project Status" subtitle="Subscription and lifecycle management for all projects">
+      {/* Filter */}
+      <div className="flex gap-3">
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="expiring">Expiring</SelectItem>
+            <SelectItem value="expired">Expired</SelectItem>
+            <SelectItem value="suspended">Suspended</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-      ) : projects.length === 0 ? (
-        <p className="text-center text-muted-foreground py-12">No projects yet.</p>
+      ) : filteredProjects.length === 0 ? (
+        <p className="text-center text-muted-foreground py-12">No projects found.</p>
       ) : (
         <div className="border border-border rounded-lg overflow-x-auto">
           <Table>
@@ -125,12 +173,13 @@ export default function ProjectStatusPage() {
                 <TableHead className="text-center">Orders</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Expiry Date</TableHead>
-                <TableHead className="text-center">Days Remaining</TableHead>
+                <TableHead>Next Due</TableHead>
+                <TableHead className="text-center">Days Left</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {projects.map((project) => {
+              {filteredProjects.map((project) => {
                 const status = getProjectStatus(project);
                 return (
                   <TableRow key={project.id}>
@@ -154,9 +203,10 @@ export default function ProjectStatusPage() {
                     <TableCell className="text-sm">
                       {project.expiry_date ? new Date(project.expiry_date).toLocaleDateString() : "Not set"}
                     </TableCell>
+                    <TableCell className="text-sm">{getNextDueDate(project.expiry_date)}</TableCell>
                     <TableCell className="text-center text-sm">{getDaysRemaining(project.expiry_date)}</TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="flex items-center justify-end gap-0.5">
                         <Button variant="ghost" size="sm" onClick={() => handleOpenProject(project)} title="Open Project">
                           <LogIn className="h-3.5 w-3.5" />
                         </Button>
@@ -166,7 +216,7 @@ export default function ProjectStatusPage() {
                         <Button variant="ghost" size="sm" onClick={() => { setExpiryProject(project); setExpiryDate(project.expiry_date || ""); }} title="Set Expiry">
                           <Calendar className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => { setExtendProject(project); setExtendDays("30"); }} title="Extend Expiry">
+                        <Button variant="ghost" size="sm" onClick={() => { setExtendProject(project); setExtendDays("30"); }} title="Extend">
                           <CalendarPlus className="h-3.5 w-3.5" />
                         </Button>
                         {project.subscription_status === "suspended" ? (
@@ -178,6 +228,30 @@ export default function ProjectStatusPage() {
                             <Pause className="h-3.5 w-3.5" />
                           </Button>
                         )}
+                        <Button variant="ghost" size="sm" onClick={() => handleExportProject(project)} title="Export Data">
+                          <Download className="h-3.5 w-3.5" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm" title="Reset Project">
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Reset Project Data</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Delete all orders, customers, products, and delivery methods for "{project.business_name}"? Users and roles will be preserved.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => invokeAction("reset_project", { projectId: project.id }, "Project data reset")}>
+                                Reset
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </TableCell>
                   </TableRow>
