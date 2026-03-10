@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -13,7 +14,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, Pencil, Shield, Key, Ban, Trash2, UserCog } from "lucide-react";
+import { Loader2, Plus, Pencil, Shield, Key, Ban, Trash2, Eye } from "lucide-react";
 import OwnerLayout from "@/components/owner/OwnerLayout";
 import { useSearchParams } from "react-router-dom";
 
@@ -52,6 +53,7 @@ export default function OwnerUsersPage() {
   const [editUser, setEditUser] = useState<UserItem | null>(null);
   const [roleUser, setRoleUser] = useState<UserItem | null>(null);
   const [passwordUser, setPasswordUser] = useState<UserItem | null>(null);
+  const [viewUser, setViewUser] = useState<UserItem | null>(null);
 
   // Form states
   const [formEmail, setFormEmail] = useState("");
@@ -77,7 +79,7 @@ export default function OwnerUsersPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const filteredUsers = users.filter((u) => {
-    if (filterRole && u.role !== filterRole) return false;
+    if (filterRole && filterRole !== "all" && u.role !== filterRole) return false;
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       return u.email.toLowerCase().includes(term) || u.fullName.toLowerCase().includes(term);
@@ -185,7 +187,7 @@ export default function OwnerUsersPage() {
       sub_admin: "bg-purple-500/10 text-purple-500 border-purple-500/20",
       sales_executive: "bg-green-500/10 text-green-500 border-green-500/20",
     };
-    return <Badge variant="outline" className={colors[role || ""] || ""}>{role || "No role"}</Badge>;
+    return <Badge variant="outline" className={colors[role || ""] || ""}>{role?.replace("_", " ") || "No role"}</Badge>;
   };
 
   return (
@@ -226,22 +228,26 @@ export default function OwnerUsersPage() {
                       {user.banned && <Badge variant="destructive">Disabled</Badge>}
                     </div>
                     <p className="text-sm text-muted-foreground">{user.email}</p>
-                    <div className="flex gap-3 text-xs text-muted-foreground mt-1">
+                    <div className="flex gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
                       <span>Project: {user.projectName}</span>
+                      {user.phone && <span>Phone: {user.phone}</span>}
                       {user.lastSignIn && <span>Last login: {new Date(user.lastSignIn).toLocaleDateString()}</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="View Profile" onClick={() => setViewUser(user)}>
+                      <Eye className="h-3.5 w-3.5" />
+                    </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Edit" onClick={() => { setEditUser(user); setFormName(user.fullName); setFormEmail(user.email); setFormPhone(user.phone); }}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" title="Change Role" onClick={() => { setRoleUser(user); setNewRole(user.role || "sales_executive"); }}>
                       <Shield className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Reset Password" onClick={() => { setPasswordUser(user); setNewPassword(""); }}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Set Password" onClick={() => { setPasswordUser(user); setNewPassword(""); }}>
                       <Key className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title={user.banned ? "Enable" : "Disable"} onClick={() => handleToggleBan(user.id, !user.banned)}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title={user.banned ? "Enable User" : "Disable User"} onClick={() => handleToggleBan(user.id, !user.banned)}>
                       <Ban className="h-3.5 w-3.5" />
                     </Button>
                     <AlertDialog>
@@ -267,16 +273,76 @@ export default function OwnerUsersPage() {
         </div>
       )}
 
+      {/* View Profile Dialog */}
+      <Dialog open={!!viewUser} onOpenChange={(open) => !open && setViewUser(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>User Profile</DialogTitle></DialogHeader>
+          {viewUser && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Name</Label>
+                  <p className="text-sm font-medium text-foreground">{viewUser.fullName || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Email</Label>
+                  <p className="text-sm font-medium text-foreground">{viewUser.email}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Role</Label>
+                  <div className="mt-0.5">{roleBadge(viewUser.role)}</div>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Project</Label>
+                  <p className="text-sm font-medium text-foreground">{viewUser.projectName}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Phone</Label>
+                  <p className="text-sm font-medium text-foreground">{viewUser.phone || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Status</Label>
+                  <Badge variant={viewUser.banned ? "destructive" : "default"}>
+                    {viewUser.banned ? "Disabled" : "Active"}
+                  </Badge>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Last Login</Label>
+                  <p className="text-sm font-medium text-foreground">
+                    {viewUser.lastSignIn ? new Date(viewUser.lastSignIn).toLocaleString() : "Never"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Created</Label>
+                  <p className="text-sm font-medium text-foreground">
+                    {new Date(viewUser.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              <div className="border-t border-border pt-3 text-xs text-muted-foreground">
+                <p>Password: ●●●●●●●● (hashed — use "Set Password" to change)</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewUser(null)}>Close</Button>
+            <Button variant="outline" onClick={() => { if (viewUser) { setPasswordUser(viewUser); setNewPassword(""); setViewUser(null); } }}>
+              <Key className="h-3.5 w-3.5 mr-1.5" />Set Password
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Create User Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Create New User</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><label className="text-sm font-medium">Full Name</label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
-            <div><label className="text-sm font-medium">Email</label><Input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} /></div>
-            <div><label className="text-sm font-medium">Password</label><Input type="password" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} /></div>
+            <div><Label>Full Name</Label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
+            <div><Label>Email</Label><Input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} /></div>
+            <div><Label>Password</Label><Input type="password" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} /></div>
             <div>
-              <label className="text-sm font-medium">Role</label>
+              <Label>Role</Label>
               <Select value={formRole} onValueChange={setFormRole}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -287,7 +353,7 @@ export default function OwnerUsersPage() {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">Assign to Project</label>
+              <Label>Assign to Project</Label>
               <Select value={formProjectId} onValueChange={setFormProjectId}>
                 <SelectTrigger><SelectValue placeholder="Select project..." /></SelectTrigger>
                 <SelectContent>
@@ -308,9 +374,9 @@ export default function OwnerUsersPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>Edit User</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><label className="text-sm font-medium">Full Name</label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
-            <div><label className="text-sm font-medium">Email</label><Input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} /></div>
-            <div><label className="text-sm font-medium">Phone</label><Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} /></div>
+            <div><Label>Full Name</Label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
+            <div><Label>Email</Label><Input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} /></div>
+            <div><Label>Phone</Label><Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditUser(null)}>Cancel</Button>
@@ -338,14 +404,20 @@ export default function OwnerUsersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Reset Password Dialog */}
+      {/* Set Password Dialog */}
       <Dialog open={!!passwordUser} onOpenChange={(open) => !open && setPasswordUser(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Reset Password for {passwordUser?.email}</DialogTitle></DialogHeader>
-          <Input type="password" placeholder="New password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          <DialogHeader><DialogTitle>Set New Password for {passwordUser?.email}</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <Label>New Password</Label>
+            <Input type="password" placeholder="Enter new password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            <p className="text-xs text-muted-foreground">Minimum 6 characters. This will immediately update the user's password.</p>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPasswordUser(null)}>Cancel</Button>
-            <Button onClick={handleResetPassword} disabled={actionLoading || !newPassword}>Reset Password</Button>
+            <Button onClick={handleResetPassword} disabled={actionLoading || newPassword.length < 6}>
+              {actionLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Set Password
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
