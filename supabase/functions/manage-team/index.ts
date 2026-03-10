@@ -321,7 +321,7 @@ serve(async (req) => {
       if (action === "owner_reset_password") {
         const { userId, newPassword } = body;
         if (!userId || !newPassword) return json({ error: "userId and newPassword required" }, 400);
-        const { error } = await supabaseAdmin.auth.admin.updateUser(userId, { password: newPassword });
+        const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
         if (error) return json({ error: error.message }, 400);
         return json({ success: true });
       }
