@@ -159,7 +159,7 @@ export default function TeamPage() {
                           <ShieldAlert className="h-3 w-3" /> Disabled
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-xs gap-1 border-green-500/30 text-green-600">
+                        <Badge variant="outline" className="text-xs gap-1 border-primary/30 text-primary">
                           <ShieldCheck className="h-3 w-3" /> Active
                         </Badge>
                       )}
