@@ -1,5 +1,4 @@
-import { useState, useEffect, ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { ReactNode } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
@@ -10,8 +9,8 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { label: "Dashboard", path: "/owner" },
   { label: "Registration Requests", path: "/owner/requests", badge: true },
-  { label: "Projects", path: "/owner/projects" },
-  { label: "Users", path: "/owner/users" },
+  { label: "Project Status", path: "/owner/project-status" },
+  { label: "Users Manager", path: "/owner/users" },
   { label: "System Logs", path: "/owner/logs" },
 ];
 

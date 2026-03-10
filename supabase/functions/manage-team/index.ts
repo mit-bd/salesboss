@@ -86,6 +86,25 @@ serve(async (req) => {
         return json({ success: true });
       }
 
+      if (action === "edit_request") {
+        const { requestId, businessName, ownerName, email, phone } = body;
+        if (!requestId) return json({ error: "requestId required" }, 400);
+        const updates: any = {};
+        if (businessName !== undefined) updates.business_name = businessName;
+        if (ownerName !== undefined) updates.owner_name = ownerName;
+        if (email !== undefined) updates.email = email;
+        if (phone !== undefined) updates.phone = phone;
+        await supabaseAdmin.from("project_requests").update(updates).eq("id", requestId);
+        return json({ success: true });
+      }
+
+      if (action === "delete_request") {
+        const { requestId } = body;
+        if (!requestId) return json({ error: "requestId required" }, 400);
+        await supabaseAdmin.from("project_requests").delete().eq("id", requestId);
+        return json({ success: true });
+      }
+
       if (action === "list_projects") {
         const { data: projects } = await supabaseAdmin.from("projects").select("*").order("created_at", { ascending: false });
         const enriched = await Promise.all((projects || []).map(async (project: any) => {
@@ -200,29 +219,49 @@ serve(async (req) => {
       }
 
       if (action === "dashboard_stats") {
+        // Fetch all projects to compute expiring count
+        const { data: allProjectsList } = await supabaseAdmin.from("projects").select("id, expiry_date, subscription_status, is_active, created_at");
+        const now = Date.now();
+        const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+
+        let totalProjects = 0, activeProjects = 0, expiringProjects = 0, suspendedProjects = 0;
+        (allProjectsList || []).forEach((p: any) => {
+          totalProjects++;
+          if (p.subscription_status === "suspended" || !p.is_active) {
+            suspendedProjects++;
+          } else if (p.expiry_date) {
+            const diff = new Date(p.expiry_date).getTime() - now;
+            if (diff <= 0) {
+              // expired
+            } else if (diff <= threeDaysMs) {
+              expiringProjects++;
+              activeProjects++;
+            } else {
+              activeProjects++;
+            }
+          } else {
+            activeProjects++;
+          }
+        });
+
         const [
-          { count: totalProjects },
           { count: pendingRequests },
-          { count: activeProjects },
-          { count: suspendedProjects },
           { count: totalUsers },
           { count: totalOrders },
         ] = await Promise.all([
-          supabaseAdmin.from("projects").select("*", { count: "exact", head: true }),
           supabaseAdmin.from("project_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
-          supabaseAdmin.from("projects").select("*", { count: "exact", head: true }).eq("is_active", true),
-          supabaseAdmin.from("projects").select("*", { count: "exact", head: true }).eq("is_active", false),
           supabaseAdmin.from("user_roles").select("*", { count: "exact", head: true }).neq("role", "owner"),
           supabaseAdmin.from("orders").select("*", { count: "exact", head: true }).eq("is_deleted", false),
         ]);
 
+        // Chart data: last 6 months
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
         const { data: recentOrders } = await supabaseAdmin.from("orders")
           .select("created_at")
           .eq("is_deleted", false)
           .gte("created_at", sixMonthsAgo.toISOString());
-        
+
         const ordersByMonth: Record<string, number> = {};
         (recentOrders || []).forEach((o: any) => {
           const d = new Date(o.created_at);
@@ -230,12 +269,22 @@ serve(async (req) => {
           ordersByMonth[key] = (ordersByMonth[key] || 0) + 1;
         });
 
-        const { data: allProjects } = await supabaseAdmin.from("projects").select("created_at");
         const projectsByMonth: Record<string, number> = {};
-        (allProjects || []).forEach((p: any) => {
+        (allProjectsList || []).forEach((p: any) => {
           const d = new Date(p.created_at);
           const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
           projectsByMonth[key] = (projectsByMonth[key] || 0) + 1;
+        });
+
+        // Active users per month (from login timestamps)
+        const { data: { users: allUsers } } = await supabaseAdmin.auth.admin.listUsers();
+        const usersByMonth: Record<string, number> = {};
+        (allUsers || []).forEach((u: any) => {
+          if (u.last_sign_in_at) {
+            const d = new Date(u.last_sign_in_at);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            usersByMonth[key] = (usersByMonth[key] || 0) + 1;
+          }
         });
 
         const chartData = [];
@@ -248,14 +297,16 @@ serve(async (req) => {
             month: monthName,
             orders: ordersByMonth[key] || 0,
             projects: projectsByMonth[key] || 0,
+            users: usersByMonth[key] || 0,
           });
         }
 
         return json({
-          totalProjects: totalProjects || 0,
+          totalProjects,
           pendingRequests: pendingRequests || 0,
-          activeProjects: activeProjects || 0,
-          suspendedProjects: suspendedProjects || 0,
+          activeProjects,
+          expiringProjects,
+          suspendedProjects,
           totalUsers: totalUsers || 0,
           totalOrders: totalOrders || 0,
           chartData,
@@ -372,6 +423,7 @@ serve(async (req) => {
       if (action === "owner_delete_user") {
         const { userId } = body;
         if (!userId) return json({ error: "userId required" }, 400);
+        await supabaseAdmin.from("orders").update({ assigned_to: null, assigned_to_name: "" }).eq("assigned_to", userId);
         await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
         await supabaseAdmin.from("profiles").delete().eq("user_id", userId);
         const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
