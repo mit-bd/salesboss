@@ -293,7 +293,7 @@ serve(async (req) => {
         if (email) updates.email = email;
         if (fullName !== undefined) updates.user_metadata = { full_name: fullName };
         if (Object.keys(updates).length > 0) {
-          const { error } = await supabaseAdmin.auth.admin.updateUser(userId, updates);
+          const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, updates);
           if (error) return json({ error: error.message }, 400);
         }
         const profileUpdates: any = {};
@@ -321,7 +321,7 @@ serve(async (req) => {
       if (action === "owner_reset_password") {
         const { userId, newPassword } = body;
         if (!userId || !newPassword) return json({ error: "userId and newPassword required" }, 400);
-        const { error } = await supabaseAdmin.auth.admin.updateUser(userId, { password: newPassword });
+        const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
         if (error) return json({ error: error.message }, 400);
         return json({ success: true });
       }
@@ -330,7 +330,7 @@ serve(async (req) => {
         const { userId, ban } = body;
         if (!userId) return json({ error: "userId required" }, 400);
         const banData = ban ? { ban_duration: "876600h" } : { ban_duration: "none" };
-        const { error } = await supabaseAdmin.auth.admin.updateUser(userId, banData as any);
+        const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, banData as any);
         if (error) return json({ error: error.message }, 400);
         return json({ success: true });
       }
@@ -475,7 +475,7 @@ serve(async (req) => {
     if (action === "reset_password") {
       const { userId, newPassword } = body;
       if (!userId || !newPassword) return json({ error: "userId and newPassword required" }, 400);
-      const { error } = await supabaseAdmin.auth.admin.updateUser(userId, { password: newPassword });
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
       if (error) return json({ error: error.message }, 400);
       return json({ success: true });
     }
@@ -496,7 +496,7 @@ serve(async (req) => {
       if (email) updates.email = email;
       if (fullName !== undefined) updates.user_metadata = { full_name: fullName };
       if (Object.keys(updates).length > 0) {
-        const { error } = await supabaseAdmin.auth.admin.updateUser(userId, updates);
+        const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, updates);
         if (error) return json({ error: error.message }, 400);
       }
       if (fullName !== undefined) {
@@ -538,7 +538,7 @@ serve(async (req) => {
       if (!userId) return json({ error: "userId required" }, 400);
       if (userId === caller.id) return json({ error: "Cannot deactivate yourself" }, 400);
       const banData = ban ? { ban_duration: "876600h" } : { ban_duration: "none" };
-      const { error } = await supabaseAdmin.auth.admin.updateUser(userId, banData as any);
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, banData as any);
       if (error) return json({ error: error.message }, 400);
       return json({ success: true });
     }
@@ -566,6 +566,6 @@ serve(async (req) => {
 
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
-    return json({ error: err.message }, 500);
+    return json({ error: (err as Error).message }, 500);
   }
 });
