@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import AppSidebar from "./AppSidebar";
 import NotificationPanel from "@/components/NotificationPanel";
 import SubscriptionBanner from "@/components/SubscriptionBanner";
+import AiAssistant from "@/components/AiAssistant";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -18,6 +19,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </div>
         <div className="px-6 pb-6 lg:px-8">{children}</div>
       </main>
+      <AiAssistant />
     </div>
   );
 }
