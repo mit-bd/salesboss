@@ -330,7 +330,7 @@ serve(async (req) => {
         const { userId, ban } = body;
         if (!userId) return json({ error: "userId required" }, 400);
         const banData = ban ? { ban_duration: "876600h" } : { ban_duration: "none" };
-        const { error } = await supabaseAdmin.auth.admin.updateUser(userId, banData as any);
+        const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, banData as any);
         if (error) return json({ error: error.message }, 400);
         return json({ success: true });
       }
