@@ -14,9 +14,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, Pencil, Shield, Key, Ban, Trash2, Eye } from "lucide-react";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { Loader2, Plus, Pencil, Shield, Key, Ban, Trash2, Eye, Users, Building2 } from "lucide-react";
 import OwnerLayout from "@/components/owner/OwnerLayout";
-import { useSearchParams } from "react-router-dom";
 
 interface UserItem {
   id: string;
@@ -35,17 +37,15 @@ interface UserItem {
 interface ProjectItem {
   id: string;
   business_name: string;
+  total_users: number;
 }
 
 export default function OwnerUsersPage() {
   const { toast } = useToast();
-  const [searchParams] = useSearchParams();
-  const filterProjectId = searchParams.get("project") || "";
-  
   const [users, setUsers] = useState<UserItem[]>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterRole, setFilterRole] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
 
   // Dialogs
@@ -68,24 +68,29 @@ export default function OwnerUsersPage() {
 
   const fetchData = useCallback(async () => {
     const [usersRes, projectsRes] = await Promise.all([
-      supabase.functions.invoke("manage-team", { body: { action: "owner_list_users", projectId: filterProjectId || undefined } }),
+      supabase.functions.invoke("manage-team", { body: { action: "owner_list_users", projectId: selectedProjectId || undefined } }),
       supabase.functions.invoke("manage-team", { body: { action: "list_projects" } }),
     ]);
     if (usersRes.data?.users) setUsers(usersRes.data.users);
     if (projectsRes.data?.projects) setProjects(projectsRes.data.projects);
     setLoading(false);
-  }, [filterProjectId]);
+  }, [selectedProjectId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const filteredUsers = users.filter((u) => {
-    if (filterRole && filterRole !== "all" && u.role !== filterRole) return false;
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       return u.email.toLowerCase().includes(term) || u.fullName.toLowerCase().includes(term);
     }
     return true;
   });
+
+  // Group users by project for the project selector counts
+  const projectUserCounts = projects.map((p) => ({
+    ...p,
+    userCount: users.filter((u) => u.projectId === p.id).length,
+  }));
 
   const handleCreate = async () => {
     if (!formEmail || !formPassword || !formRole) return;
@@ -191,22 +196,42 @@ export default function OwnerUsersPage() {
   };
 
   return (
-    <OwnerLayout title="Users Manager" subtitle="Manage all platform users across projects">
+    <OwnerLayout title="Users Manager" subtitle="Manage all platform users grouped by project">
+      {/* Project Selector Cards */}
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <Card
+          className={`cursor-pointer transition-colors ${!selectedProjectId ? "border-primary bg-primary/5" : "hover:border-muted-foreground/30"}`}
+          onClick={() => setSelectedProjectId("")}
+        >
+          <CardContent className="p-4 flex items-center gap-3">
+            <Building2 className="h-5 w-5 text-primary shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">All Projects</p>
+              <p className="text-xs text-muted-foreground">{users.length} Users</p>
+            </div>
+          </CardContent>
+        </Card>
+        {projectUserCounts.map((p) => (
+          <Card
+            key={p.id}
+            className={`cursor-pointer transition-colors ${selectedProjectId === p.id ? "border-primary bg-primary/5" : "hover:border-muted-foreground/30"}`}
+            onClick={() => setSelectedProjectId(p.id)}
+          >
+            <CardContent className="p-4 flex items-center gap-3">
+              <Users className="h-5 w-5 text-muted-foreground shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">{p.business_name}</p>
+                <p className="text-xs text-muted-foreground">{p.userCount} Users</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div className="flex gap-2 flex-1 w-full sm:w-auto">
-          <Input placeholder="Search by name or email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-xs" />
-          <Select value={filterRole} onValueChange={setFilterRole}>
-            <SelectTrigger className="w-[160px]"><SelectValue placeholder="All Roles" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Roles</SelectItem>
-              <SelectItem value="admin">Admin</SelectItem>
-              <SelectItem value="sub_admin">Sub Admin</SelectItem>
-              <SelectItem value="sales_executive">Sales Executive</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <Button onClick={() => { resetForm(); setCreateOpen(true); }}>
+        <Input placeholder="Search by name or email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-xs" />
+        <Button onClick={() => { resetForm(); setFormProjectId(selectedProjectId); setCreateOpen(true); }}>
           <Plus className="h-4 w-4 mr-2" />Create User
         </Button>
       </div>
@@ -216,60 +241,76 @@ export default function OwnerUsersPage() {
       ) : filteredUsers.length === 0 ? (
         <p className="text-center text-muted-foreground py-12">No users found.</p>
       ) : (
-        <div className="space-y-3">
-          {filteredUsers.map((user) => (
-            <Card key={user.id}>
-              <CardContent className="p-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-foreground">{user.fullName || "Unnamed"}</p>
-                      {roleBadge(user.role)}
-                      {user.banned && <Badge variant="destructive">Disabled</Badge>}
+        <div className="border border-border rounded-lg overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Project</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Last Login</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredUsers.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell className="font-medium text-foreground">{user.fullName || "Unnamed"}</TableCell>
+                  <TableCell className="text-sm">{user.email}</TableCell>
+                  <TableCell>{roleBadge(user.role)}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{user.projectName}</TableCell>
+                  <TableCell>
+                    <Badge variant={user.banned ? "destructive" : "default"}>
+                      {user.banned ? "Disabled" : "Active"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {user.lastSignIn ? new Date(user.lastSignIn).toLocaleDateString() : "Never"}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {new Date(user.createdAt).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-0.5">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="View" onClick={() => setViewUser(user)}>
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit" onClick={() => { setEditUser(user); setFormName(user.fullName); setFormEmail(user.email); setFormPhone(user.phone); }}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Role" onClick={() => { setRoleUser(user); setNewRole(user.role || "sales_executive"); }}>
+                        <Shield className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Password" onClick={() => { setPasswordUser(user); setNewPassword(""); }}>
+                        <Key className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title={user.banned ? "Enable" : "Disable"} onClick={() => handleToggleBan(user.id, !user.banned)}>
+                        <Ban className="h-3.5 w-3.5" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete User</AlertDialogTitle>
+                            <AlertDialogDescription>Permanently delete {user.email}?</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(user.id)}>Delete</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
-                    <div className="flex gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
-                      <span>Project: {user.projectName}</span>
-                      {user.phone && <span>Phone: {user.phone}</span>}
-                      {user.lastSignIn && <span>Last login: {new Date(user.lastSignIn).toLocaleDateString()}</span>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="View Profile" onClick={() => setViewUser(user)}>
-                      <Eye className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Edit" onClick={() => { setEditUser(user); setFormName(user.fullName); setFormEmail(user.email); setFormPhone(user.phone); }}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Change Role" onClick={() => { setRoleUser(user); setNewRole(user.role || "sales_executive"); }}>
-                      <Shield className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Set Password" onClick={() => { setPasswordUser(user); setNewPassword(""); }}>
-                      <Key className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title={user.banned ? "Enable User" : "Disable User"} onClick={() => handleToggleBan(user.id, !user.banned)}>
-                      <Ban className="h-3.5 w-3.5" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete User</AlertDialogTitle>
-                          <AlertDialogDescription>Permanently delete {user.email}? This cannot be undone.</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(user.id)}>Delete</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       )}
 
@@ -314,9 +355,7 @@ export default function OwnerUsersPage() {
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Created</Label>
-                  <p className="text-sm font-medium text-foreground">
-                    {new Date(viewUser.createdAt).toLocaleDateString()}
-                  </p>
+                  <p className="text-sm font-medium text-foreground">{new Date(viewUser.createdAt).toLocaleDateString()}</p>
                 </div>
               </div>
               <div className="border-t border-border pt-3 text-xs text-muted-foreground">
@@ -411,7 +450,7 @@ export default function OwnerUsersPage() {
           <div className="space-y-2">
             <Label>New Password</Label>
             <Input type="password" placeholder="Enter new password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-            <p className="text-xs text-muted-foreground">Minimum 6 characters. This will immediately update the user's password.</p>
+            <p className="text-xs text-muted-foreground">Minimum 6 characters.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPasswordUser(null)}>Cancel</Button>
