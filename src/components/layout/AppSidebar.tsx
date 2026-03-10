@@ -1,35 +1,17 @@
 import { useState, useEffect, useMemo } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import {
-  LayoutDashboard,
-  ShoppingCart,
-  PhoneForwarded,
-  Package,
-  Users,
-  RefreshCw,
-  ArrowUpRight,
-  Upload,
-  Settings,
-  Truck,
-  BarChart3,
-  Trash2,
-  Shield,
-  Download,
-  Database,
-  Target,
-  LogOut,
-  KeyRound,
-  ChevronDown,
-  ChevronRight,
-  Globe,
-  Building2,
-  UserPlus,
+  LayoutDashboard, ShoppingCart, PhoneForwarded, Package, Users,
+  RefreshCw, ArrowUpRight, Upload, Settings, Truck, BarChart3,
+  Trash2, Shield, Download, Database, Target, LogOut, KeyRound,
+  ChevronDown, ChevronRight, Globe, Building2, UserPlus, ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
+import { useOwnerProject } from "@/contexts/OwnerProjectContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -62,10 +44,7 @@ const navCategories: NavCategory[] = [
       { label: "Dashboard", icon: LayoutDashboard, path: "/" },
       { label: "All Orders", icon: ShoppingCart, path: "/orders", permission: "orders.view" },
       {
-        label: "Followups",
-        icon: PhoneForwarded,
-        path: "/followups",
-        permission: "followups.view",
+        label: "Followups", icon: PhoneForwarded, path: "/followups", permission: "followups.view",
         children: [
           { label: "1st Followup", path: "/followups?step=1", permission: "followups.view", stepNumber: 1 },
           { label: "2nd Followup", path: "/followups?step=2", permission: "followups.view", stepNumber: 2 },
@@ -142,37 +121,29 @@ function getInitialExpanded(): Record<string, boolean> {
 
 export default function AppSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, profile, role, signOut } = useAuth();
   const { hasPermission } = usePermissions();
   const { activeOrders } = useOrderStore();
+  const { isInAdminMode, impersonatedProject, exitProject } = useOwnerProject();
   const [expanded, setExpanded] = useState<Record<string, boolean>>(getInitialExpanded);
   const [followupsOpen, setFollowupsOpen] = useState(() => {
-    try {
-      return localStorage.getItem(FOLLOWUP_KEY) !== "false";
-    } catch {
-      return true;
-    }
+    try { return localStorage.getItem(FOLLOWUP_KEY) !== "false"; } catch { return true; }
   });
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(expanded));
-    } catch {}
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(expanded)); } catch {}
   }, [expanded]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(FOLLOWUP_KEY, String(followupsOpen));
-    } catch {}
+    try { localStorage.setItem(FOLLOWUP_KEY, String(followupsOpen)); } catch {}
   }, [followupsOpen]);
 
   const stepCounts = useMemo(() => {
     const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     for (const order of activeOrders) {
       const step = order.followupStep;
-      if (step >= 1 && step <= 5 && order.currentStatus === "pending") {
-        counts[step]++;
-      }
+      if (step >= 1 && step <= 5 && order.currentStatus === "pending") counts[step]++;
     }
     return counts;
   }, [activeOrders]);
@@ -183,36 +154,36 @@ export default function AppSidebar() {
 
   const isActive = (path: string) => {
     const [itemPath, itemQuery] = path.split("?");
-    if (itemQuery) {
-      return location.pathname === itemPath && location.search === `?${itemQuery}`;
-    }
+    if (itemQuery) return location.pathname === itemPath && location.search === `?${itemQuery}`;
     return location.pathname === itemPath && !location.search;
   };
 
   const isOwner = role === "owner";
-  const categories = isOwner ? ownerCategories : navCategories;
+  // Owner in admin mode sees project nav; otherwise owner sees owner nav
+  const categories = (isOwner && !isInAdminMode) ? ownerCategories : navCategories;
 
-  const visibleCategories = categories
-    .map((cat) => ({
-      ...cat,
-      items: cat.items.filter((item) => {
-        if (!item.permission) return true;
-        return hasPermission(item.permission);
-      }),
-    }))
-    .filter((cat) => cat.items.length > 0);
+  const visibleCategories = (isOwner && isInAdminMode)
+    ? categories // Owner in admin mode sees all categories
+    : categories
+        .map((cat) => ({
+          ...cat,
+          items: cat.items.filter((item) => !item.permission || hasPermission(item.permission)),
+        }))
+        .filter((cat) => cat.items.length > 0);
 
   const displayName = profile?.full_name || user?.email?.split("@")[0] || "User";
-  const initials = displayName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  const initials = displayName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+
+  const handleExitAdminMode = () => {
+    exitProject();
+    navigate("/owner/projects");
+  };
 
   const renderNavItem = (item: NavItem) => {
     if (item.children) {
-      const visibleChildren = item.children.filter((c) => !c.permission || hasPermission(c.permission));
+      const visibleChildren = (isOwner && isInAdminMode)
+        ? item.children
+        : item.children.filter((c) => !c.permission || hasPermission(c.permission));
       if (visibleChildren.length === 0) return null;
       const parentActive = isActive(item.path);
       const anyChildActive = visibleChildren.some((c) => isActive(c.path));
@@ -236,20 +207,10 @@ export default function AppSidebar() {
               onClick={() => setFollowupsOpen((p) => !p)}
               className="mr-1 rounded p-1 text-sidebar-muted hover:text-sidebar-foreground transition-fast"
             >
-              <ChevronRight
-                className={cn(
-                  "h-3.5 w-3.5 transition-transform duration-200",
-                  followupsOpen && "rotate-90"
-                )}
-              />
+              <ChevronRight className={cn("h-3.5 w-3.5 transition-transform duration-200", followupsOpen && "rotate-90")} />
             </button>
           </div>
-          <div
-            className={cn(
-              "overflow-hidden transition-all duration-200",
-              followupsOpen ? "max-h-[300px] opacity-100" : "max-h-0 opacity-0"
-            )}
-          >
+          <div className={cn("overflow-hidden transition-all duration-200", followupsOpen ? "max-h-[300px] opacity-100" : "max-h-0 opacity-0")}>
             <div className="space-y-0.5 pt-0.5">
               {visibleChildren.map((child) => {
                 const active = isActive(child.path);
@@ -268,10 +229,7 @@ export default function AppSidebar() {
                     <span className="h-1.5 w-1.5 rounded-full bg-sidebar-muted shrink-0" />
                     <span className="truncate flex-1">{child.label}</span>
                     {count > 0 && (
-                      <Badge
-                        variant="secondary"
-                        className="h-5 min-w-[20px] px-1.5 text-[10px] font-semibold justify-center"
-                      >
+                      <Badge variant="secondary" className="h-5 min-w-[20px] px-1.5 text-[10px] font-semibold justify-center">
                         {count}
                       </Badge>
                     )}
@@ -314,6 +272,22 @@ export default function AppSidebar() {
         </span>
       </div>
 
+      {/* Admin Mode Banner */}
+      {isInAdminMode && impersonatedProject && (
+        <div className="px-3 py-2 border-b border-sidebar-border bg-primary/5">
+          <p className="text-[11px] font-semibold text-primary uppercase tracking-wider">Admin Mode</p>
+          <p className="text-xs text-sidebar-foreground truncate">{impersonatedProject.businessName}</p>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-1 h-7 w-full text-xs justify-start gap-1.5 text-sidebar-muted hover:text-sidebar-foreground"
+            onClick={handleExitAdminMode}
+          >
+            <ArrowLeft className="h-3 w-3" />Exit to Owner Panel
+          </Button>
+        </div>
+      )}
+
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
         {visibleCategories.map((cat) => (
@@ -323,20 +297,9 @@ export default function AppSidebar() {
               className="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted hover:text-sidebar-foreground transition-fast"
             >
               <span>{cat.label}</span>
-              <ChevronDown
-                className={cn(
-                  "h-3 w-3 transition-transform duration-200",
-                  expanded[cat.key] ? "rotate-0" : "-rotate-90"
-                )}
-              />
+              <ChevronDown className={cn("h-3 w-3 transition-transform duration-200", expanded[cat.key] ? "rotate-0" : "-rotate-90")} />
             </button>
-
-            <div
-              className={cn(
-                "overflow-hidden transition-all duration-200",
-                expanded[cat.key] ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"
-              )}
-            >
+            <div className={cn("overflow-hidden transition-all duration-200", expanded[cat.key] ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0")}>
               <div className="space-y-0.5 pb-2">
                 {cat.items.map((item) => renderNavItem(item))}
               </div>
@@ -358,7 +321,9 @@ export default function AppSidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-sidebar-accent-foreground truncate">{displayName}</p>
-            <p className="text-xs text-sidebar-muted truncate capitalize">{role?.replace("_", " ") || "User"}</p>
+            <p className="text-xs text-sidebar-muted truncate capitalize">
+              {isInAdminMode ? "Owner (Admin Mode)" : (role?.replace("_", " ") || "User")}
+            </p>
           </div>
           <Button
             variant="ghost"

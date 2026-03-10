@@ -100,7 +100,6 @@ serve(async (req) => {
             .select("*", { count: "exact", head: true })
             .eq("project_id", project.id)
             .eq("is_deleted", false);
-          // Get admin email
           const { data: { users: adminUsers } } = await supabaseAdmin.auth.admin.listUsers();
           const adminUser = adminUsers?.find((u: any) => u.id === project.owner_user_id);
           return {
@@ -123,13 +122,11 @@ serve(async (req) => {
       if (action === "delete_project") {
         const { projectId } = body;
         if (!projectId) return json({ error: "projectId required" }, 400);
-        // Clean up project data
         await supabaseAdmin.from("orders").delete().eq("project_id", projectId);
         await supabaseAdmin.from("customers").delete().eq("project_id", projectId);
         await supabaseAdmin.from("products").delete().eq("project_id", projectId);
         await supabaseAdmin.from("delivery_methods").delete().eq("project_id", projectId);
         await supabaseAdmin.from("order_sources").delete().eq("project_id", projectId).eq("is_system", false);
-        // Remove user associations
         const { data: projectProfiles } = await supabaseAdmin.from("profiles").select("user_id").eq("project_id", projectId);
         if (projectProfiles) {
           for (const p of projectProfiles) {
@@ -144,7 +141,6 @@ serve(async (req) => {
       if (action === "reset_project") {
         const { projectId } = body;
         if (!projectId) return json({ error: "projectId required" }, 400);
-        // Delete all operational data but keep the project and users
         await supabaseAdmin.from("orders").delete().eq("project_id", projectId);
         await supabaseAdmin.from("customers").delete().eq("project_id", projectId);
         await supabaseAdmin.from("products").delete().eq("project_id", projectId);
@@ -153,11 +149,53 @@ serve(async (req) => {
       }
 
       if (action === "update_project") {
-        const { projectId, businessName } = body;
+        const { projectId, businessName, expiryDate } = body;
         if (!projectId) return json({ error: "projectId required" }, 400);
         const updates: any = {};
         if (businessName) updates.business_name = businessName;
+        if (expiryDate !== undefined) updates.expiry_date = expiryDate;
         await supabaseAdmin.from("projects").update(updates).eq("id", projectId);
+        return json({ success: true });
+      }
+
+      if (action === "set_expiry") {
+        const { projectId, expiryDate } = body;
+        if (!projectId) return json({ error: "projectId required" }, 400);
+        await supabaseAdmin.from("projects").update({ expiry_date: expiryDate }).eq("id", projectId);
+        return json({ success: true });
+      }
+
+      if (action === "extend_expiry") {
+        const { projectId, days } = body;
+        if (!projectId || !days) return json({ error: "projectId and days required" }, 400);
+        const { data: project } = await supabaseAdmin.from("projects").select("expiry_date").eq("id", projectId).single();
+        if (!project) return json({ error: "Project not found" }, 404);
+        const base = project.expiry_date ? new Date(project.expiry_date) : new Date();
+        base.setDate(base.getDate() + days);
+        await supabaseAdmin.from("projects").update({
+          expiry_date: base.toISOString().split("T")[0],
+          subscription_status: "active",
+        }).eq("id", projectId);
+        return json({ success: true });
+      }
+
+      if (action === "suspend_project") {
+        const { projectId } = body;
+        if (!projectId) return json({ error: "projectId required" }, 400);
+        await supabaseAdmin.from("projects").update({
+          subscription_status: "suspended",
+          is_active: false,
+        }).eq("id", projectId);
+        return json({ success: true });
+      }
+
+      if (action === "reactivate_project") {
+        const { projectId } = body;
+        if (!projectId) return json({ error: "projectId required" }, 400);
+        await supabaseAdmin.from("projects").update({
+          subscription_status: "active",
+          is_active: true,
+        }).eq("id", projectId);
         return json({ success: true });
       }
 
@@ -178,7 +216,6 @@ serve(async (req) => {
           supabaseAdmin.from("orders").select("*", { count: "exact", head: true }).eq("is_deleted", false),
         ]);
 
-        // Get orders per month for chart (last 6 months)
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
         const { data: recentOrders } = await supabaseAdmin.from("orders")
@@ -193,7 +230,6 @@ serve(async (req) => {
           ordersByMonth[key] = (ordersByMonth[key] || 0) + 1;
         });
 
-        // Get projects per month
         const { data: allProjects } = await supabaseAdmin.from("projects").select("created_at");
         const projectsByMonth: Record<string, number> = {};
         (allProjects || []).forEach((p: any) => {
@@ -202,7 +238,6 @@ serve(async (req) => {
           projectsByMonth[key] = (projectsByMonth[key] || 0) + 1;
         });
 
-        // Build chart data for last 6 months
         const chartData = [];
         for (let i = 5; i >= 0; i--) {
           const d = new Date();
@@ -308,7 +343,6 @@ serve(async (req) => {
       if (action === "owner_update_role") {
         const { userId, role } = body;
         if (!userId || !role) return json({ error: "userId and role required" }, 400);
-        // Check if user has a role already
         const { data: existingRole } = await supabaseAdmin.from("user_roles").select("id").eq("user_id", userId).maybeSingle();
         if (existingRole) {
           await supabaseAdmin.from("user_roles").update({ role }).eq("user_id", userId);
@@ -348,16 +382,21 @@ serve(async (req) => {
       if (action === "owner_transfer_admin") {
         const { projectId, newAdminUserId } = body;
         if (!projectId || !newAdminUserId) return json({ error: "projectId and newAdminUserId required" }, 400);
-        // Get current admin
         const { data: project } = await supabaseAdmin.from("projects").select("owner_user_id").eq("id", projectId).single();
         if (!project) return json({ error: "Project not found" }, 404);
-        // Downgrade old admin to sub_admin
         await supabaseAdmin.from("user_roles").update({ role: "sub_admin" }).eq("user_id", project.owner_user_id);
-        // Upgrade new admin
         await supabaseAdmin.from("user_roles").update({ role: "admin" }).eq("user_id", newAdminUserId);
-        // Update project owner
         await supabaseAdmin.from("projects").update({ owner_user_id: newAdminUserId }).eq("id", projectId);
         return json({ success: true });
+      }
+
+      // ---- OWNER: CHECK SUBSCRIPTION STATUS ----
+      if (action === "check_project_subscription") {
+        const { projectId } = body;
+        if (!projectId) return json({ error: "projectId required" }, 400);
+        const { data: project } = await supabaseAdmin.from("projects").select("expiry_date, subscription_status, is_active").eq("id", projectId).single();
+        if (!project) return json({ error: "Project not found" }, 404);
+        return json({ subscription: project });
       }
 
       // ---- OWNER: SYSTEM LOGS ----
@@ -365,10 +404,8 @@ serve(async (req) => {
         const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
         const userMap = new Map((users || []).map((u: any) => [u.id, { email: u.email, name: u.user_metadata?.full_name || u.email }]));
         
-        // Get recent auth events via user last sign in
         const logs: any[] = [];
         
-        // Recent order changes
         const { data: recentOrders } = await supabaseAdmin.from("orders")
           .select("id, customer_name, created_at, created_by, updated_at, current_status, project_id")
           .order("updated_at", { ascending: false })
@@ -388,7 +425,6 @@ serve(async (req) => {
           });
         });
 
-        // Recent project changes
         const { data: recentProjects } = await supabaseAdmin.from("projects")
           .select("id, business_name, created_at, updated_at")
           .order("updated_at", { ascending: false })
@@ -407,7 +443,6 @@ serve(async (req) => {
           });
         });
 
-        // User logins
         (users || []).filter((u: any) => u.last_sign_in_at).forEach((u: any) => {
           logs.push({
             id: `login-${u.id}`,
@@ -421,7 +456,6 @@ serve(async (req) => {
           });
         });
 
-        // Role changes (from user_roles created_at)
         const { data: roleChanges } = await supabaseAdmin.from("user_roles")
           .select("user_id, role, created_at")
           .order("created_at", { ascending: false })
@@ -441,7 +475,6 @@ serve(async (req) => {
           });
         });
 
-        // Sort all logs by timestamp desc
         logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
         return json({ logs: logs.slice(0, 100) });
@@ -548,16 +581,10 @@ serve(async (req) => {
       if (!userId) return json({ error: "userId required" }, 400);
       if (userId === caller.id) return json({ error: "Cannot delete yourself" }, 400);
 
-      // Unassign orders assigned to this user
       await supabaseAdmin.from("orders").update({ assigned_to: null, assigned_to_name: "" }).eq("assigned_to", userId);
-
-      // Delete user_roles
       await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
-
-      // Delete profile
       await supabaseAdmin.from("profiles").delete().eq("user_id", userId);
 
-      // Delete auth user
       const { error: delError } = await supabaseAdmin.auth.admin.deleteUser(userId);
       if (delError) return json({ error: delError.message }, 400);
 
