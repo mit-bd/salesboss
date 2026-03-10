@@ -4,10 +4,12 @@ import AppLayout from "@/components/layout/AppLayout";
 import PageHeader, { KpiCard } from "@/components/layout/PageHeader";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { useAuth } from "@/contexts/AuthContext";
 import { ShoppingCart, DollarSign, TrendingUp, RefreshCw, PhoneForwarded, Zap, Search, X, AlertTriangle, Bell, CalendarCheck } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import GlobalFilters, { FilterState, EMPTY_FILTERS } from "@/components/GlobalFilters";
 import { Input } from "@/components/ui/input";
+import SubscriptionStatusCard from "@/components/SubscriptionStatusCard";
 
 const STEP_LABELS = ["1st Followup", "2nd Followup", "3rd Followup", "4th Followup", "5th Followup"];
 const PIE_COLORS = ["hsl(215, 80%, 52%)", "hsl(152, 60%, 42%)", "hsl(38, 92%, 50%)", "hsl(280, 60%, 55%)", "hsl(340, 65%, 52%)"];
@@ -21,64 +23,46 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { activeOrders, followupHistory } = useOrderStore();
   const { members } = useTeamMembers();
+  const { role } = useAuth();
 
   const today = new Date().toISOString().split("T")[0];
   const todayFollowups = activeOrders.filter(o => o.followupDate === today && (o.currentStatus || "pending") === "pending").length;
   const overdueFollowups = activeOrders.filter(o => o.followupDate && o.followupDate < today && (o.currentStatus || "pending") === "pending").length;
   const newAssignedToday = activeOrders.filter(o => o.createdAt && o.createdAt.startsWith(today) && o.assignedTo).length;
 
-  // Calculate real metrics from live data
   const metrics = useMemo(() => {
     const total = activeOrders.length;
     const repeatOrders = activeOrders.filter(o => o.isRepeat);
     const repeatRate = total > 0 ? ((repeatOrders.length / total) * 100) : 0;
-    
     const completedFollowups = followupHistory.length;
-    const totalFollowupSlots = total * 5; // 5 steps per order
+    const totalFollowupSlots = total * 5;
     const followupCompletion = totalFollowupSlots > 0 ? ((completedFollowups / totalFollowupSlots) * 100) : 0;
-
     const upsellOrders = activeOrders.filter(o => o.isUpsell);
     const upsellRate = total > 0 ? ((upsellOrders.length / total) * 100) : 0;
-
-    // Conversion: orders with status completed at any step / total
     const convertedOrders = activeOrders.filter(o => (o.currentStatus || "pending") === "completed");
     const conversionRate = total > 0 ? ((convertedOrders.length / total) * 100) : 0;
-
     const revenue = activeOrders.reduce((s, o) => s + o.price, 0);
-
     return { total, revenue, conversionRate, repeatRate, followupCompletion, upsellRate };
   }, [activeOrders, followupHistory]);
 
-  // Live followup step data
   const liveFollowupSteps = [1, 2, 3, 4, 5].map((step) => {
     const atStep = activeOrders.filter((o) => o.followupStep === step);
     return {
-      step,
-      label: STEP_LABELS[step - 1],
+      step, label: STEP_LABELS[step - 1],
       pending: atStep.filter((o) => (o.currentStatus || "pending") === "pending").length,
       completed: atStep.filter((o) => (o.currentStatus || "pending") === "completed").length,
     };
   });
   const funnelData = liveFollowupSteps.map((s) => ({ name: s.label, pending: s.pending, completed: s.completed }));
 
-  // Real order source distribution
   const sourceData = useMemo(() => {
     if (activeOrders.length === 0) return [];
     const counts: Record<string, number> = {};
-    activeOrders.forEach(o => {
-      const src = o.orderSource || "Unknown";
-      counts[src] = (counts[src] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, count]) => ({
-        name,
-        value: Math.round((count / activeOrders.length) * 100),
-      }));
+    activeOrders.forEach(o => { const src = o.orderSource || "Unknown"; counts[src] = (counts[src] || 0) + 1; });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5)
+      .map(([name, count]) => ({ name, value: Math.round((count / activeOrders.length) * 100) }));
   }, [activeOrders]);
 
-  // Real team performance
   const performanceData = useMemo(() => {
     if (members.length === 0) return [];
     return members
@@ -86,21 +70,13 @@ export default function DashboardPage() {
       .map(m => {
         const assigned = activeOrders.filter(o => o.assignedTo === m.id);
         const completedFu = followupHistory.filter(h => h.completedBy === m.id);
-        return {
-          name: (m.name || m.email || "").split(" ")[0] || "User",
-          orders: assigned.length,
-          followups: completedFu.length,
-        };
+        return { name: (m.name || m.email || "").split(" ")[0] || "User", orders: assigned.length, followups: completedFu.length };
       })
       .filter(d => d.orders > 0 || d.followups > 0);
   }, [members, activeOrders, followupHistory]);
 
   const searchResults = search.trim()
-    ? activeOrders.filter(
-        (o) =>
-          o.customerName.toLowerCase().includes(search.toLowerCase()) ||
-          o.mobile.includes(search)
-      )
+    ? activeOrders.filter((o) => o.customerName.toLowerCase().includes(search.toLowerCase()) || o.mobile.includes(search))
     : [];
 
   useEffect(() => {
@@ -114,6 +90,13 @@ export default function DashboardPage() {
   return (
     <AppLayout>
       <PageHeader title="Dashboard" description="Sales overview and followup performance" />
+
+      {/* Subscription Status Card for Admin */}
+      {role === "admin" && (
+        <div className="mb-6">
+          <SubscriptionStatusCard />
+        </div>
+      )}
 
       <div ref={searchRef} className="relative mb-6 max-w-lg">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -153,34 +136,24 @@ export default function DashboardPage() {
         <KpiCard label="Upsell Rate" value={`${metrics.upsellRate.toFixed(1)}%`} change="" changeType="neutral" icon={<Zap className="h-5 w-5" />} color="hsl(340,65%,52%)" />
       </div>
 
-      {/* Dashboard Alerts */}
       {(todayFollowups > 0 || overdueFollowups > 0 || newAssignedToday > 0) && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           {todayFollowups > 0 && (
             <div onClick={() => navigate("/followups")} className="flex items-center gap-3 rounded-xl border border-warning/30 bg-warning/5 p-4 cursor-pointer hover:bg-warning/10 transition-fast">
               <CalendarCheck className="h-5 w-5 text-warning shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-foreground">{todayFollowups} Followups Due Today</p>
-                <p className="text-xs text-muted-foreground">Click to view pending followups</p>
-              </div>
+              <div><p className="text-sm font-semibold text-foreground">{todayFollowups} Followups Due Today</p><p className="text-xs text-muted-foreground">Click to view pending followups</p></div>
             </div>
           )}
           {overdueFollowups > 0 && (
             <div onClick={() => navigate("/followups")} className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 cursor-pointer hover:bg-destructive/10 transition-fast">
               <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-foreground">{overdueFollowups} Overdue Followups</p>
-                <p className="text-xs text-muted-foreground">Followups past their due date</p>
-              </div>
+              <div><p className="text-sm font-semibold text-foreground">{overdueFollowups} Overdue Followups</p><p className="text-xs text-muted-foreground">Followups past their due date</p></div>
             </div>
           )}
           {newAssignedToday > 0 && (
             <div onClick={() => navigate("/orders")} className="flex items-center gap-3 rounded-xl border border-info/30 bg-info/5 p-4 cursor-pointer hover:bg-info/10 transition-fast">
               <Bell className="h-5 w-5 text-info shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-foreground">{newAssignedToday} Orders Assigned Today</p>
-                <p className="text-xs text-muted-foreground">New assignments created today</p>
-              </div>
+              <div><p className="text-sm font-semibold text-foreground">{newAssignedToday} Orders Assigned Today</p><p className="text-xs text-muted-foreground">New assignments created today</p></div>
             </div>
           )}
         </div>
@@ -215,8 +188,7 @@ export default function DashboardPage() {
               <div className="flex flex-wrap gap-3 mt-2 justify-center">
                 {sourceData.map((s, i) => (
                   <div key={s.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                    {s.name} ({s.value}%)
+                    <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />{s.name} ({s.value}%)
                   </div>
                 ))}
               </div>

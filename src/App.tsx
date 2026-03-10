@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { RoleProvider } from "@/contexts/RoleContext";
 import { PermissionProvider } from "@/contexts/PermissionContext";
+import { OwnerProjectProvider } from "@/contexts/OwnerProjectContext";
 import { AuditLogProvider } from "@/contexts/AuditLogContext";
 import { OrderStoreProvider } from "@/contexts/OrderStoreContext";
 import { ProductStoreProvider } from "@/contexts/ProductStoreContext";
@@ -52,57 +53,59 @@ const App = () => (
       <AuthProvider>
         <RoleProvider>
           <PermissionProvider>
-            <AuditLogProvider>
-              <OrderStoreProvider>
-                <ProductStoreProvider>
-                  <TooltipProvider>
-                    <Toaster />
-                    <Sonner />
-                    <Routes>
-                      {/* Public routes */}
-                      <Route path="/login" element={<LoginPage />} />
-                      <Route path="/register" element={<RegisterPage />} />
-                      <Route path="/verification-pending" element={<VerificationPendingPage />} />
-                      <Route path="/pending-approval" element={<PendingApprovalPage />} />
-                      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                      <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <OwnerProjectProvider>
+              <AuditLogProvider>
+                <OrderStoreProvider>
+                  <ProductStoreProvider>
+                    <TooltipProvider>
+                      <Toaster />
+                      <Sonner />
+                      <Routes>
+                        {/* Public routes */}
+                        <Route path="/login" element={<LoginPage />} />
+                        <Route path="/register" element={<RegisterPage />} />
+                        <Route path="/verification-pending" element={<VerificationPendingPage />} />
+                        <Route path="/pending-approval" element={<PendingApprovalPage />} />
+                        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-                      {/* Owner routes */}
-                      <Route path="/owner" element={<ProtectedRoute ownerOnly><OwnerDashboardPage /></ProtectedRoute>} />
-                      <Route path="/owner/requests" element={<ProtectedRoute ownerOnly><RegistrationRequestsPage /></ProtectedRoute>} />
-                      <Route path="/owner/projects" element={<ProtectedRoute ownerOnly><OwnerProjectsPage /></ProtectedRoute>} />
-                      <Route path="/owner/users" element={<ProtectedRoute ownerOnly><OwnerUsersPage /></ProtectedRoute>} />
-                      <Route path="/owner/logs" element={<ProtectedRoute ownerOnly><OwnerSystemLogsPage /></ProtectedRoute>} />
+                        {/* Owner routes */}
+                        <Route path="/owner" element={<ProtectedRoute ownerOnly><OwnerDashboardPage /></ProtectedRoute>} />
+                        <Route path="/owner/requests" element={<ProtectedRoute ownerOnly><RegistrationRequestsPage /></ProtectedRoute>} />
+                        <Route path="/owner/projects" element={<ProtectedRoute ownerOnly><OwnerProjectsPage /></ProtectedRoute>} />
+                        <Route path="/owner/users" element={<ProtectedRoute ownerOnly><OwnerUsersPage /></ProtectedRoute>} />
+                        <Route path="/owner/logs" element={<ProtectedRoute ownerOnly><OwnerSystemLogsPage /></ProtectedRoute>} />
 
-                      {/* Protected routes */}
-                      <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                      <Route path="/orders" element={<ProtectedRoute requiredPermission="orders.view"><OrdersPage /></ProtectedRoute>} />
-                      <Route path="/orders/:id" element={<ProtectedRoute requiredPermission="orders.view"><OrderDetailPage /></ProtectedRoute>} />
-                      <Route path="/followups" element={<ProtectedRoute requiredPermission="followups.view"><FollowupsPage /></ProtectedRoute>} />
-                      <Route path="/repeat-orders" element={<ProtectedRoute requiredPermission="orders.view"><RepeatOrdersPage /></ProtectedRoute>} />
-                      <Route path="/upsell" element={<ProtectedRoute requiredPermission="followups.view"><UpsellPage /></ProtectedRoute>} />
-                      <Route path="/sales-executives" element={<ProtectedRoute requiredPermission="sales.view_performance"><SalesExecutivesPage /></ProtectedRoute>} />
-                      <Route path="/sales-executives/:id" element={<ProtectedRoute requiredPermission="sales.view_performance"><SalesExecutiveDetailPage /></ProtectedRoute>} />
-                      <Route path="/products" element={<ProtectedRoute requiredPermission="products.view"><ProductsPage /></ProtectedRoute>} />
-                      <Route path="/delivery-methods" element={<ProtectedRoute requiredPermission="delivery.view"><DeliveryMethodPage /></ProtectedRoute>} />
-                      <Route path="/bulk-import" element={<ProtectedRoute requiredPermission="orders.create"><BulkImportPage /></ProtectedRoute>} />
-                      <Route path="/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
-                      <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-                      <Route path="/roles" element={<ProtectedRoute requiredPermission="roles.manage"><RolesPage /></ProtectedRoute>} />
-                      <Route path="/deleted-orders" element={<ProtectedRoute requiredPermission="orders.delete"><DeletedOrdersPage /></ProtectedRoute>} />
-                      <Route path="/audit-logs" element={<ProtectedRoute requiredPermission="audit.view"><AuditLogsPage /></ProtectedRoute>} />
-                      <Route path="/export" element={<ProtectedRoute requiredPermission="backup.export"><ExportPage /></ProtectedRoute>} />
-                      <Route path="/backup-center" element={<ProtectedRoute requiredPermission="backup.view"><BackupCenterPage /></ProtectedRoute>} />
-                      <Route path="/commission" element={<ProtectedRoute requiredPermission="commission.view"><CommissionPage /></ProtectedRoute>} />
-                      <Route path="/order-sources" element={<ProtectedRoute><OrderSourcesPage /></ProtectedRoute>} />
-                      <Route path="/customers/:id" element={<ProtectedRoute><CustomerProfilePage /></ProtectedRoute>} />
+                        {/* Protected routes */}
+                        <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+                        <Route path="/orders" element={<ProtectedRoute requiredPermission="orders.view"><OrdersPage /></ProtectedRoute>} />
+                        <Route path="/orders/:id" element={<ProtectedRoute requiredPermission="orders.view"><OrderDetailPage /></ProtectedRoute>} />
+                        <Route path="/followups" element={<ProtectedRoute requiredPermission="followups.view"><FollowupsPage /></ProtectedRoute>} />
+                        <Route path="/repeat-orders" element={<ProtectedRoute requiredPermission="orders.view"><RepeatOrdersPage /></ProtectedRoute>} />
+                        <Route path="/upsell" element={<ProtectedRoute requiredPermission="followups.view"><UpsellPage /></ProtectedRoute>} />
+                        <Route path="/sales-executives" element={<ProtectedRoute requiredPermission="sales.view_performance"><SalesExecutivesPage /></ProtectedRoute>} />
+                        <Route path="/sales-executives/:id" element={<ProtectedRoute requiredPermission="sales.view_performance"><SalesExecutiveDetailPage /></ProtectedRoute>} />
+                        <Route path="/products" element={<ProtectedRoute requiredPermission="products.view"><ProductsPage /></ProtectedRoute>} />
+                        <Route path="/delivery-methods" element={<ProtectedRoute requiredPermission="delivery.view"><DeliveryMethodPage /></ProtectedRoute>} />
+                        <Route path="/bulk-import" element={<ProtectedRoute requiredPermission="orders.create"><BulkImportPage /></ProtectedRoute>} />
+                        <Route path="/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
+                        <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                        <Route path="/roles" element={<ProtectedRoute requiredPermission="roles.manage"><RolesPage /></ProtectedRoute>} />
+                        <Route path="/deleted-orders" element={<ProtectedRoute requiredPermission="orders.delete"><DeletedOrdersPage /></ProtectedRoute>} />
+                        <Route path="/audit-logs" element={<ProtectedRoute requiredPermission="audit.view"><AuditLogsPage /></ProtectedRoute>} />
+                        <Route path="/export" element={<ProtectedRoute requiredPermission="backup.export"><ExportPage /></ProtectedRoute>} />
+                        <Route path="/backup-center" element={<ProtectedRoute requiredPermission="backup.view"><BackupCenterPage /></ProtectedRoute>} />
+                        <Route path="/commission" element={<ProtectedRoute requiredPermission="commission.view"><CommissionPage /></ProtectedRoute>} />
+                        <Route path="/order-sources" element={<ProtectedRoute><OrderSourcesPage /></ProtectedRoute>} />
+                        <Route path="/customers/:id" element={<ProtectedRoute><CustomerProfilePage /></ProtectedRoute>} />
 
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
-                  </TooltipProvider>
-                </ProductStoreProvider>
-              </OrderStoreProvider>
-            </AuditLogProvider>
+                        <Route path="*" element={<NotFound />} />
+                      </Routes>
+                    </TooltipProvider>
+                  </ProductStoreProvider>
+                </OrderStoreProvider>
+              </AuditLogProvider>
+            </OwnerProjectProvider>
           </PermissionProvider>
         </RoleProvider>
       </AuthProvider>
