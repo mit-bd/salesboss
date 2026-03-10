@@ -13,7 +13,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Loader2, CheckCircle, XCircle, Pencil, Trash2 } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Pencil, Trash2, Eye } from "lucide-react";
 import OwnerLayout from "@/components/owner/OwnerLayout";
 
 interface ProjectRequest {
@@ -24,6 +24,9 @@ interface ProjectRequest {
   phone: string;
   status: string;
   created_at: string;
+  reviewed_at: string | null;
+  user_id: string | null;
+  project_id: string | null;
 }
 
 export default function RegistrationRequestsPage() {
@@ -32,7 +35,10 @@ export default function RegistrationRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Edit dialog state
+  // View Details
+  const [viewRequest, setViewRequest] = useState<ProjectRequest | null>(null);
+
+  // Edit dialog
   const [editRequest, setEditRequest] = useState<ProjectRequest | null>(null);
   const [editBusinessName, setEditBusinessName] = useState("");
   const [editOwnerName, setEditOwnerName] = useState("");
@@ -157,6 +163,9 @@ export default function RegistrationRequestsPage() {
                         </Button>
                       </>
                     )}
+                    <Button size="sm" variant="outline" onClick={() => setViewRequest(req)}>
+                      <Eye className="h-3.5 w-3.5 mr-1" />Details
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => openEdit(req)}>
                       <Pencil className="h-3.5 w-3.5 mr-1" />Edit
                     </Button>
@@ -184,6 +193,52 @@ export default function RegistrationRequestsPage() {
           ))}
         </div>
       )}
+
+      {/* View Details Dialog */}
+      <Dialog open={!!viewRequest} onOpenChange={(open) => !open && setViewRequest(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Request Details</DialogTitle></DialogHeader>
+          {viewRequest && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Business Name</Label>
+                  <p className="text-sm font-medium text-foreground">{viewRequest.business_name}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Status</Label>
+                  <div className="mt-0.5">{statusBadge(viewRequest.status)}</div>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Owner Name</Label>
+                  <p className="text-sm font-medium text-foreground">{viewRequest.owner_name}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Email</Label>
+                  <p className="text-sm font-medium text-foreground">{viewRequest.email}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Phone</Label>
+                  <p className="text-sm font-medium text-foreground">{viewRequest.phone || "—"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Request Date</Label>
+                  <p className="text-sm font-medium text-foreground">{new Date(viewRequest.created_at).toLocaleString()}</p>
+                </div>
+                {viewRequest.reviewed_at && (
+                  <div className="col-span-2">
+                    <Label className="text-xs text-muted-foreground">Reviewed At</Label>
+                    <p className="text-sm font-medium text-foreground">{new Date(viewRequest.reviewed_at).toLocaleString()}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewRequest(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Request Dialog */}
       <Dialog open={!!editRequest} onOpenChange={(open) => !open && setEditRequest(null)}>

@@ -47,6 +47,8 @@ export default function OwnerUsersPage() {
   const [loading, setLoading] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterRole, setFilterRole] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
 
   // Dialogs
   const [createOpen, setCreateOpen] = useState(false);
@@ -79,6 +81,9 @@ export default function OwnerUsersPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const filteredUsers = users.filter((u) => {
+    if (filterRole !== "all" && u.role !== filterRole) return false;
+    if (filterStatus === "active" && u.banned) return false;
+    if (filterStatus === "disabled" && !u.banned) return false;
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       return u.email.toLowerCase().includes(term) || u.fullName.toLowerCase().includes(term);
@@ -86,7 +91,6 @@ export default function OwnerUsersPage() {
     return true;
   });
 
-  // Group users by project for the project selector counts
   const projectUserCounts = projects.map((p) => ({
     ...p,
     userCount: users.filter((u) => u.projectId === p.id).length,
@@ -198,7 +202,7 @@ export default function OwnerUsersPage() {
   return (
     <OwnerLayout title="Users Manager" subtitle="Manage all platform users grouped by project">
       {/* Project Selector Cards */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
         <Card
           className={`cursor-pointer transition-colors ${!selectedProjectId ? "border-primary bg-primary/5" : "hover:border-muted-foreground/30"}`}
           onClick={() => setSelectedProjectId("")}
@@ -230,7 +234,26 @@ export default function OwnerUsersPage() {
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <Input placeholder="Search by name or email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-xs" />
+        <div className="flex gap-2 flex-wrap flex-1">
+          <Input placeholder="Search by name or email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-xs" />
+          <Select value={filterRole} onValueChange={setFilterRole}>
+            <SelectTrigger className="w-[150px]"><SelectValue placeholder="All Roles" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Roles</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+              <SelectItem value="sub_admin">Sub Admin</SelectItem>
+              <SelectItem value="sales_executive">Sales Executive</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-[150px]"><SelectValue placeholder="All Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="disabled">Disabled</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <Button onClick={() => { resetForm(); setFormProjectId(selectedProjectId); setCreateOpen(true); }}>
           <Plus className="h-4 w-4 mr-2" />Create User
         </Button>
@@ -321,42 +344,14 @@ export default function OwnerUsersPage() {
           {viewUser && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-muted-foreground">Name</Label>
-                  <p className="text-sm font-medium text-foreground">{viewUser.fullName || "—"}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Email</Label>
-                  <p className="text-sm font-medium text-foreground">{viewUser.email}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Role</Label>
-                  <div className="mt-0.5">{roleBadge(viewUser.role)}</div>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Project</Label>
-                  <p className="text-sm font-medium text-foreground">{viewUser.projectName}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Phone</Label>
-                  <p className="text-sm font-medium text-foreground">{viewUser.phone || "—"}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Status</Label>
-                  <Badge variant={viewUser.banned ? "destructive" : "default"}>
-                    {viewUser.banned ? "Disabled" : "Active"}
-                  </Badge>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Last Login</Label>
-                  <p className="text-sm font-medium text-foreground">
-                    {viewUser.lastSignIn ? new Date(viewUser.lastSignIn).toLocaleString() : "Never"}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Created</Label>
-                  <p className="text-sm font-medium text-foreground">{new Date(viewUser.createdAt).toLocaleDateString()}</p>
-                </div>
+                <div><Label className="text-xs text-muted-foreground">Name</Label><p className="text-sm font-medium text-foreground">{viewUser.fullName || "—"}</p></div>
+                <div><Label className="text-xs text-muted-foreground">Email</Label><p className="text-sm font-medium text-foreground">{viewUser.email}</p></div>
+                <div><Label className="text-xs text-muted-foreground">Role</Label><div className="mt-0.5">{roleBadge(viewUser.role)}</div></div>
+                <div><Label className="text-xs text-muted-foreground">Project</Label><p className="text-sm font-medium text-foreground">{viewUser.projectName}</p></div>
+                <div><Label className="text-xs text-muted-foreground">Phone</Label><p className="text-sm font-medium text-foreground">{viewUser.phone || "—"}</p></div>
+                <div><Label className="text-xs text-muted-foreground">Status</Label><Badge variant={viewUser.banned ? "destructive" : "default"}>{viewUser.banned ? "Disabled" : "Active"}</Badge></div>
+                <div><Label className="text-xs text-muted-foreground">Last Login</Label><p className="text-sm font-medium text-foreground">{viewUser.lastSignIn ? new Date(viewUser.lastSignIn).toLocaleString() : "Never"}</p></div>
+                <div><Label className="text-xs text-muted-foreground">Created</Label><p className="text-sm font-medium text-foreground">{new Date(viewUser.createdAt).toLocaleDateString()}</p></div>
               </div>
               <div className="border-t border-border pt-3 text-xs text-muted-foreground">
                 <p>Password: ●●●●●●●● (hashed — use "Set Password" to change)</p>

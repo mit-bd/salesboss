@@ -107,6 +107,9 @@ serve(async (req) => {
 
       if (action === "list_projects") {
         const { data: projects } = await supabaseAdmin.from("projects").select("*").order("created_at", { ascending: false });
+        const { data: { users: allAuthUsers } } = await supabaseAdmin.auth.admin.listUsers();
+        const authUserMap = new Map((allAuthUsers || []).map((u: any) => [u.id, u]));
+        
         const enriched = await Promise.all((projects || []).map(async (project: any) => {
           const { data: adminProfile } = await supabaseAdmin.from("profiles")
             .select("full_name")
@@ -119,8 +122,7 @@ serve(async (req) => {
             .select("*", { count: "exact", head: true })
             .eq("project_id", project.id)
             .eq("is_deleted", false);
-          const { data: { users: adminUsers } } = await supabaseAdmin.auth.admin.listUsers();
-          const adminUser = adminUsers?.find((u: any) => u.id === project.owner_user_id);
+          const adminUser = authUserMap.get(project.owner_user_id);
           return {
             ...project,
             admin_name: adminProfile?.full_name || "Unknown",
@@ -218,17 +220,37 @@ serve(async (req) => {
         return json({ success: true });
       }
 
+      if (action === "export_project_data") {
+        const { projectId } = body;
+        if (!projectId) return json({ error: "projectId required" }, 400);
+        const [ordersRes, customersRes, productsRes, profilesRes] = await Promise.all([
+          supabaseAdmin.from("orders").select("*").eq("project_id", projectId).eq("is_deleted", false),
+          supabaseAdmin.from("customers").select("*").eq("project_id", projectId),
+          supabaseAdmin.from("products").select("*").eq("project_id", projectId),
+          supabaseAdmin.from("profiles").select("user_id, full_name, phone").eq("project_id", projectId),
+        ]);
+        return json({
+          orders: ordersRes.data || [],
+          customers: customersRes.data || [],
+          products: productsRes.data || [],
+          users: profilesRes.data || [],
+        });
+      }
+
       if (action === "dashboard_stats") {
-        // Fetch all projects to compute expiring count
-        const { data: allProjectsList } = await supabaseAdmin.from("projects").select("id, expiry_date, subscription_status, is_active, created_at");
+        const { data: allProjectsList } = await supabaseAdmin.from("projects").select("id, business_name, expiry_date, subscription_status, is_active, created_at");
         const now = Date.now();
         const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
 
         let totalProjects = 0, activeProjects = 0, expiringProjects = 0, suspendedProjects = 0;
+        const expiringList: any[] = [];
+        const suspendedList: any[] = [];
+
         (allProjectsList || []).forEach((p: any) => {
           totalProjects++;
           if (p.subscription_status === "suspended" || !p.is_active) {
             suspendedProjects++;
+            suspendedList.push({ id: p.id, name: p.business_name });
           } else if (p.expiry_date) {
             const diff = new Date(p.expiry_date).getTime() - now;
             if (diff <= 0) {
@@ -236,6 +258,7 @@ serve(async (req) => {
             } else if (diff <= threeDaysMs) {
               expiringProjects++;
               activeProjects++;
+              expiringList.push({ id: p.id, name: p.business_name, expiryDate: p.expiry_date });
             } else {
               activeProjects++;
             }
@@ -248,11 +271,26 @@ serve(async (req) => {
           { count: pendingRequests },
           { count: totalUsers },
           { count: totalOrders },
+          { count: totalFollowups },
+          { count: totalRepeatOrders },
         ] = await Promise.all([
           supabaseAdmin.from("project_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
           supabaseAdmin.from("user_roles").select("*", { count: "exact", head: true }).neq("role", "owner"),
           supabaseAdmin.from("orders").select("*", { count: "exact", head: true }).eq("is_deleted", false),
+          supabaseAdmin.from("followup_history").select("*", { count: "exact", head: true }),
+          supabaseAdmin.from("orders").select("*", { count: "exact", head: true }).eq("is_repeat", true).eq("is_deleted", false),
         ]);
+
+        // Top performing projects by order count
+        const topProjects: { name: string; orders: number }[] = [];
+        for (const p of (allProjectsList || []).slice(0, 20)) {
+          const { count } = await supabaseAdmin.from("orders")
+            .select("*", { count: "exact", head: true })
+            .eq("project_id", p.id)
+            .eq("is_deleted", false);
+          topProjects.push({ name: p.business_name, orders: count || 0 });
+        }
+        topProjects.sort((a, b) => b.orders - a.orders);
 
         // Chart data: last 6 months
         const sixMonthsAgo = new Date();
@@ -276,7 +314,6 @@ serve(async (req) => {
           projectsByMonth[key] = (projectsByMonth[key] || 0) + 1;
         });
 
-        // Active users per month (from login timestamps)
         const { data: { users: allUsers } } = await supabaseAdmin.auth.admin.listUsers();
         const usersByMonth: Record<string, number> = {};
         (allUsers || []).forEach((u: any) => {
@@ -309,7 +346,14 @@ serve(async (req) => {
           suspendedProjects,
           totalUsers: totalUsers || 0,
           totalOrders: totalOrders || 0,
+          totalFollowups: totalFollowups || 0,
+          totalRepeatOrders: totalRepeatOrders || 0,
           chartData,
+          topProjects: topProjects.slice(0, 5),
+          alerts: {
+            expiring: expiringList,
+            suspended: suspendedList,
+          },
         });
       }
 
@@ -442,7 +486,6 @@ serve(async (req) => {
         return json({ success: true });
       }
 
-      // ---- OWNER: CHECK SUBSCRIPTION STATUS ----
       if (action === "check_project_subscription") {
         const { projectId } = body;
         if (!projectId) return json({ error: "projectId required" }, 400);
@@ -455,6 +498,8 @@ serve(async (req) => {
       if (action === "owner_system_logs") {
         const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
         const userMap = new Map((users || []).map((u: any) => [u.id, { email: u.email, name: u.user_metadata?.full_name || u.email }]));
+        const { data: allProjects } = await supabaseAdmin.from("projects").select("id, business_name");
+        const projMap = new Map((allProjects || []).map((p: any) => [p.id, p.business_name]));
         
         const logs: any[] = [];
         
@@ -473,6 +518,7 @@ serve(async (req) => {
             userName: user?.name || "System",
             userEmail: user?.email || "",
             projectId: o.project_id,
+            projectName: projMap.get(o.project_id) || "",
             timestamp: o.updated_at,
           });
         });
@@ -491,6 +537,7 @@ serve(async (req) => {
             userName: "System",
             userEmail: "",
             projectId: p.id,
+            projectName: p.business_name,
             timestamp: p.updated_at,
           });
         });
@@ -504,6 +551,7 @@ serve(async (req) => {
             userName: u.user_metadata?.full_name || u.email,
             userEmail: u.email,
             projectId: null,
+            projectName: "",
             timestamp: u.last_sign_in_at,
           });
         });
@@ -523,13 +571,34 @@ serve(async (req) => {
             userName: user?.name || "Unknown",
             userEmail: user?.email || "",
             projectId: null,
+            projectName: "",
             timestamp: r.created_at,
+          });
+        });
+
+        // Followup completions
+        const { data: recentFollowups } = await supabaseAdmin.from("followup_history")
+          .select("id, order_id, step_number, completed_by_name, completed_at")
+          .order("completed_at", { ascending: false })
+          .limit(30);
+        
+        (recentFollowups || []).forEach((f: any) => {
+          logs.push({
+            id: `followup-${f.id}`,
+            type: "followup",
+            action: `Followup Step ${f.step_number} completed`,
+            userId: null,
+            userName: f.completed_by_name || "Unknown",
+            userEmail: "",
+            projectId: null,
+            projectName: "",
+            timestamp: f.completed_at,
           });
         });
 
         logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-        return json({ logs: logs.slice(0, 100) });
+        return json({ logs: logs.slice(0, 200), projects: allProjects || [] });
       }
 
       return json({ error: "Unknown action" }, 400);
