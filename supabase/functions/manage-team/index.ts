@@ -566,6 +566,6 @@ serve(async (req) => {
 
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
-    return json({ error: err.message }, 500);
+    return json({ error: (err as Error).message }, 500);
   }
 });
