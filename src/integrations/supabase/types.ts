@@ -708,28 +708,34 @@ export type Database = {
         Row: {
           business_name: string
           created_at: string
+          expiry_date: string | null
           followup_test_mode: boolean
           id: string
           is_active: boolean
           owner_user_id: string
+          subscription_status: string
           updated_at: string
         }
         Insert: {
           business_name: string
           created_at?: string
+          expiry_date?: string | null
           followup_test_mode?: boolean
           id?: string
           is_active?: boolean
           owner_user_id: string
+          subscription_status?: string
           updated_at?: string
         }
         Update: {
           business_name?: string
           created_at?: string
+          expiry_date?: string | null
           followup_test_mode?: boolean
           id?: string
           is_active?: boolean
           owner_user_id?: string
+          subscription_status?: string
           updated_at?: string
         }
         Relationships: []
