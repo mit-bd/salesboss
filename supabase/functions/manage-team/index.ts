@@ -496,7 +496,7 @@ serve(async (req) => {
       if (email) updates.email = email;
       if (fullName !== undefined) updates.user_metadata = { full_name: fullName };
       if (Object.keys(updates).length > 0) {
-        const { error } = await supabaseAdmin.auth.admin.updateUser(userId, updates);
+        const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, updates);
         if (error) return json({ error: error.message }, 400);
       }
       if (fullName !== undefined) {
