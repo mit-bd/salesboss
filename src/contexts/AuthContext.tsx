@@ -134,7 +134,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (initDone.current) {
             loadUserData(session.user.id);
           }
-        } else {
+        } else if (initDone.current) {
+          // Only clear state after initial load is done
+          // to prevent premature redirect during session restoration
           setRole(null);
           setProfile(null);
           setRoleChecked(false);
