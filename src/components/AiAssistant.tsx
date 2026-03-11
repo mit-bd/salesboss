@@ -1,10 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Bot, X, Send, Loader2, Sparkles, MessageSquare, TrendingUp, RotateCcw, Lightbulb } from "lucide-react";
+import { Send, Loader2, Sparkles, RotateCcw, Lightbulb, X, BrainCircuit } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import ReactMarkdown from "react-markdown";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface Message {
   role: "user" | "assistant";
@@ -39,10 +43,10 @@ const SUGGESTION_CATEGORIES = [
     ],
   },
   {
-    label: "🔁 Patterns",
+    label: "🔁 Predictions",
     items: [
-      "When do customers reorder?",
-      "Show repeat order patterns",
+      "Which customers are likely to reorder soon?",
+      "Show repeat order predictions",
       "Best time for upsell?",
     ],
   },
@@ -163,17 +167,37 @@ export default function AiAssistant() {
 
   return (
     <>
-      {/* Floating Button */}
-      <button
-        onClick={() => setOpen(!open)}
-        className={cn(
-          "fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-300",
-          "bg-primary text-primary-foreground hover:scale-105",
-          open && "rotate-90"
+      {/* Floating AI Button with Glow */}
+      <div className="fixed bottom-6 right-6 z-50">
+        {/* Pulse ring */}
+        {!open && (
+          <div className="absolute inset-0 rounded-full bg-primary/20 ai-fab-ring pointer-events-none" />
         )}
-      >
-        {open ? <X className="h-6 w-6" /> : <Bot className="h-6 w-6" />}
-      </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => setOpen(!open)}
+              className={cn(
+                "relative flex h-14 w-14 items-center justify-center rounded-full transition-all duration-300",
+                "bg-gradient-to-br from-primary to-[hsl(250,70%,55%)] text-primary-foreground",
+                !open && "ai-fab hover:scale-110",
+                open && "scale-95 shadow-lg hover:scale-100"
+              )}
+            >
+              {open ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <BrainCircuit className="h-6 w-6" />
+              )}
+            </button>
+          </TooltipTrigger>
+          {!open && (
+            <TooltipContent side="left" className="text-xs">
+              SalesBoss AI Assistant
+            </TooltipContent>
+          )}
+        </Tooltip>
+      </div>
 
       {/* Chat Panel */}
       {open && (
@@ -181,12 +205,12 @@ export default function AiAssistant() {
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
-                <Sparkles className="h-5 w-5 text-primary" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-[hsl(250,70%,55%)]/15">
+                <BrainCircuit className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-foreground">SalesBoss AI Copilot</h3>
-                <p className="text-[11px] text-muted-foreground">Sales mentor • Analyst • Advisor</p>
+                <p className="text-[11px] text-muted-foreground">Sales mentor • Analyst • Predictor</p>
               </div>
             </div>
             {messages.length > 0 && (
@@ -205,11 +229,11 @@ export default function AiAssistant() {
             {messages.length === 0 && showSuggestions && (
               <div className="space-y-4">
                 <div className="text-center py-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 mx-auto mb-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-[hsl(250,70%,55%)]/10 mx-auto mb-3">
                     <Lightbulb className="h-6 w-6 text-primary" />
                   </div>
                   <p className="text-sm font-medium text-foreground">Hi! I'm your Sales AI Copilot</p>
-                  <p className="text-xs text-muted-foreground mt-1">I learn from your sales data to help you sell better</p>
+                  <p className="text-xs text-muted-foreground mt-1">I learn from your data to predict & improve sales</p>
                 </div>
 
                 {SUGGESTION_CATEGORIES.map((cat) => (
@@ -277,7 +301,7 @@ export default function AiAssistant() {
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about sales, followups, customers..."
+                placeholder="Ask about sales, predictions, customers..."
                 className="flex-1 text-sm rounded-lg border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
                 disabled={isLoading}
               />
