@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { PhoneForwarded, Loader2 } from "lucide-react";
+import { PhoneForwarded, Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const { session, role, loading: authLoading } = useAuth();
