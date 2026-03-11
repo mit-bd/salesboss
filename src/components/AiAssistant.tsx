@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Loader2, Lightbulb, X, BrainCircuit, RotateCcw, Mic, MicOff, Globe } from "lucide-react";
+import { Send, Loader2, Lightbulb, X, BrainCircuit, RotateCcw, Mic, MicOff, Check, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import ReactMarkdown from "react-markdown";
@@ -13,6 +13,16 @@ import { useAuth } from "@/contexts/AuthContext";
 interface Message {
   role: "user" | "assistant";
   content: string;
+  proposal?: ActionProposal | null;
+  proposalStatus?: "pending" | "executing" | "executed" | "cancelled";
+}
+
+interface ActionProposal {
+  action_type: string;
+  order_id: string;
+  order_display: string;
+  updates: Record<string, any>;
+  summary: string;
 }
 
 type Lang = "en" | "bn";
@@ -34,8 +44,8 @@ const SUGGESTIONS: Record<Lang, { label: string; items: string[] }[]> = {
       items: ["Show sales performance summary", "Who is the top performing executive?", "Which product sells the most?"],
     },
     {
-      label: "🔁 Predictions",
-      items: ["Which customers are likely to reorder soon?", "Show repeat order predictions", "Best time for upsell?"],
+      label: "🤖 Commands",
+      items: ["Find customer Sagar and show his orders", "Add product ShaktiGuard to order for 01774158927", "Assign all pending orders to Rakib"],
     },
   ],
   bn: [
@@ -52,15 +62,15 @@ const SUGGESTIONS: Record<Lang, { label: string; items: string[] }[]> = {
       items: ["সেলস পারফরম্যান্স সামারি দেখাও", "সেরা সেলস এক্সিকিউটিভ কে?", "কোন প্রোডাক্ট বেশি বিক্রি হয়?"],
     },
     {
-      label: "🔁 প্রেডিকশন",
-      items: ["কোন কাস্টমার শীঘ্রই রিঅর্ডার করতে পারে?", "রিপিট অর্ডার প্রেডিকশন দেখাও", "আপসেলের সেরা সময় কখন?"],
+      label: "🤖 কমান্ড",
+      items: ["কাস্টমার সাগর এর অর্ডার খুঁজে দাও", "01774158927 নম্বরের অর্ডারে ShaktiGuard যোগ করো", "সব পেন্ডিং অর্ডার রাকিবকে অ্যাসাইন করো"],
     },
   ],
 };
 
 const WELCOME: Record<Lang, { title: string; subtitle: string }> = {
-  en: { title: "Hi! I'm your Sales AI Copilot", subtitle: "I learn from your data to predict & improve sales" },
-  bn: { title: "হাই! আমি আপনার সেলস AI কোপাইলট", subtitle: "আপনার ডেটা থেকে শিখে সেলস উন্নত করি" },
+  en: { title: "Hi! I'm your Sales AI Copilot", subtitle: "I can analyze data, coach sales, AND execute commands" },
+  bn: { title: "হাই! আমি আপনার সেলস AI কোপাইলট", subtitle: "ডেটা বিশ্লেষণ, সেলস কোচিং, এবং কমান্ড এক্সিকিউশন" },
 };
 
 export default function AiAssistant() {
@@ -77,7 +87,6 @@ export default function AiAssistant() {
   const recognitionRef = useRef<any>(null);
   const { user } = useAuth();
 
-  // Check voice permission
   useEffect(() => {
     if (!user) return;
     const checkVoice = async () => {
@@ -101,6 +110,17 @@ export default function AiAssistant() {
     if (open && inputRef.current) inputRef.current.focus();
   }, [open]);
 
+  const getAuthHeaders = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+    if (!accessToken) throw new Error("Not authenticated");
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    };
+  };
+
   const sendMessage = useCallback(async (overrideText?: string) => {
     const text = (overrideText || input).trim();
     if (!text || isLoading) return;
@@ -112,29 +132,53 @@ export default function AiAssistant() {
     setIsLoading(true);
     setShowSuggestions(false);
 
-    let assistantContent = "";
-
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const accessToken = session?.access_token;
-      if (!accessToken) throw new Error("Not authenticated");
+      const headers = await getAuthHeaders();
 
       const resp = await fetch(CHAT_URL, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({ messages: newMessages, language: lang }),
+        headers,
+        body: JSON.stringify({
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          language: lang,
+        }),
       });
 
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({}));
         throw new Error(errData.error || `Error ${resp.status}`);
       }
+
+      const contentType = resp.headers.get("Content-Type") || "";
+
+      // Handle JSON responses (action proposals or text)
+      if (contentType.includes("application/json")) {
+        const data = await resp.json();
+
+        if (data.type === "action_proposal") {
+          const confirmMsg = data.message || data.proposal?.summary || "Action proposed";
+          setMessages(prev => [
+            ...prev,
+            {
+              role: "assistant",
+              content: confirmMsg,
+              proposal: data.proposal,
+              proposalStatus: "pending",
+            },
+          ]);
+        } else {
+          setMessages(prev => [
+            ...prev,
+            { role: "assistant", content: data.message || "Done." },
+          ]);
+        }
+        return;
+      }
+
+      // Handle streaming SSE responses
       if (!resp.body) throw new Error("No response body");
 
+      let assistantContent = "";
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -164,7 +208,7 @@ export default function AiAssistant() {
               assistantContent += content;
               setMessages((prev) => {
                 const last = prev[prev.length - 1];
-                if (last?.role === "assistant") {
+                if (last?.role === "assistant" && !last.proposal) {
                   return prev.map((m, i) =>
                     i === prev.length - 1 ? { ...m, content: assistantContent } : m
                   );
@@ -188,6 +232,65 @@ export default function AiAssistant() {
     }
   }, [input, isLoading, messages, lang]);
 
+  const executeProposal = useCallback(async (proposal: ActionProposal, msgIndex: number) => {
+    // Set executing state
+    setMessages(prev => prev.map((m, i) =>
+      i === msgIndex ? { ...m, proposalStatus: "executing" as const } : m
+    ));
+
+    try {
+      const headers = await getAuthHeaders();
+
+      const resp = await fetch(CHAT_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          action: "execute",
+          proposal,
+          language: lang,
+        }),
+      });
+
+      const data = await resp.json();
+
+      // Update proposal status
+      setMessages(prev => prev.map((m, i) =>
+        i === msgIndex ? { ...m, proposalStatus: "executed" as const } : m
+      ));
+
+      // Add result message
+      if (data.success) {
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: data.message || "✅ Action completed successfully.",
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `⚠ ${data.error || "Failed to execute action."}`,
+        }]);
+      }
+    } catch (err: any) {
+      setMessages(prev => prev.map((m, i) =>
+        i === msgIndex ? { ...m, proposalStatus: "pending" as const } : m
+      ));
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `⚠ ${err.message || "Failed to execute action."}`,
+      }]);
+    }
+  }, [lang]);
+
+  const cancelProposal = useCallback((msgIndex: number) => {
+    setMessages(prev => prev.map((m, i) =>
+      i === msgIndex ? { ...m, proposalStatus: "cancelled" as const } : m
+    ));
+    setMessages(prev => [...prev, {
+      role: "assistant",
+      content: lang === "bn" ? "❌ অ্যাকশন বাতিল করা হয়েছে।" : "❌ Action cancelled.",
+    }]);
+  }, [lang]);
+
   const toggleListening = useCallback(() => {
     if (isListening) {
       recognitionRef.current?.stop();
@@ -210,10 +313,7 @@ export default function AiAssistant() {
       const transcript = event.results[0][0].transcript;
       setInput(transcript);
       setIsListening(false);
-      // Auto-send after voice input
-      setTimeout(() => {
-        sendMessage(transcript);
-      }, 200);
+      setTimeout(() => { sendMessage(transcript); }, 200);
     };
 
     recognition.onerror = () => setIsListening(false);
@@ -271,12 +371,11 @@ export default function AiAssistant() {
               <div>
                 <h3 className="text-sm font-semibold text-foreground">SalesBoss AI Copilot</h3>
                 <p className="text-[11px] text-muted-foreground">
-                  {lang === "bn" ? "সেলস মেন্টর • বিশ্লেষক • প্রেডিক্টর" : "Sales mentor • Analyst • Predictor"}
+                  {lang === "bn" ? "মেন্টর • বিশ্লেষক • এক্সিকিউটর" : "Mentor • Analyst • Executor"}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-1">
-              {/* Language Toggle */}
               <div className="flex items-center rounded-lg border border-border overflow-hidden text-[11px] font-medium">
                 <button
                   onClick={() => setLang("en")}
@@ -351,8 +450,66 @@ export default function AiAssistant() {
                   )}
                 >
                   {m.role === "assistant" ? (
-                    <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_table]:text-xs [&_th]:px-2 [&_td]:px-2 [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_h2]:text-sm [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:text-xs [&_h3]:mt-2 [&_h3]:mb-1 [&_strong]:text-foreground">
-                      <ReactMarkdown>{m.content}</ReactMarkdown>
+                    <div className="space-y-2">
+                      <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_table]:text-xs [&_th]:px-2 [&_td]:px-2 [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_h2]:text-sm [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:text-xs [&_h3]:mt-2 [&_h3]:mb-1 [&_strong]:text-foreground">
+                        <ReactMarkdown>{m.content}</ReactMarkdown>
+                      </div>
+
+                      {/* Action Proposal Confirmation */}
+                      {m.proposal && m.proposalStatus === "pending" && (
+                        <div className="mt-2 rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                          <p className="text-xs font-semibold text-primary">
+                            {lang === "bn" ? "⚡ প্রস্তাবিত অ্যাকশন:" : "⚡ Proposed Action:"}
+                          </p>
+                          <p className="text-xs text-foreground">{m.proposal.summary}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {lang === "bn" ? `অর্ডার: ${m.proposal.order_display}` : `Order: ${m.proposal.order_display}`}
+                          </p>
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              onClick={() => executeProposal(m.proposal!, i)}
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                            >
+                              <Check className="h-3 w-3" />
+                              {lang === "bn" ? "কনফার্ম" : "Confirm"}
+                            </button>
+                            <button
+                              onClick={() => cancelProposal(i)}
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-border text-muted-foreground hover:bg-muted transition-colors"
+                            >
+                              <XCircle className="h-3 w-3" />
+                              {lang === "bn" ? "বাতিল" : "Cancel"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {m.proposal && m.proposalStatus === "executing" && (
+                        <div className="mt-2 rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                          <span className="text-xs text-muted-foreground">
+                            {lang === "bn" ? "এক্সিকিউট করছি..." : "Executing..."}
+                          </span>
+                        </div>
+                      )}
+
+                      {m.proposal && m.proposalStatus === "executed" && (
+                        <div className="mt-2 rounded-lg border border-green-500/30 bg-green-500/5 p-3 flex items-center gap-2">
+                          <Check className="h-4 w-4 text-green-600" />
+                          <span className="text-xs text-green-700 dark:text-green-400">
+                            {lang === "bn" ? "সফলভাবে এক্সিকিউট হয়েছে" : "Executed successfully"}
+                          </span>
+                        </div>
+                      )}
+
+                      {m.proposal && m.proposalStatus === "cancelled" && (
+                        <div className="mt-2 rounded-lg border border-border bg-muted/50 p-3 flex items-center gap-2">
+                          <XCircle className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">
+                            {lang === "bn" ? "বাতিল করা হয়েছে" : "Cancelled"}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="whitespace-pre-wrap break-words">{m.content}</div>
@@ -400,7 +557,7 @@ export default function AiAssistant() {
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={lang === "bn" ? "সেলস, প্রেডিকশন, কাস্টমার নিয়ে জিজ্ঞেস করুন..." : "Ask about sales, predictions, customers..."}
+                placeholder={lang === "bn" ? "কমান্ড দিন বা প্রশ্ন করুন..." : "Ask a question or give a command..."}
                 className="flex-1 text-sm rounded-lg border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
                 disabled={isLoading}
               />
