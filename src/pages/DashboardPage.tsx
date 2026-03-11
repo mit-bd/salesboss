@@ -10,6 +10,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import GlobalFilters, { FilterState, EMPTY_FILTERS } from "@/components/GlobalFilters";
 import { Input } from "@/components/ui/input";
 import SubscriptionStatusCard from "@/components/SubscriptionStatusCard";
+import AiInsightsWidget from "@/components/AiInsightsWidget";
 
 const STEP_LABELS = ["1st Followup", "2nd Followup", "3rd Followup", "4th Followup", "5th Followup"];
 const PIE_COLORS = ["hsl(215, 80%, 52%)", "hsl(152, 60%, 42%)", "hsl(38, 92%, 50%)", "hsl(280, 60%, 55%)", "hsl(340, 65%, 52%)"];
