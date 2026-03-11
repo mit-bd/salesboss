@@ -239,6 +239,8 @@ export default function BulkImportPage() {
     }
   };
 
+  const BATCH_SIZE = 200;
+
   const handleImport = async () => {
     if (!parsedData || !profile?.project_id || !user) return;
 
@@ -251,62 +253,102 @@ export default function BulkImportPage() {
       ? allExecutives.find((e) => e.id === assignToExec)?.name || ""
       : "";
 
-    for (const row of parsedData) {
-      if (row.error) {
-        results.push({ rowNumber: row.rowNumber, success: false, error: row.error });
-        errorCount++;
-        continue;
-      }
+    const validRows = parsedData.filter(r => !r.error);
+    const invalidRows = parsedData.filter(r => r.error);
 
-      try {
-        const { data: customerId, error: custErr } = await supabase.rpc("find_or_create_customer", {
-          p_name: row.customerName,
-          p_mobile: row.mobile.replace(/\s/g, ""),
-          p_address: row.address,
-        });
+    // Add invalid rows to results immediately
+    invalidRows.forEach(row => {
+      results.push({ rowNumber: row.rowNumber, success: false, error: row.error });
+      errorCount++;
+    });
 
-        if (custErr) throw new Error(`Customer error: ${custErr.message}`);
+    const totalValid = validRows.length;
+    setImportProgress({ current: 0, total: totalValid });
 
-        const dmName = (assignDeliveryMethod && assignDeliveryMethod !== "__none__")
-          ? activeDeliveryMethods.find((dm) => dm.id === assignDeliveryMethod)?.name || row.deliveryMethod || ""
-          : row.deliveryMethod || "";
+    // Process in batches
+    for (let batchStart = 0; batchStart < totalValid; batchStart += BATCH_SIZE) {
+      const batch = validRows.slice(batchStart, batchStart + BATCH_SIZE);
 
-        const orderDate = safeDate(row.orderDate);
-        const deliveryDate = safeDate(row.deliveryDate);
+      // Process each row in batch concurrently (limited concurrency)
+      const batchPromises = batch.map(async (row) => {
+        try {
+          const { data: customerId, error: custErr } = await supabase.rpc("find_or_create_customer", {
+            p_name: row.customerName,
+            p_mobile: row.mobile.replace(/\s/g, ""),
+            p_address: row.address,
+          });
 
-        const { error: insertErr } = await supabase.from("orders").insert({
-          customer_name: row.customerName,
-          mobile: row.mobile.replace(/\s/g, ""),
-          address: row.address,
-          order_source: row.orderSource?.trim() || "Website",
-          product_title: row.product?.trim() || "",
-          price: safePrice(row.price),
-          order_date: orderDate || new Date().toISOString().slice(0, 10),
-          delivery_date: deliveryDate,
-          delivery_method: dmName || "",
-          item_description: row.itemDescription?.trim() || "",
-          note: row.note?.trim() || "",
-          customer_id: customerId,
-          project_id: profile.project_id,
-          created_by: user.id,
-          assigned_to: (assignToExec && assignToExec !== "__none__") ? assignToExec : null,
-          assigned_to_name: execName,
-          current_status: "pending",
-          followup_step: 1,
-        });
+          if (custErr) throw new Error(`Customer error: ${custErr.message}`);
 
-        if (insertErr) throw new Error(insertErr.message);
+          const dmName = (assignDeliveryMethod && assignDeliveryMethod !== "__none__")
+            ? activeDeliveryMethods.find((dm) => dm.id === assignDeliveryMethod)?.name || row.deliveryMethod || ""
+            : row.deliveryMethod || "";
 
-        results.push({ rowNumber: row.rowNumber, success: true });
-        successCount++;
-      } catch (err: any) {
-        results.push({ rowNumber: row.rowNumber, success: false, error: err.message || "Unknown error" });
-        errorCount++;
-      }
+          const orderDate = safeDate(row.orderDate);
+          const deliveryDate = safeDate(row.deliveryDate);
+
+          const { error: insertErr } = await supabase.from("orders").insert({
+            customer_name: row.customerName,
+            mobile: row.mobile.replace(/\s/g, ""),
+            address: row.address,
+            order_source: row.orderSource?.trim() || "Website",
+            product_title: row.product?.trim() || "",
+            price: safePrice(row.price),
+            order_date: orderDate || new Date().toISOString().slice(0, 10),
+            delivery_date: deliveryDate,
+            delivery_method: dmName || "",
+            item_description: row.itemDescription?.trim() || "",
+            note: row.note?.trim() || "",
+            customer_id: customerId,
+            project_id: profile.project_id,
+            created_by: user.id,
+            assigned_to: (assignToExec && assignToExec !== "__none__") ? assignToExec : null,
+            assigned_to_name: execName,
+            current_status: "pending",
+            followup_step: 1,
+          });
+
+          if (insertErr) throw new Error(insertErr.message);
+          return { rowNumber: row.rowNumber, success: true as const };
+        } catch (err: any) {
+          return { rowNumber: row.rowNumber, success: false as const, error: err.message || "Unknown error" };
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      batchResults.forEach(r => {
+        results.push(r);
+        if (r.success) successCount++;
+        else errorCount++;
+      });
+
+      setImportProgress({ current: Math.min(batchStart + BATCH_SIZE, totalValid), total: totalValid });
     }
+
+    // Post-import verification: check DB count
+    const { count: dbCount } = await (supabase.from("orders").select("*", { count: "exact", head: true }) as any)
+      .eq("project_id", profile.project_id).eq("is_deleted", false);
+
+    // Detect duplicate phones in imported data
+    const phones = parsedData.filter(r => !r.error).map(r => r.mobile.replace(/\s/g, ""));
+    const phoneSet = new Set(phones);
+    const duplicatesDetected = phones.length - phoneSet.size;
+
+    const autoCorrectedCount = parsedData.filter(r => r.autoCorrected).length;
+    const needsReviewCount = parsedData.filter(r => r.needsReview).length;
+
+    setVerificationReport({
+      totalRows: parsedData.length,
+      inserted: successCount,
+      autoCorrected: autoCorrectedCount,
+      failed: errorCount,
+      needsReview: needsReviewCount,
+      duplicatesDetected,
+    });
 
     setImportResults(results);
     setImporting(false);
+    setImportProgress({ current: 0, total: 0 });
 
     await refreshOrders();
 
