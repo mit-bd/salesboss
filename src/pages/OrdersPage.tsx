@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
+import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Loader2 } from "lucide-react";

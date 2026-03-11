@@ -38,9 +38,10 @@ interface OrderTableProps {
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
   conflictIds?: Set<string>;
+  disableInternalPagination?: boolean;
 }
 
-export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup, pageSize = 20, selectedIds, onSelectionChange, conflictIds }: OrderTableProps) {
+export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup, pageSize = 20, selectedIds, onSelectionChange, conflictIds, disableInternalPagination }: OrderTableProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { updateOrder, activeOrders } = useOrderStore();
