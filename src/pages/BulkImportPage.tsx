@@ -1,11 +1,12 @@
 import { useState, useRef } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X, Loader2 } from "lucide-react";
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X, Loader2, Sparkles, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
@@ -32,6 +33,9 @@ interface ParsedRow {
   deliveryMethod?: string;
   itemDescription?: string;
   error?: string;
+  autoCorrected?: boolean;
+  needsReview?: boolean;
+  corrections?: string[];
 }
 
 interface ImportResult {
@@ -40,22 +44,30 @@ interface ImportResult {
   error?: string;
 }
 
+interface AiReport {
+  totalRows: number;
+  autoCorrected: number;
+  needsReview: number;
+  ready: number;
+  corrections: string[];
+}
+
 // --- Constants ---
 
 const REQUIRED_COLUMNS = ["customerName", "mobile", "address"];
 
 const AUTO_MAP: Record<string, string[]> = {
-  customerName: ["customer name", "name", "customer"],
-  mobile: ["mobile", "phone", "mobile number"],
-  address: ["address", "addr"],
-  orderSource: ["order source", "source"],
-  product: ["product", "product title"],
-  price: ["price", "amount"],
-  note: ["note", "notes", "order note"],
-  orderDate: ["order date", "orderdate", "order_date"],
+  customerName: ["customer name", "name", "customer", "customer_name", "client", "client name"],
+  mobile: ["mobile", "phone", "mobile number", "contact number", "contact", "phone number", "mobile_number", "phone_number"],
+  address: ["address", "addr", "location"],
+  orderSource: ["order source", "source", "order_source"],
+  product: ["product", "product title", "product_title", "item"],
+  price: ["price", "amount", "total", "cost"],
+  note: ["note", "notes", "order note", "remark", "remarks"],
+  orderDate: ["order date", "orderdate", "order_date", "date"],
   deliveryDate: ["delivery date", "deliverydate", "delivery_date"],
-  deliveryMethod: ["delivery method", "deliverymethod", "delivery_method", "delivery partner"],
-  itemDescription: ["item description", "itemdescription", "item_description", "description"],
+  deliveryMethod: ["delivery method", "deliverymethod", "delivery_method", "delivery partner", "courier"],
+  itemDescription: ["item description", "itemdescription", "item_description", "description", "details"],
 };
 
 // --- Helpers ---
@@ -87,7 +99,7 @@ function safePrice(val: string | undefined): number {
 function autoMapColumns(headers: string[]): Record<string, string> {
   const mapping: Record<string, string> = {};
   headers.forEach((h) => {
-    const hl = h.toLowerCase();
+    const hl = h.toLowerCase().trim();
     for (const [key, aliases] of Object.entries(AUTO_MAP)) {
       if (aliases.includes(hl)) mapping[key] = h;
     }
@@ -111,6 +123,8 @@ export default function BulkImportPage() {
   const [assignToExec, setAssignToExec] = useState("");
   const [assignDeliveryMethod, setAssignDeliveryMethod] = useState("");
   const [importing, setImporting] = useState(false);
+  const [aiCleaning, setAiCleaning] = useState(false);
+  const [aiReport, setAiReport] = useState<AiReport | null>(null);
   const { members } = useTeamMembers();
   const { methods: activeDeliveryMethods } = useDeliveryMethods({ activeOnly: true });
   const { sources } = useOrderSources();
@@ -132,6 +146,7 @@ export default function BulkImportPage() {
       setColumnMapping(autoMapColumns(headers));
       setParsedData(null);
       setImportResults(null);
+      setAiReport(null);
     };
     reader.readAsText(file);
   };
@@ -147,6 +162,75 @@ export default function BulkImportPage() {
     });
     setParsedData(rows);
     setImportResults(null);
+    setAiReport(null);
+  };
+
+  const handleAiClean = async () => {
+    if (!parsedData) return;
+    setAiCleaning(true);
+
+    try {
+      const rowsForAi = parsedData.map((r) => ({
+        rowNumber: r.rowNumber,
+        customerName: r.customerName,
+        mobile: r.mobile,
+        address: r.address,
+        orderSource: r.orderSource,
+        product: r.product || "",
+        price: r.price || "",
+        note: r.note || "",
+        orderDate: r.orderDate || "",
+        deliveryDate: r.deliveryDate || "",
+        deliveryMethod: r.deliveryMethod || "",
+        itemDescription: r.itemDescription || "",
+      }));
+
+      const { data, error } = await supabase.functions.invoke("ai-import-cleaner", {
+        body: { rows: rowsForAi, headers: rawHeaders },
+      });
+
+      if (error) throw error;
+
+      if (data?.cleanedRows && Array.isArray(data.cleanedRows)) {
+        const cleaned: ParsedRow[] = data.cleanedRows.map((r: any) => {
+          const validationError = validateRow(r);
+          return {
+            rowNumber: r.rowNumber,
+            customerName: r.customerName || "",
+            mobile: r.mobile || "",
+            address: r.address || "",
+            orderSource: r.orderSource || "",
+            product: r.product || "",
+            price: r.price || "",
+            note: r.note || "",
+            orderDate: r.orderDate || "",
+            deliveryDate: r.deliveryDate || "",
+            deliveryMethod: r.deliveryMethod || "",
+            itemDescription: r.itemDescription || "",
+            autoCorrected: r.autoCorrected || false,
+            needsReview: r.needsReview || false,
+            corrections: r.corrections || [],
+            error: r.needsReview ? (validationError || "Needs review") : validationError,
+          };
+        });
+        setParsedData(cleaned);
+        setAiReport(data.report || null);
+
+        toast({
+          title: "AI Cleaning Complete",
+          description: `${data.report?.autoCorrected || 0} rows auto-corrected, ${data.report?.needsReview || 0} need review.`,
+        });
+      }
+    } catch (err: any) {
+      console.error("AI clean error:", err);
+      toast({
+        title: "AI Cleaning Failed",
+        description: err.message || "Could not process data with AI. You can still import manually.",
+        variant: "destructive",
+      });
+    } finally {
+      setAiCleaning(false);
+    }
   };
 
   const handleImport = async () => {
@@ -157,13 +241,11 @@ export default function BulkImportPage() {
     let successCount = 0;
     let errorCount = 0;
 
-    // Find the exec name if assigned
     const execName = assignToExec && assignToExec !== "__none__"
       ? allExecutives.find((e) => e.id === assignToExec)?.name || ""
       : "";
 
     for (const row of parsedData) {
-      // Skip rows that failed validation
       if (row.error) {
         results.push({ rowNumber: row.rowNumber, success: false, error: row.error });
         errorCount++;
@@ -171,7 +253,6 @@ export default function BulkImportPage() {
       }
 
       try {
-        // Find or create customer
         const { data: customerId, error: custErr } = await supabase.rpc("find_or_create_customer", {
           p_name: row.customerName,
           p_mobile: row.mobile.replace(/\s/g, ""),
@@ -180,7 +261,6 @@ export default function BulkImportPage() {
 
         if (custErr) throw new Error(`Customer error: ${custErr.message}`);
 
-        // Resolve delivery method name to use
         const dmName = (assignDeliveryMethod && assignDeliveryMethod !== "__none__")
           ? activeDeliveryMethods.find((dm) => dm.id === assignDeliveryMethod)?.name || row.deliveryMethod || ""
           : row.deliveryMethod || "";
@@ -222,7 +302,6 @@ export default function BulkImportPage() {
     setImportResults(results);
     setImporting(false);
 
-    // Refresh orders in store
     await refreshOrders();
 
     toast({
@@ -241,16 +320,18 @@ export default function BulkImportPage() {
     setRawRows([]);
     setParsedData(null);
     setImportResults(null);
+    setAiReport(null);
   };
 
   const validCount = parsedData?.filter((r) => !r.error).length ?? 0;
   const errorCount = parsedData?.filter((r) => r.error).length ?? 0;
+  const correctedCount = parsedData?.filter((r) => r.autoCorrected).length ?? 0;
 
   return (
     <AppLayout>
-      <PageHeader title="Bulk Import" description="Import orders from CSV or Google Sheets" />
+      <PageHeader title="Bulk Import" description="Import orders from CSV with AI-powered data cleaning" />
 
-      <div className="max-w-3xl animate-fade-in">
+      <div className="max-w-4xl animate-fade-in">
         {!rawHeaders.length ? (
           <>
             <div className="rounded-xl border-2 border-dashed border-border bg-card p-12 text-center card-shadow">
@@ -258,8 +339,12 @@ export default function BulkImportPage() {
                 <Upload className="h-7 w-7 text-primary" />
               </div>
               <h3 className="text-lg font-semibold text-foreground mb-2">Upload your file</h3>
-              <p className="text-sm text-muted-foreground mb-6">
-                Drag and drop a CSV file, or click to browse. You can also paste a Google Sheets URL.
+              <p className="text-sm text-muted-foreground mb-2">
+                Drag and drop a CSV file, or click to browse.
+              </p>
+              <p className="text-xs text-muted-foreground mb-6 flex items-center justify-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                AI will automatically clean and organize messy data
               </p>
               <div className="flex justify-center gap-3">
                 <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
@@ -293,7 +378,14 @@ export default function BulkImportPage() {
                   <span>• Item Description</span>
                   <span>• Order Note</span>
                 </div>
-                <p className="text-xs text-muted-foreground/70 mt-1">Orders with only required fields will appear in Step 1 Followup Pending and can be edited later.</p>
+                <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                  <p className="text-xs text-primary font-medium flex items-center gap-1.5">
+                    <Wand2 className="h-3.5 w-3.5" /> AI Data Organizer
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    After previewing, click "AI Clean Data" to auto-fix phone formats, names, product matching, and more. Messy data? No problem!
+                  </p>
+                </div>
               </div>
             </div>
           </>
@@ -355,9 +447,50 @@ export default function BulkImportPage() {
                 </div>
               </div>
               <div className="flex justify-end mt-4">
-                <Button size="sm" onClick={handlePreview} disabled={importing}>Preview Data</Button>
+                <Button size="sm" onClick={handlePreview} disabled={importing || aiCleaning}>Preview Data</Button>
               </div>
             </div>
+
+            {/* AI Report */}
+            {aiReport && (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 card-shadow animate-fade-in">
+                <div className="flex items-center gap-2 mb-3">
+                  <Sparkles className="h-4.5 w-4.5 text-primary" />
+                  <h3 className="text-sm font-semibold text-foreground">AI Import Report</h3>
+                </div>
+                <div className="grid grid-cols-4 gap-4 mb-3">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-foreground">{aiReport.totalRows}</p>
+                    <p className="text-xs text-muted-foreground">Total Rows</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-foreground">{aiReport.ready}</p>
+                    <p className="text-xs text-muted-foreground">Ready to Import</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-primary">{aiReport.autoCorrected}</p>
+                    <p className="text-xs text-muted-foreground">Auto Corrected</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-warning">{aiReport.needsReview}</p>
+                    <p className="text-xs text-muted-foreground">Needs Review</p>
+                  </div>
+                </div>
+                {aiReport.corrections.length > 0 && (
+                  <div className="mt-2 pt-3 border-t border-primary/10">
+                    <p className="text-xs font-medium text-foreground mb-1.5">Corrections Applied:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {aiReport.corrections.slice(0, 10).map((c, i) => (
+                        <Badge key={i} variant="secondary" className="text-[10px]">{c}</Badge>
+                      ))}
+                      {aiReport.corrections.length > 10 && (
+                        <Badge variant="outline" className="text-[10px]">+{aiReport.corrections.length - 10} more</Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Preview Table */}
             {parsedData && !importResults && (
@@ -365,11 +498,29 @@ export default function BulkImportPage() {
                 <div className="p-4 border-b border-border flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="flex items-center gap-1 text-xs text-success"><CheckCircle className="h-3.5 w-3.5" /> {validCount} valid</span>
+                    {correctedCount > 0 && (
+                      <span className="flex items-center gap-1 text-xs text-primary"><Sparkles className="h-3.5 w-3.5" /> {correctedCount} corrected</span>
+                    )}
                     <span className="flex items-center gap-1 text-xs text-destructive"><AlertCircle className="h-3.5 w-3.5" /> {errorCount} errors</span>
                   </div>
-                  <Button size="sm" onClick={handleImport} disabled={validCount === 0 || importing}>
-                    {importing ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Importing...</> : `Import ${validCount} Orders`}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleAiClean}
+                      disabled={aiCleaning || importing}
+                      className="gap-1.5"
+                    >
+                      {aiCleaning ? (
+                        <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Cleaning...</>
+                      ) : (
+                        <><Wand2 className="h-3.5 w-3.5" /> AI Clean Data</>
+                      )}
+                    </Button>
+                    <Button size="sm" onClick={handleImport} disabled={validCount === 0 || importing}>
+                      {importing ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Importing...</> : `Import ${validCount} Orders`}
+                    </Button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto max-h-80">
                   <table className="w-full text-xs">
@@ -379,25 +530,41 @@ export default function BulkImportPage() {
                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Status</th>
                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Name</th>
                         <th className="px-3 py-2 text-left font-medium text-muted-foreground">Mobile</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Source</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Order Date</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Delivery</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Description</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Error</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Address</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Product</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Price</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Info</th>
                       </tr>
                     </thead>
                     <tbody>
                       {parsedData.map((row, i) => (
-                        <tr key={i} className={cn("border-b border-border last:border-0", row.error && "bg-destructive/5")}>
+                        <tr key={i} className={cn(
+                          "border-b border-border last:border-0",
+                          row.error && "bg-destructive/5",
+                          row.autoCorrected && !row.error && "bg-primary/5",
+                        )}>
                           <td className="px-3 py-2 text-muted-foreground">{row.rowNumber}</td>
-                          <td className="px-3 py-2">{row.error ? <AlertCircle className="h-3.5 w-3.5 text-destructive" /> : <CheckCircle className="h-3.5 w-3.5 text-success" />}</td>
+                          <td className="px-3 py-2">
+                            {row.error ? (
+                              <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                            ) : row.autoCorrected ? (
+                              <Sparkles className="h-3.5 w-3.5 text-primary" />
+                            ) : (
+                              <CheckCircle className="h-3.5 w-3.5 text-success" />
+                            )}
+                          </td>
                           <td className="px-3 py-2 text-foreground">{row.customerName}</td>
                           <td className="px-3 py-2 text-muted-foreground">{row.mobile}</td>
-                          <td className="px-3 py-2 text-muted-foreground">{row.orderSource}</td>
-                          <td className="px-3 py-2 text-muted-foreground">{row.orderDate}</td>
-                          <td className="px-3 py-2 text-muted-foreground">{row.deliveryMethod}</td>
-                          <td className="px-3 py-2 text-muted-foreground truncate max-w-24">{row.itemDescription}</td>
-                          <td className="px-3 py-2 text-destructive">{row.error}</td>
+                          <td className="px-3 py-2 text-muted-foreground truncate max-w-32">{row.address}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{row.product}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{row.price}</td>
+                          <td className="px-3 py-2">
+                            {row.error ? (
+                              <span className="text-destructive">{row.error}</span>
+                            ) : row.corrections && row.corrections.length > 0 ? (
+                              <span className="text-primary text-[10px]">{row.corrections.join("; ")}</span>
+                            ) : null}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -419,6 +586,11 @@ export default function BulkImportPage() {
                     <span className="flex items-center gap-1 text-xs text-destructive">
                       <AlertCircle className="h-3.5 w-3.5" /> {importResults.filter((r) => !r.success).length} failed
                     </span>
+                    {correctedCount > 0 && (
+                      <span className="flex items-center gap-1 text-xs text-primary">
+                        <Sparkles className="h-3.5 w-3.5" /> {correctedCount} AI corrected
+                      </span>
+                    )}
                   </div>
                 </div>
                 {importResults.some((r) => !r.success) && (
