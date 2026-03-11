@@ -44,6 +44,7 @@ import CommissionPage from "./pages/CommissionPage";
 import RolesPage from "./pages/RolesPage";
 import OrderSourcesPage from "./pages/OrderSourcesPage";
 import CustomerProfilePage from "./pages/CustomerProfilePage";
+import BillingPage from "./pages/BillingPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
