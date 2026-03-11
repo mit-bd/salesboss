@@ -46,16 +46,32 @@ export default function SalesExecutivesPage() {
       return;
     }
 
+    // Only show SEs that belong to the same project as the current user
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("user_id, full_name");
+      .select("user_id, full_name, project_id");
 
-    const profileMap = new Map((profiles || []).map((p) => [p.user_id, p.full_name || ""]));
+    const currentUserProfile = (profiles || []).find((p) => p.user_id === (await supabase.auth.getUser()).data.user?.id);
+    const currentProjectId = currentUserProfile?.project_id;
+
+    const projectSEProfiles = (profiles || []).filter(
+      (p) => seUserIds.includes(p.user_id) && p.project_id === currentProjectId
+    );
+
+    const filteredSeUserIds = projectSEProfiles.map((p) => p.user_id);
+
+    if (filteredSeUserIds.length === 0) {
+      setExecutives([]);
+      setOrders([]);
+      setFollowups([]);
+      setLoading(false);
+      return;
+    }
 
     setExecutives(
-      seUserIds.map((uid) => ({
+      filteredSeUserIds.map((uid) => ({
         userId: uid,
-        name: profileMap.get(uid) || "Unknown",
+        name: projectSEProfiles.find((p) => p.user_id === uid)?.full_name || "Unknown",
       }))
     );
 
