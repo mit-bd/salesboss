@@ -16,12 +16,7 @@ export const mockProducts: Product[] = [
   { id: "p5", title: "Joint Care Plus", sku: "JCP-005", price: 1899, packageDuration: 30, image: "", info: "Advanced joint care supplement" },
 ];
 
-export const mockSalesExecutives: SalesExecutive[] = [
-  { id: "se1", name: "Rahul Sharma", email: "rahul@example.com", assignedOrders: 24, completedFollowups: 89 },
-  { id: "se2", name: "Priya Patel", email: "priya@example.com", assignedOrders: 31, completedFollowups: 112 },
-  { id: "se3", name: "Amit Kumar", email: "amit@example.com", assignedOrders: 18, completedFollowups: 67 },
-  { id: "se4", name: "Neha Singh", email: "neha@example.com", assignedOrders: 27, completedFollowups: 95 },
-];
+export const mockSalesExecutives: SalesExecutive[] = [];
 
 export const mockOrders: Order[] = [
   { id: "ORD-001", customerName: "Vikram Mehta", mobile: "9876543210", address: "12 MG Road, Mumbai", orderSource: "Website", productId: "p1", productTitle: "Herbal Wellness Kit", price: 2499, note: "Interested in long-term plan", followupStep: 2, followupDate: "2026-02-18", assignedTo: "se1", assignedToName: "Rahul Sharma", createdAt: "2026-02-01", orderDate: "2026-02-01", deliveryDate: "2026-02-05", deliveryMethod: "dp1", parentOrderId: null, isRepeat: false, health: "good" },
