@@ -167,6 +167,13 @@ export default function TeamPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
+                    <Switch
+                      checked={u.aiVoiceEnabled}
+                      onCheckedChange={(checked) => handleToggleVoice(u.id, checked)}
+                      className="data-[state=checked]:bg-primary"
+                    />
+                  </TableCell>
+                  <TableCell>
                     <div className="flex items-center gap-2">
                       {u.banned ? (
                         <Badge variant="destructive" className="text-xs gap-1">
