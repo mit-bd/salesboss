@@ -151,7 +151,7 @@ export default function OrdersPage() {
       )}
 
       {editOrder && (
-        <EditOrderDialogWrapper editOrder={editOrder} setEditOrder={setEditOrder} onDone={refresh} />
+        <EditOrderDialog order={editOrder} open={!!editOrder} onOpenChange={(open) => !open && setEditOrder(null)} onSave={async (updated) => { await updateOrder(updated); setEditOrder(null); refresh(); }} />
       )}
 
       {isAdmin && (
