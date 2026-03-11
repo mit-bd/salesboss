@@ -88,8 +88,8 @@ export default function GlobalFilters({ filters, onChange, showStepFilter = true
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
                 <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                {mockSalesExecutives.map((se) => (
-                  <SelectItem key={se.id} value={se.id}>{se.name}</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.userId} value={m.userId}>{m.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
