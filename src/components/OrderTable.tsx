@@ -73,8 +73,8 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
   const selected = selectedIds ?? internalSelected;
   const setSelected = onSelectionChange ?? setInternalSelected;
 
-  const totalPages = Math.max(1, Math.ceil(orders.length / pageSize));
-  const pageOrders = orders.slice(page * pageSize, (page + 1) * pageSize);
+  const totalPages = disableInternalPagination ? 1 : Math.max(1, Math.ceil(orders.length / pageSize));
+  const pageOrders = disableInternalPagination ? orders : orders.slice(page * pageSize, (page + 1) * pageSize);
 
   const toggleAll = useCallback(() => {
     if (selected.size === pageOrders.length) {
