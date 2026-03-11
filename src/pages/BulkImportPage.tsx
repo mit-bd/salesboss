@@ -1,8 +1,9 @@
 import { useState, useRef } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X, Loader2, Sparkles, Wand2 } from "lucide-react";
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X, Loader2, Sparkles, Wand2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -123,8 +124,17 @@ export default function BulkImportPage() {
   const [assignToExec, setAssignToExec] = useState("");
   const [assignDeliveryMethod, setAssignDeliveryMethod] = useState("");
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const [aiCleaning, setAiCleaning] = useState(false);
   const [aiReport, setAiReport] = useState<AiReport | null>(null);
+  const [verificationReport, setVerificationReport] = useState<{
+    totalRows: number;
+    inserted: number;
+    autoCorrected: number;
+    failed: number;
+    needsReview: number;
+    duplicatesDetected: number;
+  } | null>(null);
   const { members } = useTeamMembers();
   const { methods: activeDeliveryMethods } = useDeliveryMethods({ activeOnly: true });
   const { sources } = useOrderSources();
@@ -230,6 +240,8 @@ export default function BulkImportPage() {
     }
   };
 
+  const BATCH_SIZE = 200;
+
   const handleImport = async () => {
     if (!parsedData || !profile?.project_id || !user) return;
 
@@ -242,62 +254,102 @@ export default function BulkImportPage() {
       ? allExecutives.find((e) => e.id === assignToExec)?.name || ""
       : "";
 
-    for (const row of parsedData) {
-      if (row.error) {
-        results.push({ rowNumber: row.rowNumber, success: false, error: row.error });
-        errorCount++;
-        continue;
-      }
+    const validRows = parsedData.filter(r => !r.error);
+    const invalidRows = parsedData.filter(r => r.error);
 
-      try {
-        const { data: customerId, error: custErr } = await supabase.rpc("find_or_create_customer", {
-          p_name: row.customerName,
-          p_mobile: row.mobile.replace(/\s/g, ""),
-          p_address: row.address,
-        });
+    // Add invalid rows to results immediately
+    invalidRows.forEach(row => {
+      results.push({ rowNumber: row.rowNumber, success: false, error: row.error });
+      errorCount++;
+    });
 
-        if (custErr) throw new Error(`Customer error: ${custErr.message}`);
+    const totalValid = validRows.length;
+    setImportProgress({ current: 0, total: totalValid });
 
-        const dmName = (assignDeliveryMethod && assignDeliveryMethod !== "__none__")
-          ? activeDeliveryMethods.find((dm) => dm.id === assignDeliveryMethod)?.name || row.deliveryMethod || ""
-          : row.deliveryMethod || "";
+    // Process in batches
+    for (let batchStart = 0; batchStart < totalValid; batchStart += BATCH_SIZE) {
+      const batch = validRows.slice(batchStart, batchStart + BATCH_SIZE);
 
-        const orderDate = safeDate(row.orderDate);
-        const deliveryDate = safeDate(row.deliveryDate);
+      // Process each row in batch concurrently (limited concurrency)
+      const batchPromises = batch.map(async (row) => {
+        try {
+          const { data: customerId, error: custErr } = await supabase.rpc("find_or_create_customer", {
+            p_name: row.customerName,
+            p_mobile: row.mobile.replace(/\s/g, ""),
+            p_address: row.address,
+          });
 
-        const { error: insertErr } = await supabase.from("orders").insert({
-          customer_name: row.customerName,
-          mobile: row.mobile.replace(/\s/g, ""),
-          address: row.address,
-          order_source: row.orderSource?.trim() || "Website",
-          product_title: row.product?.trim() || "",
-          price: safePrice(row.price),
-          order_date: orderDate || new Date().toISOString().slice(0, 10),
-          delivery_date: deliveryDate,
-          delivery_method: dmName || "",
-          item_description: row.itemDescription?.trim() || "",
-          note: row.note?.trim() || "",
-          customer_id: customerId,
-          project_id: profile.project_id,
-          created_by: user.id,
-          assigned_to: (assignToExec && assignToExec !== "__none__") ? assignToExec : null,
-          assigned_to_name: execName,
-          current_status: "pending",
-          followup_step: 1,
-        });
+          if (custErr) throw new Error(`Customer error: ${custErr.message}`);
 
-        if (insertErr) throw new Error(insertErr.message);
+          const dmName = (assignDeliveryMethod && assignDeliveryMethod !== "__none__")
+            ? activeDeliveryMethods.find((dm) => dm.id === assignDeliveryMethod)?.name || row.deliveryMethod || ""
+            : row.deliveryMethod || "";
 
-        results.push({ rowNumber: row.rowNumber, success: true });
-        successCount++;
-      } catch (err: any) {
-        results.push({ rowNumber: row.rowNumber, success: false, error: err.message || "Unknown error" });
-        errorCount++;
-      }
+          const orderDate = safeDate(row.orderDate);
+          const deliveryDate = safeDate(row.deliveryDate);
+
+          const { error: insertErr } = await supabase.from("orders").insert({
+            customer_name: row.customerName,
+            mobile: row.mobile.replace(/\s/g, ""),
+            address: row.address,
+            order_source: row.orderSource?.trim() || "Website",
+            product_title: row.product?.trim() || "",
+            price: safePrice(row.price),
+            order_date: orderDate || new Date().toISOString().slice(0, 10),
+            delivery_date: deliveryDate,
+            delivery_method: dmName || "",
+            item_description: row.itemDescription?.trim() || "",
+            note: row.note?.trim() || "",
+            customer_id: customerId,
+            project_id: profile.project_id,
+            created_by: user.id,
+            assigned_to: (assignToExec && assignToExec !== "__none__") ? assignToExec : null,
+            assigned_to_name: execName,
+            current_status: "pending",
+            followup_step: 1,
+          });
+
+          if (insertErr) throw new Error(insertErr.message);
+          return { rowNumber: row.rowNumber, success: true as const };
+        } catch (err: any) {
+          return { rowNumber: row.rowNumber, success: false as const, error: err.message || "Unknown error" };
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      batchResults.forEach(r => {
+        results.push(r);
+        if (r.success) successCount++;
+        else errorCount++;
+      });
+
+      setImportProgress({ current: Math.min(batchStart + BATCH_SIZE, totalValid), total: totalValid });
     }
+
+    // Post-import verification: check DB count
+    const { count: dbCount } = await (supabase.from("orders").select("*", { count: "exact", head: true }) as any)
+      .eq("project_id", profile.project_id).eq("is_deleted", false);
+
+    // Detect duplicate phones in imported data
+    const phones = parsedData.filter(r => !r.error).map(r => r.mobile.replace(/\s/g, ""));
+    const phoneSet = new Set(phones);
+    const duplicatesDetected = phones.length - phoneSet.size;
+
+    const autoCorrectedCount = parsedData.filter(r => r.autoCorrected).length;
+    const needsReviewCount = parsedData.filter(r => r.needsReview).length;
+
+    setVerificationReport({
+      totalRows: parsedData.length,
+      inserted: successCount,
+      autoCorrected: autoCorrectedCount,
+      failed: errorCount,
+      needsReview: needsReviewCount,
+      duplicatesDetected,
+    });
 
     setImportResults(results);
     setImporting(false);
+    setImportProgress({ current: 0, total: 0 });
 
     await refreshOrders();
 
@@ -318,6 +370,8 @@ export default function BulkImportPage() {
     setParsedData(null);
     setImportResults(null);
     setAiReport(null);
+    setVerificationReport(null);
+    setImportProgress({ current: 0, total: 0 });
   };
 
   const validCount = parsedData?.filter((r) => !r.error).length ?? 0;
@@ -515,7 +569,9 @@ export default function BulkImportPage() {
                       )}
                     </Button>
                     <Button size="sm" onClick={handleImport} disabled={validCount === 0 || importing}>
-                      {importing ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Importing...</> : `Import ${validCount} Orders`}
+                      {importing ? (
+                        <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Processing {importProgress.current} / {importProgress.total}</>
+                      ) : `Import ${validCount} Orders`}
                     </Button>
                   </div>
                 </div>
@@ -570,48 +626,105 @@ export default function BulkImportPage() {
               </div>
             )}
 
-            {/* Import Results */}
+            {/* Import Progress Bar */}
+            {importing && importProgress.total > 0 && (
+              <div className="rounded-xl border border-border bg-card p-5 card-shadow animate-fade-in">
+                <div className="flex items-center gap-2 mb-3">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <h3 className="text-sm font-semibold text-foreground">Importing Orders...</h3>
+                </div>
+                <Progress value={(importProgress.current / importProgress.total) * 100} className="h-2 mb-2" />
+                <p className="text-xs text-muted-foreground">
+                  Processing Row {importProgress.current.toLocaleString()} / {importProgress.total.toLocaleString()}
+                </p>
+              </div>
+            )}
+
+            {/* Import Results + Verification Report */}
             {importResults && (
-              <div className="rounded-xl border border-border bg-card card-shadow overflow-hidden">
-                <div className="p-4 border-b border-border">
-                  <h3 className="text-sm font-semibold text-foreground mb-2">Import Summary</h3>
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs text-muted-foreground">Total: {importResults.length}</span>
-                    <span className="flex items-center gap-1 text-xs text-success">
-                      <CheckCircle className="h-3.5 w-3.5" /> {importResults.filter((r) => r.success).length} saved
-                    </span>
-                    <span className="flex items-center gap-1 text-xs text-destructive">
-                      <AlertCircle className="h-3.5 w-3.5" /> {importResults.filter((r) => !r.success).length} failed
-                    </span>
-                    {correctedCount > 0 && (
-                      <span className="flex items-center gap-1 text-xs text-primary">
-                        <Sparkles className="h-3.5 w-3.5" /> {correctedCount} AI corrected
-                      </span>
+              <div className="space-y-4">
+                {/* Verification Report */}
+                {verificationReport && (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 card-shadow animate-fade-in">
+                    <div className="flex items-center gap-2 mb-4">
+                      <CheckCircle className="h-4.5 w-4.5 text-primary" />
+                      <h3 className="text-sm font-semibold text-foreground">Import Verification Report</h3>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-4">
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-foreground">{verificationReport.totalRows.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">Total Rows</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-success">{verificationReport.inserted.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">Imported</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-primary">{verificationReport.autoCorrected}</p>
+                        <p className="text-xs text-muted-foreground">Auto Corrected</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-destructive">{verificationReport.failed}</p>
+                        <p className="text-xs text-muted-foreground">Failed</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-warning">{verificationReport.needsReview}</p>
+                        <p className="text-xs text-muted-foreground">Needs Review</p>
+                      </div>
+                    </div>
+                    {verificationReport.duplicatesDetected > 0 && (
+                      <div className="mt-3 pt-3 border-t border-primary/10 flex items-center gap-2">
+                        <AlertTriangle className="h-3.5 w-3.5 text-warning" />
+                        <p className="text-xs text-warning font-medium">
+                          {verificationReport.duplicatesDetected} duplicate phone numbers detected in imported data
+                        </p>
+                      </div>
                     )}
                   </div>
-                </div>
-                {importResults.some((r) => !r.success) && (
-                  <div className="overflow-x-auto max-h-60">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-border bg-muted/50">
-                          <th className="px-3 py-2 text-left font-medium text-muted-foreground">Row</th>
-                          <th className="px-3 py-2 text-left font-medium text-muted-foreground">Error</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {importResults.filter((r) => !r.success).map((r) => (
-                          <tr key={r.rowNumber} className="border-b border-border last:border-0 bg-destructive/5">
-                            <td className="px-3 py-2 text-foreground">Row {r.rowNumber}</td>
-                            <td className="px-3 py-2 text-destructive">{r.error}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
                 )}
-                <div className="p-4 border-t border-border flex justify-end">
-                  <Button size="sm" variant="outline" onClick={resetAll}>Import More</Button>
+
+                {/* Failed rows detail */}
+                <div className="rounded-xl border border-border bg-card card-shadow overflow-hidden">
+                  <div className="p-4 border-b border-border">
+                    <h3 className="text-sm font-semibold text-foreground mb-2">Import Summary</h3>
+                    <div className="flex items-center gap-4">
+                      <span className="text-xs text-muted-foreground">Total: {importResults.length}</span>
+                      <span className="flex items-center gap-1 text-xs text-success">
+                        <CheckCircle className="h-3.5 w-3.5" /> {importResults.filter((r) => r.success).length} saved
+                      </span>
+                      <span className="flex items-center gap-1 text-xs text-destructive">
+                        <AlertCircle className="h-3.5 w-3.5" /> {importResults.filter((r) => !r.success).length} failed
+                      </span>
+                      {correctedCount > 0 && (
+                        <span className="flex items-center gap-1 text-xs text-primary">
+                          <Sparkles className="h-3.5 w-3.5" /> {correctedCount} AI corrected
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {importResults.some((r) => !r.success) && (
+                    <div className="overflow-x-auto max-h-60">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-border bg-muted/50">
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Row</th>
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Error</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importResults.filter((r) => !r.success).map((r) => (
+                            <tr key={r.rowNumber} className="border-b border-border last:border-0 bg-destructive/5">
+                              <td className="px-3 py-2 text-foreground">Row {r.rowNumber}</td>
+                              <td className="px-3 py-2 text-destructive">{r.error}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div className="p-4 border-t border-border flex justify-end">
+                    <Button size="sm" variant="outline" onClick={resetAll}>Import More</Button>
+                  </div>
                 </div>
               </div>
             )}

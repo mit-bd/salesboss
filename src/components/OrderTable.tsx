@@ -38,9 +38,10 @@ interface OrderTableProps {
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
   conflictIds?: Set<string>;
+  disableInternalPagination?: boolean;
 }
 
-export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup, pageSize = 20, selectedIds, onSelectionChange, conflictIds }: OrderTableProps) {
+export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup, pageSize = 20, selectedIds, onSelectionChange, conflictIds, disableInternalPagination }: OrderTableProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { updateOrder, activeOrders } = useOrderStore();
@@ -72,8 +73,8 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
   const selected = selectedIds ?? internalSelected;
   const setSelected = onSelectionChange ?? setInternalSelected;
 
-  const totalPages = Math.max(1, Math.ceil(orders.length / pageSize));
-  const pageOrders = orders.slice(page * pageSize, (page + 1) * pageSize);
+  const totalPages = disableInternalPagination ? 1 : Math.max(1, Math.ceil(orders.length / pageSize));
+  const pageOrders = disableInternalPagination ? orders : orders.slice(page * pageSize, (page + 1) * pageSize);
 
   const toggleAll = useCallback(() => {
     if (selected.size === pageOrders.length) {
@@ -324,8 +325,8 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
+      {/* Pagination (only when not using external/server-side pagination) */}
+      {!disableInternalPagination && totalPages > 1 && (
         <div className="flex items-center justify-between border-t border-border px-4 py-2.5 bg-muted/30">
           <p className="text-xs text-muted-foreground">{page * pageSize + 1}–{Math.min((page + 1) * pageSize, orders.length)} of {orders.length}</p>
           <div className="flex items-center gap-1">
