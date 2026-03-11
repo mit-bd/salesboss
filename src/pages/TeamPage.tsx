@@ -70,6 +70,18 @@ export default function TeamPage() {
     }
   };
 
+  const handleToggleVoice = async (userId: string, enabled: boolean) => {
+    const { data, error } = await supabase.functions.invoke("manage-team", {
+      body: { action: "toggle_voice_permission", userId, enabled },
+    });
+    if (error || data?.error) {
+      toast({ title: "Error", description: data?.error || error?.message, variant: "destructive" });
+    } else {
+      toast({ title: enabled ? "Voice AI Enabled" : "Voice AI Disabled" });
+      fetchUsers();
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
