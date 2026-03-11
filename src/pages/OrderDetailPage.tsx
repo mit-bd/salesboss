@@ -25,7 +25,7 @@ import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useDeliveryMethods } from "@/hooks/useDeliveryMethods";
 import { FollowupHistoryEntry } from "@/types/data";
 import { supabase } from "@/integrations/supabase/client";
-import { mockSalesExecutives } from "@/data/mockData";
+
 
 const STEP_COLORS = [
   "bg-step-1 text-primary-foreground",
