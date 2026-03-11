@@ -10,6 +10,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import GlobalFilters, { FilterState, EMPTY_FILTERS } from "@/components/GlobalFilters";
 import { Input } from "@/components/ui/input";
 import SubscriptionStatusCard from "@/components/SubscriptionStatusCard";
+import AiInsightsWidget from "@/components/AiInsightsWidget";
 
 const STEP_LABELS = ["1st Followup", "2nd Followup", "3rd Followup", "4th Followup", "5th Followup"];
 const PIE_COLORS = ["hsl(215, 80%, 52%)", "hsl(152, 60%, 42%)", "hsl(38, 92%, 50%)", "hsl(280, 60%, 55%)", "hsl(340, 65%, 52%)"];
@@ -199,7 +200,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="rounded-xl border border-border bg-card p-5 card-shadow animate-fade-in">
           <h2 className="text-sm font-semibold text-card-foreground mb-4">Team Performance</h2>
           {performanceData.length > 0 ? (
@@ -237,6 +238,11 @@ export default function DashboardPage() {
             })}
           </div>
         </div>
+      </div>
+
+      {/* AI Insights Widget */}
+      <div className="mb-6">
+        <AiInsightsWidget />
       </div>
     </AppLayout>
   );

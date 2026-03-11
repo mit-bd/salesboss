@@ -183,4 +183,22 @@
   .transition-medium {
     transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
   }
+
+  @keyframes ai-glow {
+    0%, 100% { box-shadow: 0 0 12px 2px hsl(215 80% 52% / 0.3), 0 4px 14px -2px hsl(215 80% 52% / 0.2); }
+    50% { box-shadow: 0 0 20px 4px hsl(215 80% 52% / 0.45), 0 4px 20px -2px hsl(215 80% 52% / 0.3); }
+  }
+
+  @keyframes ai-pulse-ring {
+    0% { transform: scale(1); opacity: 0.5; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+
+  .ai-fab {
+    animation: ai-glow 3s ease-in-out infinite;
+  }
+
+  .ai-fab-ring {
+    animation: ai-pulse-ring 2.5s ease-out infinite;
+  }
 }
