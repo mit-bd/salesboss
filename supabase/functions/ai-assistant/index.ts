@@ -126,8 +126,7 @@ ${context}
 - When giving sales scripts, make them natural and conversational
 - Proactively offer insights when data suggests opportunities
 
-## LANGUAGE
-Respond in the same language the user writes in. Default to Bangla/English mix if unclear.`;
+${languageInstruction}`;
 
     const aiMessages = [
       { role: "system", content: systemPrompt },

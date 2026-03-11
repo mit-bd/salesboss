@@ -664,7 +664,7 @@ serve(async (req) => {
       if (error) return json({ error: error.message }, 400);
       const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id, role");
       const roleMap = new Map((roles || []).map((r: any) => [r.user_id, r.role]));
-      const { data: profiles } = await supabaseAdmin.from("profiles").select("user_id, full_name, project_id");
+      const { data: profiles } = await supabaseAdmin.from("profiles").select("user_id, full_name, project_id, phone, ai_voice_enabled");
       const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
       const result = users
         .filter((u: any) => {
@@ -678,13 +678,23 @@ serve(async (req) => {
           id: u.id,
           email: u.email,
           fullName: profileMap.get(u.id)?.full_name || u.user_metadata?.full_name || "",
+          phone: profileMap.get(u.id)?.phone || "",
           role: roleMap.get(u.id) || null,
           createdAt: u.created_at,
           lastSignIn: u.last_sign_in_at,
           emailConfirmed: !!u.email_confirmed_at,
           banned: u.banned_until ? new Date(u.banned_until) > new Date() : false,
+          aiVoiceEnabled: profileMap.get(u.id)?.ai_voice_enabled || false,
         }));
       return json({ users: result });
+    }
+
+    if (action === "toggle_voice_permission") {
+      const { userId, enabled } = body;
+      if (!userId) return json({ error: "userId required" }, 400);
+      const { error } = await supabaseAdmin.from("profiles").update({ ai_voice_enabled: !!enabled }).eq("user_id", userId);
+      if (error) return json({ error: error.message }, 400);
+      return json({ success: true });
     }
 
     if (action === "toggle_ban") {
