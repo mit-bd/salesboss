@@ -303,7 +303,7 @@ export default function BulkImportPage() {
 
     toast({
       title: "Import Complete",
-      description: `${successCount} orders saved. ${errorCount} rows failed.`,
+      description: `Imported Successfully: ${successCount} Orders.${errorCount > 0 ? ` ${errorCount} rows failed.` : ""}`,
     });
   };
 
