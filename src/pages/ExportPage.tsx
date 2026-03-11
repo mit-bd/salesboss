@@ -59,7 +59,7 @@ export default function ExportPage() {
     });
   }, [activeOrders, dateFrom, dateTo, execFilter, productFilter, deliveryFilter]);
 
-  const getDeliveryName = (id: string) => mockDeliveryPartners.find((dp) => dp.id === id)?.name || id;
+  const getDeliveryName = (id: string) => deliveryPartners.find((dp) => dp.id === id)?.name || id;
 
   const exportOrders = () => {
     downloadCSV(
