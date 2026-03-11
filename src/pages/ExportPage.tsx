@@ -128,8 +128,8 @@ export default function ExportPage() {
   const exports = [
     { label: "All Orders", count: filteredOrders.length, action: exportOrders },
     { label: "Repeat Orders", count: filteredOrders.filter((o) => o.isRepeat).length, action: exportRepeatOrders },
-    { label: "Sales Performance", count: mockSalesExecutives.length, action: exportPerformance },
-    { label: "Products", count: mockProducts.length, action: exportProducts },
+    { label: "Sales Performance", count: members.length, action: exportPerformance },
+    { label: "Products", count: products.length, action: exportProducts },
     { label: "Audit Logs", count: logs.length, action: exportAuditLogs },
   ];
 
