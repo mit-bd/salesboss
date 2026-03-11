@@ -102,6 +102,9 @@ export default function ResetPasswordPage() {
           </Button>
         </form>
       </div>
+      <p className="absolute bottom-4 left-0 right-0 text-center text-xs text-muted-foreground">
+        © 2026 Motion IT BD. All rights reserved.
+      </p>
     </div>
   );
 }
