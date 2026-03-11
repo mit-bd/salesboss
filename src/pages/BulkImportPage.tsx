@@ -15,7 +15,7 @@ import { useOrderSources } from "@/hooks/useOrderSources";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
-import { mockSalesExecutives } from "@/data/mockData";
+
 
 // --- Types ---
 
