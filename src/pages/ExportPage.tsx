@@ -83,11 +83,11 @@ export default function ExportPage() {
   };
 
   const exportPerformance = () => {
-    const data = mockSalesExecutives.map((se) => {
-      const seOrders = filteredOrders.filter((o) => o.assignedTo === se.id);
+    const data = members.map((m) => {
+      const seOrders = filteredOrders.filter((o) => o.assignedTo === m.userId);
       const revenue = seOrders.reduce((s, o) => s + o.price, 0);
       const repeats = seOrders.filter((o) => o.isRepeat).length;
-      return [se.name, se.email, String(seOrders.length), String(repeats), `৳${revenue}`];
+      return [m.name, m.email, String(seOrders.length), String(repeats), `৳${revenue}`];
     });
     downloadCSV(
       "sales_performance_export.csv",
