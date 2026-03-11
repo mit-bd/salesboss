@@ -568,7 +568,9 @@ export default function BulkImportPage() {
                       )}
                     </Button>
                     <Button size="sm" onClick={handleImport} disabled={validCount === 0 || importing}>
-                      {importing ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Importing...</> : `Import ${validCount} Orders`}
+                      {importing ? (
+                        <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Processing {importProgress.current} / {importProgress.total}</>
+                      ) : `Import ${validCount} Orders`}
                     </Button>
                   </div>
                 </div>
