@@ -86,6 +86,13 @@ const navCategories: NavCategory[] = [
     ],
   },
   {
+    label: "Billing",
+    key: "billing",
+    items: [
+      { label: "Billing", icon: CreditCard, path: "/billing" },
+    ],
+  },
+  {
     label: "System",
     key: "system",
     items: [
