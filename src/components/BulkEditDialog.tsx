@@ -9,7 +9,7 @@ import { Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useDeliveryMethods } from "@/hooks/useDeliveryMethods";
 import { useOrderSources } from "@/hooks/useOrderSources";
-import { mockSalesExecutives } from "@/data/mockData";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/contexts/AuditLogContext";
