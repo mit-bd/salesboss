@@ -18,6 +18,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <NotificationPanel />
         </div>
         <div className="px-6 pb-6 lg:px-8">{children}</div>
+        <footer className="border-t border-border px-6 py-4 text-center text-xs text-muted-foreground">
+          © 2026 Motion IT BD. All rights reserved.
+        </footer>
       </main>
       <AiAssistant />
     </div>
