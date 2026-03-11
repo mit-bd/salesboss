@@ -28,12 +28,12 @@ export function useOrderMetrics() {
     const today = new Date().toISOString().slice(0, 10);
 
     const [totalRes, todayRes, pendingRes] = await Promise.all([
-      supabase.from("orders").select("*", { count: "exact", head: true })
-        .eq("project_id" as any, projectId).eq("is_deleted" as any, false),
-      supabase.from("orders").select("*", { count: "exact", head: true })
-        .eq("project_id" as any, projectId).eq("is_deleted" as any, false).eq("order_date" as any, today),
-      supabase.from("orders").select("*", { count: "exact", head: true })
-        .eq("project_id" as any, projectId).eq("is_deleted" as any, false).eq("current_status" as any, "pending"),
+      (supabase.from("orders").select("*", { count: "exact", head: true }) as any)
+        .eq("project_id", projectId).eq("is_deleted", false),
+      (supabase.from("orders").select("*", { count: "exact", head: true }) as any)
+        .eq("project_id", projectId).eq("is_deleted", false).eq("order_date", today),
+      (supabase.from("orders").select("*", { count: "exact", head: true }) as any)
+        .eq("project_id", projectId).eq("is_deleted", false).eq("current_status", "pending"),
     ]);
 
     setMetrics({
