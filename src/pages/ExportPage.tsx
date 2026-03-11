@@ -101,9 +101,9 @@ export default function ExportPage() {
     downloadCSV(
       "products_export.csv",
       ["SKU", "Title", "Price (৳)", "Duration (days)", "Info"],
-      mockProducts.map((p) => [p.sku, p.title, `৳${p.price}`, String(p.packageDuration), p.info])
+      products.map((p) => [p.sku, p.title, `৳${p.price}`, String(p.packageDuration), p.info || ""])
     );
-    toast({ title: "Exported", description: `${mockProducts.length} products exported.` });
+    toast({ title: "Exported", description: `${products.length} products exported.` });
   };
 
   const exportAuditLogs = () => {
