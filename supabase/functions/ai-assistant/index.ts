@@ -24,7 +24,6 @@ serve(async (req) => {
       });
     }
 
-    // Auth
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -47,7 +46,6 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // Get user role and project
     const { data: roleData } = await supabaseAdmin
       .from("user_roles")
       .select("role")
@@ -64,45 +62,61 @@ serve(async (req) => {
     const userName = profileData?.full_name || caller.email;
 
     const body = await req.json();
-    const { messages, action } = body;
+    const { messages } = body;
 
-    // If action requested, handle data queries
-    if (action === "get_context") {
-      const context = await buildContext(supabaseAdmin, callerRole, caller.id, projectId);
-      return new Response(JSON.stringify({ context }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Build system prompt with live data context
+    // Build comprehensive context with learning data
     const context = await buildContext(supabaseAdmin, callerRole, caller.id, projectId);
 
-    const systemPrompt = `You are SalesBoss AI Assistant — a sales copilot for a CRM/Sales Management platform.
+    const systemPrompt = `You are **SalesBoss AI Copilot** — an intelligent sales mentor, analyst, and advisor for a CRM/Sales Management platform.
 
 Current user: ${userName} (Role: ${callerRole})
-${projectId ? `Project ID: ${projectId}` : "No project assigned"}
+Today: ${new Date().toISOString().split("T")[0]}
 
-LIVE DATA CONTEXT:
 ${context}
 
-CAPABILITIES:
-- Provide sales guidance, followup strategies, upsell suggestions
-- Generate customer conversation scripts
-- Analyze performance data and provide insights
-- Answer questions about orders, followups, customers, products
-- Suggest followup timing and repeat order strategies
+## YOUR ROLE — SALES LEARNING COPILOT
 
-RULES:
-- Only reference data from the user's project
-- ${callerRole === "sales_executive" ? "Only show data assigned to this user" : "Can access all project data"}
-- Be concise and actionable
+### 1. SALES COACH
+- Provide tailored followup conversation scripts
+- Suggest customer handling strategies based on actual data patterns
+- Recommend upsell techniques that have worked historically
+- Give repeat order timing advice based on real patterns
+- Adapt advice to the specific followup step
+
+### 2. PERFORMANCE ANALYST
+- Analyze sales executive metrics and identify top performers
+- Identify which followup steps convert best
+- Find patterns in successful upsells and repeat orders
+- Highlight trends in customer behavior
+- Provide data-driven recommendations
+
+### 3. PROACTIVE ADVISOR
+- Alert about overdue followups and urgent items
+- Suggest optimal timing for followups based on patterns
+- Recommend products for upsell based on purchase history
+- Identify at-risk customers who haven't reordered
+- Predict repeat order windows
+
+### 4. CONTEXTUAL MEMORY
+- Use followup notes history to understand customer conversations
+- Reference past interactions when advising on next steps
+- Track which strategies worked for specific customers
+- Remember customer preferences from order history
+
+## RULES
+- Only reference data from the user's project (project_id: ${projectId || "none"})
+- ${callerRole === "sales_executive" ? "Only show data assigned to this user — never reveal other executives' data" : "Can access all project data"}
+- Be concise, actionable, and data-driven
 - Use Bangladesh Taka (৳) for currency
-- Format dates in DD MMM YYYY format
-- When showing data, use clean markdown tables
-- Never reveal internal IDs or technical details to the user
-- If asked to perform an action (create order, assign, etc.), explain that actions must be done through the app interface
+- Format dates as DD MMM YYYY
+- Use clean markdown formatting (tables, bold, lists)
+- Never reveal internal IDs or technical details
+- Actions (create order, assign, etc.) must be done through the app UI — guide the user there
+- When giving sales scripts, make them natural and conversational
+- Proactively offer insights when data suggests opportunities
 
-Respond helpfully in the user's language. Keep answers clear, practical, and data-driven.`;
+## LANGUAGE
+Respond in the same language the user writes in. Default to Bangla/English mix if unclear.`;
 
     const aiMessages = [
       { role: "system", content: systemPrompt },
@@ -125,21 +139,18 @@ Respond helpfully in the user's language. Keep answers clear, practical, and dat
     if (!response.ok) {
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again shortly." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (response.status === 402) {
         return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
       return new Response(JSON.stringify({ error: "AI service unavailable" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -155,6 +166,8 @@ Respond helpfully in the user's language. Keep answers clear, practical, and dat
   }
 });
 
+// ─── COMPREHENSIVE CONTEXT BUILDER ───
+
 async function buildContext(
   supabase: any,
   role: string,
@@ -165,18 +178,19 @@ async function buildContext(
 
   const parts: string[] = [];
   const today = new Date().toISOString().split("T")[0];
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
 
   try {
-    // Orders summary
+    // ── ORDERS ──
     let ordersQuery = supabase
       .from("orders")
-      .select("id, customer_name, current_status, followup_step, followup_date, price, assigned_to_name, is_repeat, is_upsell, order_date, product_title")
+      .select("id, customer_name, mobile, current_status, followup_step, followup_date, price, paid_amount, assigned_to, assigned_to_name, is_repeat, is_upsell, order_date, product_title, product_sku, delivery_method, health, note, parent_order_id")
       .eq("is_deleted", false);
 
     if (projectId) ordersQuery = ordersQuery.eq("project_id", projectId);
     if (role === "sales_executive") ordersQuery = ordersQuery.eq("assigned_to", userId);
 
-    const { data: orders } = await ordersQuery.order("created_at", { ascending: false }).limit(500);
+    const { data: orders } = await ordersQuery.order("created_at", { ascending: false }).limit(800);
 
     if (orders && orders.length > 0) {
       const total = orders.length;
@@ -185,61 +199,220 @@ async function buildContext(
       const repeatOrders = orders.filter((o: any) => o.is_repeat).length;
       const upsellOrders = orders.filter((o: any) => o.is_upsell).length;
       const totalRevenue = orders.reduce((s: number, o: any) => s + Number(o.price || 0), 0);
+      const totalPaid = orders.reduce((s: number, o: any) => s + Number(o.paid_amount || 0), 0);
 
-      const todayFollowups = orders.filter((o: any) => o.followup_date === today && o.current_status === "pending").length;
-      const overdueFollowups = orders.filter((o: any) => o.followup_date && o.followup_date < today && o.current_status === "pending").length;
+      const todayFollowups = orders.filter((o: any) => o.followup_date === today && o.current_status === "pending");
+      const overdueFollowups = orders.filter((o: any) => o.followup_date && o.followup_date < today && o.current_status === "pending");
 
-      parts.push(`ORDERS SUMMARY:
-- Total Orders: ${total}
-- Pending: ${pending}
-- Completed: ${completed}
-- Repeat Orders: ${repeatOrders}
-- Upsell Orders: ${upsellOrders}
-- Total Revenue: ৳${totalRevenue.toLocaleString()}
-- Today's Followups Due: ${todayFollowups}
-- Overdue Followups: ${overdueFollowups}`);
+      // Recent orders (last 30 days)
+      const recentOrders = orders.filter((o: any) => o.order_date >= thirtyDaysAgo);
+      const recentRevenue = recentOrders.reduce((s: number, o: any) => s + Number(o.price || 0), 0);
 
-      // Followup pipeline
-      const stepCounts = [1, 2, 3, 4, 5].map(s => ({
-        step: s,
-        pending: orders.filter((o: any) => o.followup_step === s && o.current_status === "pending").length,
-        completed: orders.filter((o: any) => o.followup_step === s && o.current_status === "completed").length,
-      }));
-      parts.push(`FOLLOWUP PIPELINE:\n${stepCounts.map(s => `Step ${s.step}: ${s.pending} pending, ${s.completed} completed`).join("\n")}`);
+      parts.push(`## ORDERS OVERVIEW
+| Metric | Value |
+|--------|-------|
+| Total Orders | ${total} |
+| Pending | ${pending} |
+| Completed | ${completed} |
+| Repeat Orders | ${repeatOrders} (${total > 0 ? ((repeatOrders / total) * 100).toFixed(1) : 0}%) |
+| Upsell Orders | ${upsellOrders} |
+| Total Revenue | ৳${totalRevenue.toLocaleString()} |
+| Collected | ৳${totalPaid.toLocaleString()} |
+| Due | ৳${(totalRevenue - totalPaid).toLocaleString()} |
+| Last 30 Days Revenue | ৳${recentRevenue.toLocaleString()} |
+| Today's Followups | ${todayFollowups.length} |
+| Overdue Followups | ${overdueFollowups.length} |`);
 
-      // Top customers
-      const customerCounts: Record<string, { count: number; revenue: number }> = {};
-      orders.forEach((o: any) => {
-        if (!customerCounts[o.customer_name]) customerCounts[o.customer_name] = { count: 0, revenue: 0 };
-        customerCounts[o.customer_name].count++;
-        customerCounts[o.customer_name].revenue += Number(o.price || 0);
+      // Followup pipeline with conversion analysis
+      const stepCounts = [1, 2, 3, 4, 5].map(s => {
+        const stepOrders = orders.filter((o: any) => o.followup_step === s);
+        const stepPending = stepOrders.filter((o: any) => o.current_status === "pending").length;
+        const stepCompleted = stepOrders.filter((o: any) => o.current_status === "completed").length;
+        return { step: s, total: stepOrders.length, pending: stepPending, completed: stepCompleted };
       });
-      const topCustomers = Object.entries(customerCounts)
-        .sort((a, b) => b[1].revenue - a[1].revenue)
-        .slice(0, 5);
-      if (topCustomers.length > 0) {
-        parts.push(`TOP CUSTOMERS:\n${topCustomers.map(([name, data]) => `- ${name}: ${data.count} orders, ৳${data.revenue.toLocaleString()}`).join("\n")}`);
+      parts.push(`## FOLLOWUP PIPELINE
+${stepCounts.map(s => `- **Step ${s.step}**: ${s.pending} pending, ${s.completed} completed (${s.total} total)`).join("\n")}`);
+
+      // Today's followups detail
+      if (todayFollowups.length > 0) {
+        parts.push(`## TODAY'S FOLLOWUPS (${todayFollowups.length})
+${todayFollowups.slice(0, 15).map((o: any) => `- ${o.customer_name} — Step ${o.followup_step}, ${o.product_title || "N/A"}, ৳${Number(o.price || 0).toLocaleString()}`).join("\n")}`);
       }
 
       // Overdue details
-      if (overdueFollowups > 0) {
-        const overdue = orders
-          .filter((o: any) => o.followup_date && o.followup_date < today && o.current_status === "pending")
-          .slice(0, 10);
-        parts.push(`OVERDUE FOLLOWUPS (top 10):\n${overdue.map((o: any) => `- ${o.customer_name} (Step ${o.followup_step}, due ${o.followup_date})`).join("\n")}`);
+      if (overdueFollowups.length > 0) {
+        parts.push(`## ⚠ OVERDUE FOLLOWUPS (${overdueFollowups.length})
+${overdueFollowups.slice(0, 15).map((o: any) => `- ${o.customer_name} — Step ${o.followup_step}, due ${o.followup_date}, ${o.product_title || "N/A"}`).join("\n")}`);
+      }
+
+      // Health analysis
+      const healthCounts: Record<string, number> = {};
+      orders.forEach((o: any) => { healthCounts[o.health] = (healthCounts[o.health] || 0) + 1; });
+      parts.push(`## ORDER HEALTH
+${Object.entries(healthCounts).map(([h, c]) => `- ${h}: ${c}`).join("\n")}`);
+
+      // Top customers
+      const customerMap: Record<string, { count: number; revenue: number; lastOrder: string; repeats: number }> = {};
+      orders.forEach((o: any) => {
+        if (!customerMap[o.customer_name]) customerMap[o.customer_name] = { count: 0, revenue: 0, lastOrder: o.order_date, repeats: 0 };
+        customerMap[o.customer_name].count++;
+        customerMap[o.customer_name].revenue += Number(o.price || 0);
+        if (o.is_repeat) customerMap[o.customer_name].repeats++;
+        if (o.order_date > customerMap[o.customer_name].lastOrder) customerMap[o.customer_name].lastOrder = o.order_date;
+      });
+      const topCustomers = Object.entries(customerMap).sort((a, b) => b[1].revenue - a[1].revenue).slice(0, 10);
+      parts.push(`## TOP CUSTOMERS
+${topCustomers.map(([name, d]) => `- **${name}**: ${d.count} orders, ৳${d.revenue.toLocaleString()}, ${d.repeats} repeats, last order: ${d.lastOrder}`).join("\n")}`);
+
+      // Product performance
+      const productMap: Record<string, { count: number; revenue: number; repeats: number; upsells: number }> = {};
+      orders.forEach((o: any) => {
+        const key = o.product_title || "Unknown";
+        if (!productMap[key]) productMap[key] = { count: 0, revenue: 0, repeats: 0, upsells: 0 };
+        productMap[key].count++;
+        productMap[key].revenue += Number(o.price || 0);
+        if (o.is_repeat) productMap[key].repeats++;
+        if (o.is_upsell) productMap[key].upsells++;
+      });
+      const topProducts = Object.entries(productMap).sort((a, b) => b[1].count - a[1].count).slice(0, 10);
+      parts.push(`## PRODUCT PERFORMANCE
+${topProducts.map(([name, d]) => `- **${name}**: ${d.count} orders, ৳${d.revenue.toLocaleString()}, ${d.repeats} repeats, ${d.upsells} upsells`).join("\n")}`);
+
+      // Repeat order timing patterns
+      const repeatTimings: number[] = [];
+      const repeatChildren = orders.filter((o: any) => o.is_repeat && o.parent_order_id);
+      const orderById = new Map(orders.map((o: any) => [o.id, o]));
+      repeatChildren.forEach((child: any) => {
+        const parent = orderById.get(child.parent_order_id);
+        if (parent) {
+          const days = Math.round((new Date(child.order_date).getTime() - new Date(parent.order_date).getTime()) / 86400000);
+          if (days > 0 && days < 365) repeatTimings.push(days);
+        }
+      });
+      if (repeatTimings.length > 0) {
+        const avgDays = Math.round(repeatTimings.reduce((a, b) => a + b, 0) / repeatTimings.length);
+        const minDays = Math.min(...repeatTimings);
+        const maxDays = Math.max(...repeatTimings);
+        parts.push(`## REPEAT ORDER PATTERNS (LEARNED)
+- Average repeat interval: **${avgDays} days**
+- Fastest repeat: ${minDays} days
+- Longest repeat: ${maxDays} days
+- Total repeat orders analyzed: ${repeatTimings.length}
+- 💡 Insight: Customers typically reorder around day ${avgDays}. Proactively reach out a few days earlier.`);
+      }
+
+      // SE Performance (admin/owner)
+      if (role === "admin" || role === "owner") {
+        const seMap: Record<string, { name: string; orders: number; revenue: number; repeats: number; upsells: number; pending: number }> = {};
+        orders.forEach((o: any) => {
+          if (!o.assigned_to) return;
+          if (!seMap[o.assigned_to]) seMap[o.assigned_to] = { name: o.assigned_to_name || "Unknown", orders: 0, revenue: 0, repeats: 0, upsells: 0, pending: 0 };
+          seMap[o.assigned_to].orders++;
+          seMap[o.assigned_to].revenue += Number(o.price || 0);
+          if (o.is_repeat) seMap[o.assigned_to].repeats++;
+          if (o.is_upsell) seMap[o.assigned_to].upsells++;
+          if (o.current_status === "pending") seMap[o.assigned_to].pending++;
+        });
+        const sePerformance = Object.entries(seMap).sort((a, b) => b[1].revenue - a[1].revenue);
+        if (sePerformance.length > 0) {
+          parts.push(`## SALES EXECUTIVE PERFORMANCE
+${sePerformance.map(([_, d]) => `- **${d.name}**: ${d.orders} orders, ৳${d.revenue.toLocaleString()}, ${d.repeats} repeats, ${d.upsells} upsells, ${d.pending} pending`).join("\n")}`);
+        }
       }
     }
 
-    // Products
+    // ── FOLLOWUP HISTORY (Learning Data) ──
+    const orderIds = (orders || []).map((o: any) => o.id);
+    if (orderIds.length > 0) {
+      const { data: followups } = await supabase
+        .from("followup_history")
+        .select("order_id, step_number, note, problems_discussed, upsell_attempted, upsell_details, next_followup_date, completed_by_name, completed_at")
+        .in("order_id", orderIds.slice(0, 200))
+        .order("completed_at", { ascending: false })
+        .limit(300);
+
+      if (followups && followups.length > 0) {
+        // Conversion analysis per step
+        const stepAnalysis: Record<number, { total: number; upsellAttempted: number; withProblems: number; notes: string[] }> = {};
+        followups.forEach((f: any) => {
+          if (!stepAnalysis[f.step_number]) stepAnalysis[f.step_number] = { total: 0, upsellAttempted: 0, withProblems: 0, notes: [] };
+          stepAnalysis[f.step_number].total++;
+          if (f.upsell_attempted) stepAnalysis[f.step_number].upsellAttempted++;
+          if (f.problems_discussed) stepAnalysis[f.step_number].withProblems++;
+          if (f.note) stepAnalysis[f.step_number].notes.push(f.note);
+        });
+
+        parts.push(`## FOLLOWUP INSIGHTS (LEARNED)
+${Object.entries(stepAnalysis).sort((a, b) => Number(a[0]) - Number(b[0])).map(([step, d]) => 
+  `- **Step ${step}**: ${d.total} completed, ${d.upsellAttempted} upsell attempts (${d.total > 0 ? ((d.upsellAttempted / d.total) * 100).toFixed(0) : 0}%), ${d.withProblems} with problems reported`
+).join("\n")}`);
+
+        // Recent followup notes (for memory/context)
+        const recentNotes = followups
+          .filter((f: any) => f.note)
+          .slice(0, 20)
+          .map((f: any) => {
+            const order = (orders || []).find((o: any) => o.id === f.order_id);
+            return `[Step ${f.step_number}] ${order?.customer_name || "?"}: "${f.note}"${f.problems_discussed ? ` | Problems: "${f.problems_discussed}"` : ""}`;
+          });
+        if (recentNotes.length > 0) {
+          parts.push(`## RECENT FOLLOWUP NOTES (MEMORY)
+${recentNotes.join("\n")}`);
+        }
+      }
+
+      // Upsell records analysis
+      const { data: upsells } = await supabase
+        .from("upsell_records")
+        .select("followup_id, product_name, price, note")
+        .limit(100);
+
+      if (upsells && upsells.length > 0) {
+        const upsellProducts: Record<string, { count: number; totalValue: number }> = {};
+        upsells.forEach((u: any) => {
+          const key = u.product_name || "Unknown";
+          if (!upsellProducts[key]) upsellProducts[key] = { count: 0, totalValue: 0 };
+          upsellProducts[key].count++;
+          upsellProducts[key].totalValue += Number(u.price || 0);
+        });
+        const topUpsells = Object.entries(upsellProducts).sort((a, b) => b[1].count - a[1].count).slice(0, 5);
+        parts.push(`## UPSELL PATTERNS (LEARNED)
+Most successful upsell products:
+${topUpsells.map(([name, d]) => `- **${name}**: ${d.count} times, ৳${d.totalValue.toLocaleString()} total`).join("\n")}`);
+      }
+
+      // Repeat order records
+      const { data: repeats } = await supabase
+        .from("repeat_order_records")
+        .select("product_name, price, note")
+        .limit(100);
+
+      if (repeats && repeats.length > 0) {
+        const repeatProducts: Record<string, { count: number; totalValue: number }> = {};
+        repeats.forEach((r: any) => {
+          const key = r.product_name || "Unknown";
+          if (!repeatProducts[key]) repeatProducts[key] = { count: 0, totalValue: 0 };
+          repeatProducts[key].count++;
+          repeatProducts[key].totalValue += Number(r.price || 0);
+        });
+        const topRepeats = Object.entries(repeatProducts).sort((a, b) => b[1].count - a[1].count).slice(0, 5);
+        parts.push(`## REPEAT ORDER PATTERNS (LEARNED)
+Most repeated products:
+${topRepeats.map(([name, d]) => `- **${name}**: ${d.count} times, ৳${d.totalValue.toLocaleString()} total`).join("\n")}`);
+      }
+    }
+
+    // ── PRODUCTS ──
     let productsQuery = supabase.from("products").select("title, sku, price, package_duration");
     if (projectId) productsQuery = productsQuery.eq("project_id", projectId);
     const { data: products } = await productsQuery.limit(50);
 
     if (products && products.length > 0) {
-      parts.push(`PRODUCTS:\n${products.map((p: any) => `- ${p.title} (${p.sku}): ৳${p.price}, ${p.package_duration} days`).join("\n")}`);
+      parts.push(`## PRODUCTS CATALOG
+${products.map((p: any) => `- **${p.title}** (${p.sku}): ৳${p.price}, ${p.package_duration} day package`).join("\n")}`);
     }
 
-    // Team (admin/owner only)
+    // ── TEAM (admin/owner) ──
     if (role === "admin" || role === "owner") {
       let profilesQuery = supabase.from("profiles").select("user_id, full_name");
       if (projectId) profilesQuery = profilesQuery.eq("project_id", projectId);
@@ -253,9 +426,11 @@ async function buildContext(
           .in("user_id", userIds);
 
         const roleMap = new Map((roles || []).map((r: any) => [r.user_id, r.role]));
-        parts.push(`TEAM MEMBERS:\n${profiles.map((p: any) => `- ${p.full_name || "Unnamed"} (${roleMap.get(p.user_id) || "no role"})`).join("\n")}`);
+        parts.push(`## TEAM
+${profiles.map((p: any) => `- ${p.full_name || "Unnamed"} — ${roleMap.get(p.user_id) || "no role"}`).join("\n")}`);
       }
     }
+
   } catch (err) {
     console.error("Context build error:", err);
     parts.push("Error loading some data context.");
