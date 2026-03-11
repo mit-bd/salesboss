@@ -270,7 +270,11 @@ export default function AppSidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 flex w-60 flex-col bg-sidebar border-r border-sidebar-border">
       {/* Brand */}
-      <div className="flex h-14 items-center gap-2 px-5 border-b border-sidebar-border shrink-0">
+      <div
+        className="flex h-14 items-center gap-2 px-5 border-b border-sidebar-border shrink-0 cursor-pointer"
+        onClick={() => window.location.reload()}
+        title="Reload page"
+      >
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary">
           <PhoneForwarded className="h-4 w-4 text-sidebar-primary-foreground" />
         </div>
