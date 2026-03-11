@@ -325,8 +325,8 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
+      {/* Pagination (only when not using external/server-side pagination) */}
+      {!disableInternalPagination && totalPages > 1 && (
         <div className="flex items-center justify-between border-t border-border px-4 py-2.5 bg-muted/30">
           <p className="text-xs text-muted-foreground">{page * pageSize + 1}–{Math.min((page + 1) * pageSize, orders.length)} of {orders.length}</p>
           <div className="flex items-center gap-1">
