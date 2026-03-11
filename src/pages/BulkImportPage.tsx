@@ -369,6 +369,8 @@ export default function BulkImportPage() {
     setParsedData(null);
     setImportResults(null);
     setAiReport(null);
+    setVerificationReport(null);
+    setImportProgress({ current: 0, total: 0 });
   };
 
   const validCount = parsedData?.filter((r) => !r.error).length ?? 0;
