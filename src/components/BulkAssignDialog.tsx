@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Loader2, UserPlus } from "lucide-react";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { mockSalesExecutives } from "@/data/mockData";
+
 
 interface BulkAssignDialogProps {
   open: boolean;
