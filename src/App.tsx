@@ -44,6 +44,7 @@ import CommissionPage from "./pages/CommissionPage";
 import RolesPage from "./pages/RolesPage";
 import OrderSourcesPage from "./pages/OrderSourcesPage";
 import CustomerProfilePage from "./pages/CustomerProfilePage";
+import BillingPage from "./pages/BillingPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -99,6 +100,7 @@ const App = () => (
                         <Route path="/backup-center" element={<ProtectedRoute requiredPermission="backup.view"><BackupCenterPage /></ProtectedRoute>} />
                         <Route path="/commission" element={<ProtectedRoute requiredPermission="commission.view"><CommissionPage /></ProtectedRoute>} />
                         <Route path="/order-sources" element={<ProtectedRoute><OrderSourcesPage /></ProtectedRoute>} />
+                        <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
                         <Route path="/customers/:id" element={<ProtectedRoute><CustomerProfilePage /></ProtectedRoute>} />
 
                         <Route path="*" element={<NotFound />} />

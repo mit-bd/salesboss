@@ -9,7 +9,7 @@ import { ShoppingCart, DollarSign, TrendingUp, RefreshCw, PhoneForwarded, Zap, S
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import GlobalFilters, { FilterState, EMPTY_FILTERS } from "@/components/GlobalFilters";
 import { Input } from "@/components/ui/input";
-import SubscriptionStatusCard from "@/components/SubscriptionStatusCard";
+
 import AiInsightsWidget from "@/components/AiInsightsWidget";
 
 const STEP_LABELS = ["1st Followup", "2nd Followup", "3rd Followup", "4th Followup", "5th Followup"];
@@ -92,12 +92,8 @@ export default function DashboardPage() {
     <AppLayout>
       <PageHeader title="Dashboard" description="Sales overview and followup performance" />
 
-      {/* Subscription Status Card for Admin */}
-      {role === "admin" && (
-        <div className="mb-6">
-          <SubscriptionStatusCard />
-        </div>
-      )}
+
+
 
       <div ref={searchRef} className="relative mb-6 max-w-lg">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
