@@ -38,6 +38,9 @@ export default function ExportPage() {
   const { logs } = useAuditLog();
   const { isAdmin } = useRole();
   const { toast } = useToast();
+  const { members } = useTeamMembers();
+  const { products } = useProductStore();
+  const { methods: deliveryPartners } = useDeliveryMethods({ activeOnly: false });
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
