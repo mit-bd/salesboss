@@ -51,7 +51,8 @@ export default function SalesExecutivesPage() {
       .from("profiles")
       .select("user_id, full_name, project_id");
 
-    const currentUserProfile = (profiles || []).find((p) => p.user_id === (await supabase.auth.getUser()).data.user?.id);
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    const currentUserProfile = (profiles || []).find((p) => p.user_id === currentUser?.id);
     const currentProjectId = currentUserProfile?.project_id;
 
     const projectSEProfiles = (profiles || []).filter(
