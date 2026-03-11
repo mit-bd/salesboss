@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Button } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Bot, X, Send, Loader2, Sparkles, MessageSquare, TrendingUp, RotateCcw, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
