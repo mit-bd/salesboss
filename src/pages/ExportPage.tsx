@@ -163,7 +163,7 @@ export default function ExportPage() {
             <SelectTrigger className="h-9 w-44 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All</SelectItem>
-              {mockProducts.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+              {products.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
