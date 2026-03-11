@@ -41,6 +41,8 @@ export default function GlobalFilters({ filters, onChange, showStepFilter = true
   const [open, setOpen] = useState(false);
   const { sources: orderSources } = useOrderSources();
   const { methods: activePartners } = useDeliveryMethods({ activeOnly: true });
+  const { members } = useTeamMembers();
+  const { products } = useProductStore();
 
   const hasActiveFilters = Object.values(filters).some((v) => v !== "");
 
