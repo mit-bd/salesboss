@@ -80,7 +80,7 @@ export default function SalesExecutivesPage() {
       .from("orders")
       .select("*")
       .eq("is_deleted", false)
-      .in("assigned_to", seUserIds);
+      .in("assigned_to", filteredSeUserIds);
 
     setOrders(ordersData || []);
 
