@@ -24,11 +24,7 @@ export default function BulkAssignDialog({
   const [selectedExec, setSelectedExec] = useState("");
   const { members, loading: teamLoading } = useTeamMembers();
 
-  // Combine DB team members with mock executives for backward compatibility
-  const allExecutives = [
-    ...members.map((m) => ({ id: m.userId, name: m.name })),
-    ...mockSalesExecutives.filter((se) => !members.some((m) => m.userId === se.id)).map((se) => ({ id: se.id, name: se.name })),
-  ];
+  const allExecutives = members.map((m) => ({ id: m.userId, name: m.name }));
 
   const handleAssign = async () => {
     if (!selectedExec) return;

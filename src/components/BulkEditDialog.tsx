@@ -42,10 +42,7 @@ export default function BulkEditDialog({ open, onOpenChange, selectedIds, onComp
   const { sources: orderSources } = useOrderSources({ activeOnly: true });
   const { buildVersionMap, handleConflictResponse, conflict, clearConflict } = useBulkConflict();
 
-  const allExecutives = [
-    ...members.map((m) => ({ id: m.userId, name: m.name })),
-    ...mockSalesExecutives.filter((se) => !members.some((m) => m.userId === se.id)).map((se) => ({ id: se.id, name: se.name })),
-  ];
+  const allExecutives = members.map((m) => ({ id: m.userId, name: m.name }));
 
   const [fields, setFields] = useState<Record<string, FieldState>>({
     assignedTo: { enabled: false, value: "" },

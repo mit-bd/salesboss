@@ -100,7 +100,7 @@ export default function GlobalFilters({ filters, onChange, showStepFilter = true
               <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="All" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
-                {mockProducts.map((p) => (
+                {products.map((p) => (
                   <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
                 ))}
               </SelectContent>

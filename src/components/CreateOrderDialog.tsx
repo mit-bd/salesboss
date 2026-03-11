@@ -35,10 +35,7 @@ export default function CreateOrderDialog() {
   const { addOrder } = useOrderStore();
   const { members } = useTeamMembers();
 
-  const allExecutives = [
-    ...members.map((m) => ({ id: m.userId, name: m.name })),
-    ...mockSalesExecutives.filter((se) => !members.some((m) => m.userId === se.id)).map((se) => ({ id: se.id, name: se.name })),
-  ];
+  const allExecutives = members.map((m) => ({ id: m.userId, name: m.name }));
 
   const [form, setForm] = useState({
     customerName: "",
