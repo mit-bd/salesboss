@@ -305,14 +305,67 @@ ${topProducts.map(([name, d]) => `- **${name}**: ${d.count} orders, ৳${d.reven
 - Longest repeat: ${maxDays} days
 - Total repeat orders analyzed: ${repeatTimings.length}
 - 💡 Insight: Customers typically reorder around day ${avgDays}. Proactively reach out a few days earlier.`);
+
+        // ── REPEAT ORDER PREDICTIONS ──
+        const todayMs = new Date(today).getTime();
+        const predictions: { name: string; lastOrder: string; avgInterval: number; predictedDate: string; daysUntil: number; status: string }[] = [];
+
+        // Build per-customer repeat intervals
+        const customerIntervals: Record<string, { intervals: number[]; lastOrder: string }> = {};
+        orders.forEach((o: any) => {
+          if (!customerIntervals[o.customer_name]) customerIntervals[o.customer_name] = { intervals: [], lastOrder: o.order_date };
+          if (o.order_date > customerIntervals[o.customer_name].lastOrder) {
+            customerIntervals[o.customer_name].lastOrder = o.order_date;
+          }
+        });
+
+        // Calculate intervals for customers with repeats
+        const customerOrders: Record<string, string[]> = {};
+        orders.forEach((o: any) => {
+          if (!customerOrders[o.customer_name]) customerOrders[o.customer_name] = [];
+          customerOrders[o.customer_name].push(o.order_date);
+        });
+
+        Object.entries(customerOrders).forEach(([name, dates]) => {
+          if (dates.length < 2) return;
+          const sorted = [...new Set(dates)].sort();
+          const intervals: number[] = [];
+          for (let i = 1; i < sorted.length; i++) {
+            const gap = Math.round((new Date(sorted[i]).getTime() - new Date(sorted[i - 1]).getTime()) / 86400000);
+            if (gap > 0 && gap < 365) intervals.push(gap);
+          }
+          if (intervals.length === 0) return;
+
+          const custAvg = Math.round(intervals.reduce((a, b) => a + b, 0) / intervals.length);
+          const lastDate = sorted[sorted.length - 1];
+          const predictedMs = new Date(lastDate).getTime() + custAvg * 86400000;
+          const predictedDate = new Date(predictedMs).toISOString().split("T")[0];
+          const daysUntil = Math.round((predictedMs - todayMs) / 86400000);
+          const status = daysUntil < 0 ? "🔴 OVERDUE" : daysUntil <= 7 ? "🟡 SOON" : "🟢 UPCOMING";
+
+          predictions.push({ name, lastOrder: lastDate, avgInterval: custAvg, predictedDate, daysUntil, status });
+        });
+
+        // Sort: overdue first, then soonest
+        predictions.sort((a, b) => a.daysUntil - b.daysUntil);
+        const relevantPredictions = predictions.filter(p => p.daysUntil <= 30);
+
+        if (relevantPredictions.length > 0) {
+          parts.push(`## 🔮 REPEAT ORDER PREDICTIONS
+${relevantPredictions.slice(0, 15).map(p =>
+  `- ${p.status} **${p.name}**: avg interval ${p.avgInterval}d, last order ${p.lastOrder}, predicted reorder: **${p.predictedDate}** (${p.daysUntil < 0 ? Math.abs(p.daysUntil) + "d overdue" : p.daysUntil + "d away"})`
+).join("\n")}
+
+💡 Use these predictions to proactively reach out to customers before their expected reorder date.`);
+        }
       }
 
       // SE Performance (admin/owner)
       if (role === "admin" || role === "owner") {
-        const seMap: Record<string, { name: string; orders: number; revenue: number; repeats: number; upsells: number; pending: number }> = {};
+        const seMap: Record<string, { name: string; orders: number; revenue: number; repeats: number; upsells: number; pending: number; completedFollowups: number }> = {};
         orders.forEach((o: any) => {
           if (!o.assigned_to) return;
-          if (!seMap[o.assigned_to]) seMap[o.assigned_to] = { name: o.assigned_to_name || "Unknown", orders: 0, revenue: 0, repeats: 0, upsells: 0, pending: 0 };
+          if (!seMap[o.assigned_to]) seMap[o.assigned_to] = { name: o.assigned_to_name || "Unknown", orders: 0, revenue: 0, repeats: 0, upsells: 0, pending: 0, completedFollowups: 0 };
           seMap[o.assigned_to].orders++;
           seMap[o.assigned_to].revenue += Number(o.price || 0);
           if (o.is_repeat) seMap[o.assigned_to].repeats++;
@@ -321,8 +374,36 @@ ${topProducts.map(([name, d]) => `- **${name}**: ${d.count} orders, ৳${d.reven
         });
         const sePerformance = Object.entries(seMap).sort((a, b) => b[1].revenue - a[1].revenue);
         if (sePerformance.length > 0) {
+          const topSE = sePerformance[0][1];
+          const bestRepeatSE = sePerformance.sort((a, b) => b[1].repeats - a[1].repeats)[0]?.[1];
           parts.push(`## SALES EXECUTIVE PERFORMANCE
-${sePerformance.map(([_, d]) => `- **${d.name}**: ${d.orders} orders, ৳${d.revenue.toLocaleString()}, ${d.repeats} repeats, ${d.upsells} upsells, ${d.pending} pending`).join("\n")}`);
+${sePerformance.map(([_, d]) => `- **${d.name}**: ${d.orders} orders, ৳${d.revenue.toLocaleString()}, ${d.repeats} repeats, ${d.upsells} upsells, ${d.pending} pending`).join("\n")}
+
+🏆 Top Revenue: **${topSE.name}** (৳${topSE.revenue.toLocaleString()})
+🔁 Best Repeats: **${bestRepeatSE?.name}** (${bestRepeatSE?.repeats} repeats)`);
+        }
+
+        // Cross-sell patterns
+        const customerProducts: Record<string, Set<string>> = {};
+        orders.forEach((o: any) => {
+          if (!o.product_title) return;
+          if (!customerProducts[o.customer_name]) customerProducts[o.customer_name] = new Set();
+          customerProducts[o.customer_name].add(o.product_title);
+        });
+        const productPairs: Record<string, number> = {};
+        Object.values(customerProducts).forEach(products => {
+          const arr = [...products];
+          for (let i = 0; i < arr.length; i++) {
+            for (let j = i + 1; j < arr.length; j++) {
+              const key = [arr[i], arr[j]].sort().join(" + ");
+              productPairs[key] = (productPairs[key] || 0) + 1;
+            }
+          }
+        });
+        const topPairs = Object.entries(productPairs).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        if (topPairs.length > 0 && topPairs[0][1] > 1) {
+          parts.push(`## CROSS-SELL PATTERNS (LEARNED)
+${topPairs.filter(([_, c]) => c > 1).map(([pair, count]) => `- **${pair}**: bought together by ${count} customers`).join("\n")}`);
         }
       }
     }
