@@ -6,6 +6,98 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ─── TOOL DEFINITIONS FOR AI COMMAND EXECUTION ───
+const ACTION_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "search_orders",
+      description: "Search orders by customer name, phone number, or invoice ID. Returns matching orders.",
+      parameters: {
+        type: "object",
+        properties: {
+          customer_name: { type: "string", description: "Customer name to search for (partial match)" },
+          phone: { type: "string", description: "Phone/mobile number to search" },
+          invoice_id: { type: "string", description: "Invoice ID to search" },
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_products",
+      description: "Search products by name or SKU. Returns matching products with id, title, sku, price.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Product name or SKU to search for" },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_action",
+      description: "Propose an action to execute on the system. The user must confirm before execution. Use this when you have identified the target order and action to perform.",
+      parameters: {
+        type: "object",
+        properties: {
+          action_type: {
+            type: "string",
+            enum: ["update_order_product", "update_order_status", "update_order_note", "update_order_price", "assign_order", "update_followup_date", "update_delivery_method", "update_order_source"],
+            description: "Type of action to perform",
+          },
+          order_id: { type: "string", description: "UUID of the target order" },
+          order_display: { type: "string", description: "Human-readable order identifier (invoice or customer name)" },
+          updates: {
+            type: "object",
+            description: "Key-value pairs of fields to update",
+            properties: {
+              product_id: { type: "string" },
+              product_title: { type: "string" },
+              product_sku: { type: "string" },
+              price: { type: "number" },
+              note: { type: "string" },
+              current_status: { type: "string" },
+              health: { type: "string" },
+              assigned_to: { type: "string" },
+              assigned_to_name: { type: "string" },
+              followup_date: { type: "string" },
+              delivery_method: { type: "string" },
+              order_source: { type: "string" },
+            },
+            additionalProperties: false,
+          },
+          summary: { type: "string", description: "Human-readable summary of the proposed change" },
+        },
+        required: ["action_type", "order_id", "order_display", "updates", "summary"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_team_members",
+      description: "Search team members (sales executives) by name. Returns user_id and full_name.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Name to search for" },
+        },
+        required: ["name"],
+        additionalProperties: false,
+      },
+    },
+  },
+];
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -19,16 +111,14 @@ serve(async (req) => {
 
     if (!lovableApiKey) {
       return new Response(JSON.stringify({ error: "AI not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -39,31 +129,29 @@ serve(async (req) => {
     const { data: { user: caller }, error: userError } = await callerClient.auth.getUser(token);
     if (userError || !caller) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
     const { data: roleData } = await supabaseAdmin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", caller.id)
-      .maybeSingle();
+      .from("user_roles").select("role").eq("user_id", caller.id).maybeSingle();
     const callerRole = roleData?.role || "sales_executive";
 
     const { data: profileData } = await supabaseAdmin
-      .from("profiles")
-      .select("project_id, full_name")
-      .eq("user_id", caller.id)
-      .maybeSingle();
+      .from("profiles").select("project_id, full_name").eq("user_id", caller.id).maybeSingle();
     const projectId = profileData?.project_id;
     const userName = profileData?.full_name || caller.email;
 
     const body = await req.json();
-    const { messages, language } = body;
+    const { messages, language, action } = body;
     const lang = language === "bn" ? "bn" : "en";
+
+    // ─── ACTION: EXECUTE CONFIRMED ACTION ───
+    if (action === "execute") {
+      return await handleExecuteAction(supabaseAdmin, body, callerRole, caller.id, projectId, userName);
+    }
 
     // Build comprehensive context with learning data
     const context = await buildContext(supabaseAdmin, callerRole, caller.id, projectId);
@@ -72,7 +160,30 @@ serve(async (req) => {
       ? `\n\n## LANGUAGE INSTRUCTION\nYou MUST respond entirely in Bengali (বাংলা). Use simple, everyday Bengali. Do NOT mix English unless absolutely necessary for technical terms. All analysis, suggestions, scripts, and insights must be in Bengali.`
       : `\n\n## LANGUAGE INSTRUCTION\nRespond in English. Keep it clear and professional.`;
 
-    const systemPrompt = `You are **SalesBoss AI Copilot** — an intelligent sales mentor, analyst, and advisor for a CRM/Sales Management platform.
+    const commandInstruction = `
+## AI COMMAND EXECUTION CAPABILITY
+
+You can now **execute actions** on the system! When the user asks you to perform an action (add product, update order, assign, etc.), follow this process:
+
+1. **Search first**: Use \`search_orders\` to find the target order, \`search_products\` to match products, \`search_team_members\` to find team members
+2. **Propose action**: Once you've identified the target, use \`propose_action\` to propose the change
+3. **Never assume**: Always search to verify data before proposing actions
+4. **Be specific**: Show the user exactly what will change before they confirm
+
+### Supported actions:
+- Add/change product on an order
+- Update order status, health, price, note
+- Assign order to a sales executive
+- Update followup date, delivery method, order source
+
+### Important rules:
+- ${callerRole === "sales_executive" ? "You can only modify orders assigned to this user" : "You can modify any order in the project"}
+- Always use propose_action — never claim to have executed something without it
+- If multiple orders match, ask the user to clarify
+- If no orders match, inform the user clearly
+`;
+
+    const systemPrompt = `You are **SalesBoss AI Copilot** — an intelligent sales mentor, analyst, advisor, AND action executor for a CRM/Sales Management platform.
 
 Current user: ${userName} (Role: ${callerRole})
 Today: ${new Date().toISOString().split("T")[0]}
@@ -103,16 +214,15 @@ ${context}
 
 ### 4. AUTONOMOUS ADVISOR
 - Proactively provide alerts: overdue followups, repeat opportunities, at-risk customers
-- Suggest automation improvements: "Step 2 followups convert better than Step 1"
-- Cross-sell insights: "Customers buying Product A often buy Product B"
-- Timing insights: "Followups after 7 days increase repeat orders"
-- SE coaching: suggest which executives need support based on metrics
+- Suggest automation improvements
+- Cross-sell insights
+- SE coaching
 
 ### 5. CONTEXTUAL MEMORY
 - Use followup notes history to understand customer conversations
-- Reference past interactions when advising on next steps
-- Track which strategies worked for specific customers
-- Remember customer preferences from order history
+- Reference past interactions when advising
+
+${commandInstruction}
 
 ## RULES
 - Only reference data from the user's project (project_id: ${projectId || "none"})
@@ -121,10 +231,8 @@ ${context}
 - Use Bangladesh Taka (৳) for currency
 - Format dates as DD MMM YYYY
 - Use clean markdown formatting (tables, bold, lists)
-- Never reveal internal IDs or technical details
-- Actions (create order, assign, etc.) must be done through the app UI — guide the user there
+- Never reveal internal IDs or technical details to the user
 - When giving sales scripts, make them natural and conversational
-- Proactively offer insights when data suggests opportunities
 
 ${languageInstruction}`;
 
@@ -133,7 +241,221 @@ ${languageInstruction}`;
       ...(messages || []),
     ];
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // First call: check if AI wants to use tools
+    const toolResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${lovableApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: aiMessages,
+        tools: ACTION_TOOLS,
+        stream: false,
+      }),
+    });
+
+    if (!toolResponse.ok) {
+      if (toolResponse.status === 429) {
+        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again shortly." }), {
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (toolResponse.status === 402) {
+        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits." }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const errorText = await toolResponse.text();
+      console.error("AI gateway error:", toolResponse.status, errorText);
+      return new Response(JSON.stringify({ error: "AI service unavailable" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const toolResult = await toolResponse.json();
+    const choice = toolResult.choices?.[0];
+
+    if (!choice) {
+      return new Response(JSON.stringify({ error: "No AI response" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // If AI wants to call tools, handle them
+    if (choice.finish_reason === "tool_calls" || choice.message?.tool_calls?.length > 0) {
+      const toolCalls = choice.message.tool_calls;
+      const toolResults: any[] = [];
+
+      for (const tc of toolCalls) {
+        const args = typeof tc.function.arguments === "string" ? JSON.parse(tc.function.arguments) : tc.function.arguments;
+        let result: any;
+
+        switch (tc.function.name) {
+          case "search_orders":
+            result = await toolSearchOrders(supabaseAdmin, args, callerRole, caller.id, projectId);
+            break;
+          case "search_products":
+            result = await toolSearchProducts(supabaseAdmin, args, projectId);
+            break;
+          case "search_team_members":
+            result = await toolSearchTeamMembers(supabaseAdmin, args, projectId);
+            break;
+          case "propose_action":
+            // Return the proposal directly to the client
+            return new Response(JSON.stringify({
+              type: "action_proposal",
+              proposal: args,
+              message: choice.message.content || "",
+            }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          default:
+            result = { error: "Unknown tool" };
+        }
+
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(result),
+        });
+      }
+
+      // Follow-up call with tool results (may propose action or provide info)
+      const followupMessages = [
+        ...aiMessages,
+        choice.message,
+        ...toolResults,
+      ];
+
+      const followupResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${lovableApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: followupMessages,
+          tools: ACTION_TOOLS,
+          stream: false,
+        }),
+      });
+
+      if (!followupResponse.ok) {
+        const errText = await followupResponse.text();
+        console.error("Followup AI error:", followupResponse.status, errText);
+        return new Response(JSON.stringify({ error: "AI service error" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const followupResult = await followupResponse.json();
+      const followupChoice = followupResult.choices?.[0];
+
+      // Check if followup wants to propose action
+      if (followupChoice?.message?.tool_calls?.length > 0) {
+        // Handle second round of tool calls
+        const secondToolCalls = followupChoice.message.tool_calls;
+        const secondToolResults: any[] = [];
+
+        for (const tc of secondToolCalls) {
+          const args = typeof tc.function.arguments === "string" ? JSON.parse(tc.function.arguments) : tc.function.arguments;
+
+          if (tc.function.name === "propose_action") {
+            return new Response(JSON.stringify({
+              type: "action_proposal",
+              proposal: args,
+              message: followupChoice.message.content || "",
+            }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          let result: any;
+          switch (tc.function.name) {
+            case "search_orders":
+              result = await toolSearchOrders(supabaseAdmin, args, callerRole, caller.id, projectId);
+              break;
+            case "search_products":
+              result = await toolSearchProducts(supabaseAdmin, args, projectId);
+              break;
+            case "search_team_members":
+              result = await toolSearchTeamMembers(supabaseAdmin, args, projectId);
+              break;
+            default:
+              result = { error: "Unknown tool" };
+          }
+
+          secondToolResults.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: JSON.stringify(result),
+          });
+        }
+
+        // Third call with second round of tool results
+        const thirdMessages = [
+          ...followupMessages,
+          followupChoice.message,
+          ...secondToolResults,
+        ];
+
+        const thirdResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${lovableApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-3-flash-preview",
+            messages: thirdMessages,
+            tools: ACTION_TOOLS,
+            stream: false,
+          }),
+        });
+
+        if (thirdResponse.ok) {
+          const thirdResult = await thirdResponse.json();
+          const thirdChoice = thirdResult.choices?.[0];
+
+          if (thirdChoice?.message?.tool_calls?.length > 0) {
+            for (const tc of thirdChoice.message.tool_calls) {
+              const args = typeof tc.function.arguments === "string" ? JSON.parse(tc.function.arguments) : tc.function.arguments;
+              if (tc.function.name === "propose_action") {
+                return new Response(JSON.stringify({
+                  type: "action_proposal",
+                  proposal: args,
+                  message: thirdChoice.message.content || "",
+                }), {
+                  headers: { ...corsHeaders, "Content-Type": "application/json" },
+                });
+              }
+            }
+          }
+
+          // Return text response
+          return new Response(JSON.stringify({
+            type: "text",
+            message: thirdChoice?.message?.content || "I couldn't complete the action.",
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      // Return text response from followup
+      return new Response(JSON.stringify({
+        type: "text",
+        message: followupChoice?.message?.content || "I processed your request.",
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // No tool calls — stream the regular response
+    const streamResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${lovableApiKey}`,
@@ -146,27 +468,18 @@ ${languageInstruction}`;
       }),
     });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again shortly." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      return new Response(JSON.stringify({ error: "AI service unavailable" }), {
+    if (!streamResponse.ok) {
+      const errText = await streamResponse.text();
+      console.error("Stream error:", streamResponse.status, errText);
+      return new Response(JSON.stringify({ error: "AI service error" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(response.body, {
+    return new Response(streamResponse.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
+
   } catch (e) {
     console.error("AI assistant error:", e);
     return new Response(
@@ -175,6 +488,172 @@ ${languageInstruction}`;
     );
   }
 });
+
+// ─── TOOL: SEARCH ORDERS ───
+async function toolSearchOrders(
+  supabase: any,
+  args: { customer_name?: string; phone?: string; invoice_id?: string },
+  role: string,
+  userId: string,
+  projectId: string | null
+) {
+  let query = supabase
+    .from("orders")
+    .select("id, customer_name, mobile, invoice_id, generated_order_id, product_title, product_id, price, current_status, followup_step, health, assigned_to, assigned_to_name, order_date, note, delivery_method, order_source, followup_date")
+    .eq("is_deleted", false);
+
+  if (projectId) query = query.eq("project_id", projectId);
+  if (role === "sales_executive") query = query.eq("assigned_to", userId);
+
+  if (args.phone) {
+    query = query.ilike("mobile", `%${args.phone}%`);
+  }
+  if (args.customer_name) {
+    query = query.ilike("customer_name", `%${args.customer_name}%`);
+  }
+  if (args.invoice_id) {
+    query = query.or(`invoice_id.ilike.%${args.invoice_id}%,generated_order_id.ilike.%${args.invoice_id}%`);
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(10);
+
+  if (error) return { error: error.message, orders: [] };
+  return { orders: data || [], count: data?.length || 0 };
+}
+
+// ─── TOOL: SEARCH PRODUCTS ───
+async function toolSearchProducts(
+  supabase: any,
+  args: { query: string },
+  projectId: string | null
+) {
+  let query = supabase
+    .from("products")
+    .select("id, title, sku, price, package_duration");
+
+  if (projectId) query = query.eq("project_id", projectId);
+
+  // Fuzzy match on title or SKU
+  query = query.or(`title.ilike.%${args.query}%,sku.ilike.%${args.query}%`);
+
+  const { data, error } = await query.limit(10);
+
+  if (error) return { error: error.message, products: [] };
+  return { products: data || [], count: data?.length || 0 };
+}
+
+// ─── TOOL: SEARCH TEAM MEMBERS ───
+async function toolSearchTeamMembers(
+  supabase: any,
+  args: { name: string },
+  projectId: string | null
+) {
+  let query = supabase
+    .from("profiles")
+    .select("user_id, full_name");
+
+  if (projectId) query = query.eq("project_id", projectId);
+  query = query.ilike("full_name", `%${args.name}%`);
+
+  const { data, error } = await query.limit(10);
+
+  if (error) return { error: error.message, members: [] };
+  return { members: data || [], count: data?.length || 0 };
+}
+
+// ─── HANDLE EXECUTE ACTION ───
+async function handleExecuteAction(
+  supabase: any,
+  body: any,
+  role: string,
+  userId: string,
+  projectId: string | null,
+  userName: string
+) {
+  const { proposal } = body;
+  if (!proposal || !proposal.order_id || !proposal.updates) {
+    return new Response(JSON.stringify({ error: "Invalid action proposal" }), {
+      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // Verify the order exists and belongs to the user's project
+  let orderQuery = supabase
+    .from("orders")
+    .select("id, project_id, assigned_to, customer_name, invoice_id")
+    .eq("id", proposal.order_id)
+    .eq("is_deleted", false)
+    .maybeSingle();
+
+  const { data: order, error: orderError } = await orderQuery;
+
+  if (orderError || !order) {
+    return new Response(JSON.stringify({ success: false, error: "Order not found" }), {
+      status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // Project isolation check
+  if (projectId && order.project_id !== projectId) {
+    return new Response(JSON.stringify({ success: false, error: "Access denied" }), {
+      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // Role-based check: SE can only modify assigned orders
+  if (role === "sales_executive" && order.assigned_to !== userId) {
+    return new Response(JSON.stringify({ success: false, error: "You can only modify orders assigned to you" }), {
+      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // Build safe update object (only allow known fields)
+  const allowedFields = [
+    "product_id", "product_title", "product_sku", "price",
+    "note", "current_status", "health", "assigned_to",
+    "assigned_to_name", "followup_date", "delivery_method", "order_source",
+  ];
+  const safeUpdates: Record<string, any> = { updated_at: new Date().toISOString() };
+  for (const [key, value] of Object.entries(proposal.updates)) {
+    if (allowedFields.includes(key) && value !== undefined && value !== null) {
+      safeUpdates[key] = value;
+    }
+  }
+
+  const { error: updateError } = await supabase
+    .from("orders")
+    .update(safeUpdates)
+    .eq("id", proposal.order_id);
+
+  if (updateError) {
+    console.error("Execute action error:", updateError);
+    return new Response(JSON.stringify({ success: false, error: "Failed to update order" }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // Log the activity
+  const now = new Date();
+  const bstTime = new Date(now.getTime() + 6 * 60 * 60 * 1000);
+  const dateStr = bstTime.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const timeStr = bstTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+
+  await supabase.from("order_activity_logs").insert({
+    order_id: proposal.order_id,
+    project_id: projectId,
+    user_id: userId,
+    user_name: userName,
+    action_type: "AI Command",
+    action_description: `AI executed: ${proposal.summary} | Requested by: ${userName} | ${dateStr} • ${timeStr} (BST)`,
+  });
+
+  return new Response(JSON.stringify({
+    success: true,
+    message: `✅ Action completed: ${proposal.summary}`,
+  }), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 // ─── COMPREHENSIVE CONTEXT BUILDER ───
 
@@ -214,7 +693,6 @@ async function buildContext(
       const todayFollowups = orders.filter((o: any) => o.followup_date === today && o.current_status === "pending");
       const overdueFollowups = orders.filter((o: any) => o.followup_date && o.followup_date < today && o.current_status === "pending");
 
-      // Recent orders (last 30 days)
       const recentOrders = orders.filter((o: any) => o.order_date >= thirtyDaysAgo);
       const recentRevenue = recentOrders.reduce((s: number, o: any) => s + Number(o.price || 0), 0);
 
@@ -233,7 +711,6 @@ async function buildContext(
 | Today's Followups | ${todayFollowups.length} |
 | Overdue Followups | ${overdueFollowups.length} |`);
 
-      // Followup pipeline with conversion analysis
       const stepCounts = [1, 2, 3, 4, 5].map(s => {
         const stepOrders = orders.filter((o: any) => o.followup_step === s);
         const stepPending = stepOrders.filter((o: any) => o.current_status === "pending").length;
@@ -243,25 +720,21 @@ async function buildContext(
       parts.push(`## FOLLOWUP PIPELINE
 ${stepCounts.map(s => `- **Step ${s.step}**: ${s.pending} pending, ${s.completed} completed (${s.total} total)`).join("\n")}`);
 
-      // Today's followups detail
       if (todayFollowups.length > 0) {
         parts.push(`## TODAY'S FOLLOWUPS (${todayFollowups.length})
 ${todayFollowups.slice(0, 15).map((o: any) => `- ${o.customer_name} — Step ${o.followup_step}, ${o.product_title || "N/A"}, ৳${Number(o.price || 0).toLocaleString()}`).join("\n")}`);
       }
 
-      // Overdue details
       if (overdueFollowups.length > 0) {
         parts.push(`## ⚠ OVERDUE FOLLOWUPS (${overdueFollowups.length})
 ${overdueFollowups.slice(0, 15).map((o: any) => `- ${o.customer_name} — Step ${o.followup_step}, due ${o.followup_date}, ${o.product_title || "N/A"}`).join("\n")}`);
       }
 
-      // Health analysis
       const healthCounts: Record<string, number> = {};
       orders.forEach((o: any) => { healthCounts[o.health] = (healthCounts[o.health] || 0) + 1; });
       parts.push(`## ORDER HEALTH
 ${Object.entries(healthCounts).map(([h, c]) => `- ${h}: ${c}`).join("\n")}`);
 
-      // Top customers
       const customerMap: Record<string, { count: number; revenue: number; lastOrder: string; repeats: number }> = {};
       orders.forEach((o: any) => {
         if (!customerMap[o.customer_name]) customerMap[o.customer_name] = { count: 0, revenue: 0, lastOrder: o.order_date, repeats: 0 };
@@ -274,7 +747,6 @@ ${Object.entries(healthCounts).map(([h, c]) => `- ${h}: ${c}`).join("\n")}`);
       parts.push(`## TOP CUSTOMERS
 ${topCustomers.map(([name, d]) => `- **${name}**: ${d.count} orders, ৳${d.revenue.toLocaleString()}, ${d.repeats} repeats, last order: ${d.lastOrder}`).join("\n")}`);
 
-      // Product performance
       const productMap: Record<string, { count: number; revenue: number; repeats: number; upsells: number }> = {};
       orders.forEach((o: any) => {
         const key = o.product_title || "Unknown";
@@ -307,23 +779,11 @@ ${topProducts.map(([name, d]) => `- **${name}**: ${d.count} orders, ৳${d.reven
 - Average repeat interval: **${avgDays} days**
 - Fastest repeat: ${minDays} days
 - Longest repeat: ${maxDays} days
-- Total repeat orders analyzed: ${repeatTimings.length}
-- 💡 Insight: Customers typically reorder around day ${avgDays}. Proactively reach out a few days earlier.`);
+- Total repeat orders analyzed: ${repeatTimings.length}`);
 
-        // ── REPEAT ORDER PREDICTIONS ──
         const todayMs = new Date(today).getTime();
         const predictions: { name: string; lastOrder: string; avgInterval: number; predictedDate: string; daysUntil: number; status: string }[] = [];
 
-        // Build per-customer repeat intervals
-        const customerIntervals: Record<string, { intervals: number[]; lastOrder: string }> = {};
-        orders.forEach((o: any) => {
-          if (!customerIntervals[o.customer_name]) customerIntervals[o.customer_name] = { intervals: [], lastOrder: o.order_date };
-          if (o.order_date > customerIntervals[o.customer_name].lastOrder) {
-            customerIntervals[o.customer_name].lastOrder = o.order_date;
-          }
-        });
-
-        // Calculate intervals for customers with repeats
         const customerOrders: Record<string, string[]> = {};
         orders.forEach((o: any) => {
           if (!customerOrders[o.customer_name]) customerOrders[o.customer_name] = [];
@@ -350,7 +810,6 @@ ${topProducts.map(([name, d]) => `- **${name}**: ${d.count} orders, ৳${d.reven
           predictions.push({ name, lastOrder: lastDate, avgInterval: custAvg, predictedDate, daysUntil, status });
         });
 
-        // Sort: overdue first, then soonest
         predictions.sort((a, b) => a.daysUntil - b.daysUntil);
         const relevantPredictions = predictions.filter(p => p.daysUntil <= 30);
 
@@ -358,18 +817,16 @@ ${topProducts.map(([name, d]) => `- **${name}**: ${d.count} orders, ৳${d.reven
           parts.push(`## 🔮 REPEAT ORDER PREDICTIONS
 ${relevantPredictions.slice(0, 15).map(p =>
   `- ${p.status} **${p.name}**: avg interval ${p.avgInterval}d, last order ${p.lastOrder}, predicted reorder: **${p.predictedDate}** (${p.daysUntil < 0 ? Math.abs(p.daysUntil) + "d overdue" : p.daysUntil + "d away"})`
-).join("\n")}
-
-💡 Use these predictions to proactively reach out to customers before their expected reorder date.`);
+).join("\n")}`);
         }
       }
 
       // SE Performance (admin/owner)
       if (role === "admin" || role === "owner") {
-        const seMap: Record<string, { name: string; orders: number; revenue: number; repeats: number; upsells: number; pending: number; completedFollowups: number }> = {};
+        const seMap: Record<string, { name: string; orders: number; revenue: number; repeats: number; upsells: number; pending: number }> = {};
         orders.forEach((o: any) => {
           if (!o.assigned_to) return;
-          if (!seMap[o.assigned_to]) seMap[o.assigned_to] = { name: o.assigned_to_name || "Unknown", orders: 0, revenue: 0, repeats: 0, upsells: 0, pending: 0, completedFollowups: 0 };
+          if (!seMap[o.assigned_to]) seMap[o.assigned_to] = { name: o.assigned_to_name || "Unknown", orders: 0, revenue: 0, repeats: 0, upsells: 0, pending: 0 };
           seMap[o.assigned_to].orders++;
           seMap[o.assigned_to].revenue += Number(o.price || 0);
           if (o.is_repeat) seMap[o.assigned_to].repeats++;
@@ -379,7 +836,7 @@ ${relevantPredictions.slice(0, 15).map(p =>
         const sePerformance = Object.entries(seMap).sort((a, b) => b[1].revenue - a[1].revenue);
         if (sePerformance.length > 0) {
           const topSE = sePerformance[0][1];
-          const bestRepeatSE = sePerformance.sort((a, b) => b[1].repeats - a[1].repeats)[0]?.[1];
+          const bestRepeatSE = [...sePerformance].sort((a, b) => b[1].repeats - a[1].repeats)[0]?.[1];
           parts.push(`## SALES EXECUTIVE PERFORMANCE
 ${sePerformance.map(([_, d]) => `- **${d.name}**: ${d.orders} orders, ৳${d.revenue.toLocaleString()}, ${d.repeats} repeats, ${d.upsells} upsells, ${d.pending} pending`).join("\n")}
 
@@ -412,7 +869,7 @@ ${topPairs.filter(([_, c]) => c > 1).map(([pair, count]) => `- **${pair}**: boug
       }
     }
 
-    // ── FOLLOWUP HISTORY (Learning Data) ──
+    // ── FOLLOWUP HISTORY ──
     const orderIds = (orders || []).map((o: any) => o.id);
     if (orderIds.length > 0) {
       const { data: followups } = await supabase
@@ -423,7 +880,6 @@ ${topPairs.filter(([_, c]) => c > 1).map(([pair, count]) => `- **${pair}**: boug
         .limit(300);
 
       if (followups && followups.length > 0) {
-        // Conversion analysis per step
         const stepAnalysis: Record<number, { total: number; upsellAttempted: number; withProblems: number; notes: string[] }> = {};
         followups.forEach((f: any) => {
           if (!stepAnalysis[f.step_number]) stepAnalysis[f.step_number] = { total: 0, upsellAttempted: 0, withProblems: 0, notes: [] };
@@ -438,25 +894,18 @@ ${Object.entries(stepAnalysis).sort((a, b) => Number(a[0]) - Number(b[0])).map((
   `- **Step ${step}**: ${d.total} completed, ${d.upsellAttempted} upsell attempts (${d.total > 0 ? ((d.upsellAttempted / d.total) * 100).toFixed(0) : 0}%), ${d.withProblems} with problems reported`
 ).join("\n")}`);
 
-        // Recent followup notes (for memory/context)
-        const recentNotes = followups
-          .filter((f: any) => f.note)
-          .slice(0, 20)
-          .map((f: any) => {
-            const order = (orders || []).find((o: any) => o.id === f.order_id);
-            return `[Step ${f.step_number}] ${order?.customer_name || "?"}: "${f.note}"${f.problems_discussed ? ` | Problems: "${f.problems_discussed}"` : ""}`;
-          });
+        const recentNotes = followups.filter((f: any) => f.note).slice(0, 20).map((f: any) => {
+          const order = (orders || []).find((o: any) => o.id === f.order_id);
+          return `[Step ${f.step_number}] ${order?.customer_name || "?"}: "${f.note}"${f.problems_discussed ? ` | Problems: "${f.problems_discussed}"` : ""}`;
+        });
         if (recentNotes.length > 0) {
           parts.push(`## RECENT FOLLOWUP NOTES (MEMORY)
 ${recentNotes.join("\n")}`);
         }
       }
 
-      // Upsell records analysis
       const { data: upsells } = await supabase
-        .from("upsell_records")
-        .select("followup_id, product_name, price, note")
-        .limit(100);
+        .from("upsell_records").select("followup_id, product_name, price, note").limit(100);
 
       if (upsells && upsells.length > 0) {
         const upsellProducts: Record<string, { count: number; totalValue: number }> = {};
@@ -468,15 +917,11 @@ ${recentNotes.join("\n")}`);
         });
         const topUpsells = Object.entries(upsellProducts).sort((a, b) => b[1].count - a[1].count).slice(0, 5);
         parts.push(`## UPSELL PATTERNS (LEARNED)
-Most successful upsell products:
 ${topUpsells.map(([name, d]) => `- **${name}**: ${d.count} times, ৳${d.totalValue.toLocaleString()} total`).join("\n")}`);
       }
 
-      // Repeat order records
       const { data: repeats } = await supabase
-        .from("repeat_order_records")
-        .select("product_name, price, note")
-        .limit(100);
+        .from("repeat_order_records").select("product_name, price, note").limit(100);
 
       if (repeats && repeats.length > 0) {
         const repeatProducts: Record<string, { count: number; totalValue: number }> = {};
@@ -488,7 +933,6 @@ ${topUpsells.map(([name, d]) => `- **${name}**: ${d.count} times, ৳${d.totalVa
         });
         const topRepeats = Object.entries(repeatProducts).sort((a, b) => b[1].count - a[1].count).slice(0, 5);
         parts.push(`## REPEAT ORDER PATTERNS (LEARNED)
-Most repeated products:
 ${topRepeats.map(([name, d]) => `- **${name}**: ${d.count} times, ৳${d.totalValue.toLocaleString()} total`).join("\n")}`);
       }
     }
@@ -512,9 +956,7 @@ ${products.map((p: any) => `- **${p.title}** (${p.sku}): ৳${p.price}, ${p.pack
       if (profiles && profiles.length > 0) {
         const userIds = profiles.map((p: any) => p.user_id);
         const { data: roles } = await supabase
-          .from("user_roles")
-          .select("user_id, role")
-          .in("user_id", userIds);
+          .from("user_roles").select("user_id, role").in("user_id", userIds);
 
         const roleMap = new Map((roles || []).map((r: any) => [r.user_id, r.role]));
         parts.push(`## TEAM
