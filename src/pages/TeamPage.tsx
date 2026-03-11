@@ -14,7 +14,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Loader2, MoreHorizontal, Pencil, Trash2, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Loader2, MoreHorizontal, Pencil, Trash2, ShieldCheck, ShieldAlert, Mic, MicOff } from "lucide-react";
 import AddTeamMemberDialog from "@/components/AddTeamMemberDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
