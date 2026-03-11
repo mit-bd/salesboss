@@ -615,6 +615,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          ai_voice_enabled: boolean
           avatar_url: string | null
           created_at: string
           full_name: string | null
@@ -625,6 +626,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ai_voice_enabled?: boolean
           avatar_url?: string | null
           created_at?: string
           full_name?: string | null
@@ -635,6 +637,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ai_voice_enabled?: boolean
           avatar_url?: string | null
           created_at?: string
           full_name?: string | null

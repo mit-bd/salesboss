@@ -62,10 +62,15 @@ serve(async (req) => {
     const userName = profileData?.full_name || caller.email;
 
     const body = await req.json();
-    const { messages } = body;
+    const { messages, language } = body;
+    const lang = language === "bn" ? "bn" : "en";
 
     // Build comprehensive context with learning data
     const context = await buildContext(supabaseAdmin, callerRole, caller.id, projectId);
+
+    const languageInstruction = lang === "bn"
+      ? `\n\n## LANGUAGE INSTRUCTION\nYou MUST respond entirely in Bengali (বাংলা). Use simple, everyday Bengali. Do NOT mix English unless absolutely necessary for technical terms. All analysis, suggestions, scripts, and insights must be in Bengali.`
+      : `\n\n## LANGUAGE INSTRUCTION\nRespond in English. Keep it clear and professional.`;
 
     const systemPrompt = `You are **SalesBoss AI Copilot** — an intelligent sales mentor, analyst, and advisor for a CRM/Sales Management platform.
 
@@ -121,8 +126,7 @@ ${context}
 - When giving sales scripts, make them natural and conversational
 - Proactively offer insights when data suggests opportunities
 
-## LANGUAGE
-Respond in the same language the user writes in. Default to Bangla/English mix if unclear.`;
+${languageInstruction}`;
 
     const aiMessages = [
       { role: "system", content: systemPrompt },

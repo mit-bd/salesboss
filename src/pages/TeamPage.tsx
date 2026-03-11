@@ -14,7 +14,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Loader2, MoreHorizontal, Pencil, Trash2, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Loader2, MoreHorizontal, Pencil, Trash2, ShieldCheck, ShieldAlert, Mic, MicOff } from "lucide-react";
 import AddTeamMemberDialog from "@/components/AddTeamMemberDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +29,7 @@ interface TeamUser {
   createdAt: string;
   lastSignIn: string | null;
   banned: boolean;
+  aiVoiceEnabled: boolean;
 }
 
 export default function TeamPage() {
@@ -65,6 +66,18 @@ export default function TeamPage() {
       toast({ title: "Error", description: data?.error || error?.message, variant: "destructive" });
     } else {
       toast({ title: ban ? "User Deactivated" : "User Activated" });
+      fetchUsers();
+    }
+  };
+
+  const handleToggleVoice = async (userId: string, enabled: boolean) => {
+    const { data, error } = await supabase.functions.invoke("manage-team", {
+      body: { action: "toggle_voice_permission", userId, enabled },
+    });
+    if (error || data?.error) {
+      toast({ title: "Error", description: data?.error || error?.message, variant: "destructive" });
+    } else {
+      toast({ title: enabled ? "Voice AI Enabled" : "Voice AI Disabled" });
       fetchUsers();
     }
   };
@@ -123,6 +136,7 @@ export default function TeamPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Voice AI</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead>Last Login</TableHead>
@@ -151,6 +165,13 @@ export default function TeamPage() {
                     <Badge variant={roleVariant(u.role)} className="text-xs">
                       {roleLabel(u.role)}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Switch
+                      checked={u.aiVoiceEnabled}
+                      onCheckedChange={(checked) => handleToggleVoice(u.id, checked)}
+                      className="data-[state=checked]:bg-primary"
+                    />
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">

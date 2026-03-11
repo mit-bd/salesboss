@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Send, Loader2, Sparkles, RotateCcw, Lightbulb, X, BrainCircuit } from "lucide-react";
+import { Send, Loader2, Lightbulb, X, BrainCircuit, RotateCcw, Mic, MicOff, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import ReactMarkdown from "react-markdown";
@@ -9,48 +8,60 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
 }
 
+type Lang = "en" | "bn";
+
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-assistant`;
 
-const SUGGESTION_CATEGORIES = [
-  {
-    label: "📋 Followups",
-    items: [
-      "Show today's followups",
-      "Show overdue followups",
-      "Which followup step converts best?",
-    ],
-  },
-  {
-    label: "💡 Sales Coach",
-    items: [
-      "Write a Step 3 followup script",
-      "How to convince a repeat order?",
-      "Best upsell techniques",
-    ],
-  },
-  {
-    label: "📊 Insights",
-    items: [
-      "Show sales performance summary",
-      "Who is the top performing executive?",
-      "Which product sells the most?",
-    ],
-  },
-  {
-    label: "🔁 Predictions",
-    items: [
-      "Which customers are likely to reorder soon?",
-      "Show repeat order predictions",
-      "Best time for upsell?",
-    ],
-  },
-];
+const SUGGESTIONS: Record<Lang, { label: string; items: string[] }[]> = {
+  en: [
+    {
+      label: "📋 Followups",
+      items: ["Show today's followups", "Show overdue followups", "Which followup step converts best?"],
+    },
+    {
+      label: "💡 Sales Coach",
+      items: ["Write a Step 3 followup script", "How to convince a repeat order?", "Best upsell techniques"],
+    },
+    {
+      label: "📊 Insights",
+      items: ["Show sales performance summary", "Who is the top performing executive?", "Which product sells the most?"],
+    },
+    {
+      label: "🔁 Predictions",
+      items: ["Which customers are likely to reorder soon?", "Show repeat order predictions", "Best time for upsell?"],
+    },
+  ],
+  bn: [
+    {
+      label: "📋 ফলোআপ",
+      items: ["আজকের ফলোআপ দেখাও", "ওভারডিউ ফলোআপ দেখাও", "কোন ফলোআপ স্টেপ সবচেয়ে ভালো কাজ করে?"],
+    },
+    {
+      label: "💡 সেলস কোচ",
+      items: ["স্টেপ ৩ ফলোআপ স্ক্রিপ্ট লিখে দাও", "রিপিট অর্ডার কিভাবে কনভিন্স করবো?", "আপসেল করার টেকনিক দাও"],
+    },
+    {
+      label: "📊 ইনসাইটস",
+      items: ["সেলস পারফরম্যান্স সামারি দেখাও", "সেরা সেলস এক্সিকিউটিভ কে?", "কোন প্রোডাক্ট বেশি বিক্রি হয়?"],
+    },
+    {
+      label: "🔁 প্রেডিকশন",
+      items: ["কোন কাস্টমার শীঘ্রই রিঅর্ডার করতে পারে?", "রিপিট অর্ডার প্রেডিকশন দেখাও", "আপসেলের সেরা সময় কখন?"],
+    },
+  ],
+};
+
+const WELCOME: Record<Lang, { title: string; subtitle: string }> = {
+  en: { title: "Hi! I'm your Sales AI Copilot", subtitle: "I learn from your data to predict & improve sales" },
+  bn: { title: "হাই! আমি আপনার সেলস AI কোপাইলট", subtitle: "আপনার ডেটা থেকে শিখে সেলস উন্নত করি" },
+};
 
 export default function AiAssistant() {
   const [open, setOpen] = useState(false);
@@ -58,8 +69,27 @@ export default function AiAssistant() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [lang, setLang] = useState<Lang>("en");
+  const [isListening, setIsListening] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const { user } = useAuth();
+
+  // Check voice permission
+  useEffect(() => {
+    if (!user) return;
+    const checkVoice = async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("ai_voice_enabled")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      setVoiceEnabled(data?.ai_voice_enabled ?? false);
+    };
+    checkVoice();
+  }, [user]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -68,9 +98,7 @@ export default function AiAssistant() {
   }, [messages]);
 
   useEffect(() => {
-    if (open && inputRef.current) {
-      inputRef.current.focus();
-    }
+    if (open && inputRef.current) inputRef.current.focus();
   }, [open]);
 
   const sendMessage = useCallback(async (overrideText?: string) => {
@@ -98,7 +126,7 @@ export default function AiAssistant() {
           Authorization: `Bearer ${accessToken}`,
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({ messages: newMessages }),
+        body: JSON.stringify({ messages: newMessages, language: lang }),
       });
 
       if (!resp.ok) {
@@ -158,18 +186,56 @@ export default function AiAssistant() {
     } finally {
       setIsLoading(false);
     }
-  }, [input, isLoading, messages]);
+  }, [input, isLoading, messages, lang]);
+
+  const toggleListening = useCallback(() => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setMessages((prev) => [...prev, { role: "assistant", content: "⚠ Speech recognition is not supported in this browser." }]);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = lang === "bn" ? "bn-BD" : "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setInput(transcript);
+      setIsListening(false);
+      // Auto-send after voice input
+      setTimeout(() => {
+        sendMessage(transcript);
+      }, 200);
+    };
+
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  }, [isListening, lang, sendMessage]);
 
   const handleNewChat = () => {
     setMessages([]);
     setShowSuggestions(true);
   };
 
+  const currentSuggestions = SUGGESTIONS[lang];
+  const welcome = WELCOME[lang];
+
   return (
     <>
-      {/* Floating AI Button with Glow */}
+      {/* Floating AI Button */}
       <div className="fixed bottom-6 right-6 z-50">
-        {/* Pulse ring */}
         {!open && (
           <div className="absolute inset-0 rounded-full bg-primary/20 ai-fab-ring pointer-events-none" />
         )}
@@ -184,17 +250,11 @@ export default function AiAssistant() {
                 open && "scale-95 shadow-lg hover:scale-100"
               )}
             >
-              {open ? (
-                <X className="h-5 w-5" />
-              ) : (
-                <BrainCircuit className="h-6 w-6" />
-              )}
+              {open ? <X className="h-5 w-5" /> : <BrainCircuit className="h-6 w-6" />}
             </button>
           </TooltipTrigger>
           {!open && (
-            <TooltipContent side="left" className="text-xs">
-              SalesBoss AI Assistant
-            </TooltipContent>
+            <TooltipContent side="left" className="text-xs">SalesBoss AI Assistant</TooltipContent>
           )}
         </Tooltip>
       </div>
@@ -203,25 +263,50 @@ export default function AiAssistant() {
       {open && (
         <div className="fixed bottom-24 right-6 z-50 w-[420px] max-h-[640px] flex flex-col rounded-2xl border border-border bg-card shadow-2xl animate-in slide-in-from-bottom-4 fade-in duration-300">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div className="flex items-center justify-between border-b border-border px-5 py-3">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-[hsl(250,70%,55%)]/15">
                 <BrainCircuit className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-foreground">SalesBoss AI Copilot</h3>
-                <p className="text-[11px] text-muted-foreground">Sales mentor • Analyst • Predictor</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {lang === "bn" ? "সেলস মেন্টর • বিশ্লেষক • প্রেডিক্টর" : "Sales mentor • Analyst • Predictor"}
+                </p>
               </div>
             </div>
-            {messages.length > 0 && (
-              <button
-                onClick={handleNewChat}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-lg px-2 py-1 hover:bg-muted"
-                title="New Chat"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-              </button>
-            )}
+            <div className="flex items-center gap-1">
+              {/* Language Toggle */}
+              <div className="flex items-center rounded-lg border border-border overflow-hidden text-[11px] font-medium">
+                <button
+                  onClick={() => setLang("en")}
+                  className={cn(
+                    "px-2 py-1 transition-colors",
+                    lang === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  EN
+                </button>
+                <button
+                  onClick={() => setLang("bn")}
+                  className={cn(
+                    "px-2 py-1 transition-colors",
+                    lang === "bn" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  BN
+                </button>
+              </div>
+              {messages.length > 0 && (
+                <button
+                  onClick={handleNewChat}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-lg px-2 py-1 hover:bg-muted"
+                  title="New Chat"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Messages */}
@@ -232,11 +317,11 @@ export default function AiAssistant() {
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-[hsl(250,70%,55%)]/10 mx-auto mb-3">
                     <Lightbulb className="h-6 w-6 text-primary" />
                   </div>
-                  <p className="text-sm font-medium text-foreground">Hi! I'm your Sales AI Copilot</p>
-                  <p className="text-xs text-muted-foreground mt-1">I learn from your data to predict & improve sales</p>
+                  <p className="text-sm font-medium text-foreground">{welcome.title}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{welcome.subtitle}</p>
                 </div>
 
-                {SUGGESTION_CATEGORIES.map((cat) => (
+                {currentSuggestions.map((cat) => (
                   <div key={cat.label}>
                     <p className="text-[11px] font-medium text-muted-foreground mb-1.5">{cat.label}</p>
                     <div className="space-y-1">
@@ -256,10 +341,7 @@ export default function AiAssistant() {
             )}
 
             {messages.map((m, i) => (
-              <div
-                key={i}
-                className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}
-              >
+              <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
                 <div
                   className={cn(
                     "max-w-[88%] rounded-2xl px-4 py-2.5 text-sm",
@@ -284,7 +366,9 @@ export default function AiAssistant() {
                 <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-3">
                   <div className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">Analyzing your data...</span>
+                    <span className="text-xs text-muted-foreground">
+                      {lang === "bn" ? "ডেটা বিশ্লেষণ করছি..." : "Analyzing your data..."}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -297,11 +381,26 @@ export default function AiAssistant() {
               onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
               className="flex gap-2"
             >
+              {voiceEnabled && (
+                <button
+                  type="button"
+                  onClick={toggleListening}
+                  className={cn(
+                    "shrink-0 flex h-9 w-9 items-center justify-center rounded-lg transition-all",
+                    isListening
+                      ? "bg-destructive text-destructive-foreground animate-pulse"
+                      : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
+                  )}
+                  title={isListening ? "Stop listening" : "Voice input"}
+                >
+                  {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                </button>
+              )}
               <input
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about sales, predictions, customers..."
+                placeholder={lang === "bn" ? "সেলস, প্রেডিকশন, কাস্টমার নিয়ে জিজ্ঞেস করুন..." : "Ask about sales, predictions, customers..."}
                 className="flex-1 text-sm rounded-lg border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
                 disabled={isLoading}
               />
@@ -313,6 +412,15 @@ export default function AiAssistant() {
                 <Send className="h-4 w-4" />
               </button>
             </form>
+            {isListening && (
+              <div className="flex items-center gap-2 mt-2 text-xs text-destructive">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-destructive"></span>
+                </span>
+                {lang === "bn" ? "শুনছি... কথা বলুন" : "Listening... speak now"}
+              </div>
+            )}
           </div>
         </div>
       )}
