@@ -29,6 +29,7 @@ interface TeamUser {
   createdAt: string;
   lastSignIn: string | null;
   banned: boolean;
+  aiVoiceEnabled: boolean;
 }
 
 export default function TeamPage() {
