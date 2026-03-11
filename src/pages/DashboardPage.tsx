@@ -9,7 +9,7 @@ import { ShoppingCart, DollarSign, TrendingUp, RefreshCw, PhoneForwarded, Zap, S
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import GlobalFilters, { FilterState, EMPTY_FILTERS } from "@/components/GlobalFilters";
 import { Input } from "@/components/ui/input";
-import SubscriptionStatusCard from "@/components/SubscriptionStatusCard";
+
 import AiInsightsWidget from "@/components/AiInsightsWidget";
 
 const STEP_LABELS = ["1st Followup", "2nd Followup", "3rd Followup", "4th Followup", "5th Followup"];
