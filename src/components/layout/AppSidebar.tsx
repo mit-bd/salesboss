@@ -5,7 +5,7 @@ import {
   LayoutDashboard, ShoppingCart, PhoneForwarded, Package, Users,
   RefreshCw, ArrowUpRight, Upload, Settings, Truck, BarChart3,
   Trash2, Shield, Download, Database, Target, LogOut, KeyRound,
-  ChevronDown, ChevronRight, Globe, Building2, UserPlus, ArrowLeft,
+  ChevronDown, ChevronRight, Globe, Building2, UserPlus, ArrowLeft, CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";

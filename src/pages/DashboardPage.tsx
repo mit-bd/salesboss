@@ -92,12 +92,8 @@ export default function DashboardPage() {
     <AppLayout>
       <PageHeader title="Dashboard" description="Sales overview and followup performance" />
 
-      {/* Subscription Status Card for Admin */}
-      {role === "admin" && (
-        <div className="mb-6">
-          <SubscriptionStatusCard />
-        </div>
-      )}
+
+
 
       <div ref={searchRef} className="relative mb-6 max-w-lg">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
