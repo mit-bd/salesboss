@@ -25,6 +25,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
 
   const fetchPermissions = useCallback(async () => {
     if (!role) { setPermissions([]); setLoading(false); return; }
+    setLoading(true);
     const { data, error } = await (supabase.from as any)("role_permissions")
       .select("permission_key")
       .eq("role", role);
@@ -34,6 +35,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
   }, [role]);
 
   useEffect(() => {
+    setLoading(true);
     fetchPermissions();
 
     const channel = supabase
