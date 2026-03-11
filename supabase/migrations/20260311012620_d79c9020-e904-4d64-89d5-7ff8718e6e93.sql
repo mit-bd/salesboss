@@ -1,0 +1,10 @@
+CREATE INDEX IF NOT EXISTS idx_orders_project_id ON public.orders(project_id);
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON public.orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_mobile ON public.orders(mobile);
+CREATE INDEX IF NOT EXISTS idx_orders_current_status ON public.orders(current_status);
+CREATE INDEX IF NOT EXISTS idx_orders_project_deleted ON public.orders(project_id, is_deleted);
+CREATE INDEX IF NOT EXISTS idx_orders_assigned_to ON public.orders(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_orders_followup_step ON public.orders(followup_step);
+CREATE INDEX IF NOT EXISTS idx_orders_updated_at ON public.orders(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_customers_mobile ON public.customers(mobile_number);
+CREATE INDEX IF NOT EXISTS idx_followup_history_order_id ON public.followup_history(order_id);
