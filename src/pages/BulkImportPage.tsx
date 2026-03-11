@@ -626,48 +626,105 @@ export default function BulkImportPage() {
               </div>
             )}
 
-            {/* Import Results */}
+            {/* Import Progress Bar */}
+            {importing && importProgress.total > 0 && (
+              <div className="rounded-xl border border-border bg-card p-5 card-shadow animate-fade-in">
+                <div className="flex items-center gap-2 mb-3">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <h3 className="text-sm font-semibold text-foreground">Importing Orders...</h3>
+                </div>
+                <Progress value={(importProgress.current / importProgress.total) * 100} className="h-2 mb-2" />
+                <p className="text-xs text-muted-foreground">
+                  Processing Row {importProgress.current.toLocaleString()} / {importProgress.total.toLocaleString()}
+                </p>
+              </div>
+            )}
+
+            {/* Import Results + Verification Report */}
             {importResults && (
-              <div className="rounded-xl border border-border bg-card card-shadow overflow-hidden">
-                <div className="p-4 border-b border-border">
-                  <h3 className="text-sm font-semibold text-foreground mb-2">Import Summary</h3>
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs text-muted-foreground">Total: {importResults.length}</span>
-                    <span className="flex items-center gap-1 text-xs text-success">
-                      <CheckCircle className="h-3.5 w-3.5" /> {importResults.filter((r) => r.success).length} saved
-                    </span>
-                    <span className="flex items-center gap-1 text-xs text-destructive">
-                      <AlertCircle className="h-3.5 w-3.5" /> {importResults.filter((r) => !r.success).length} failed
-                    </span>
-                    {correctedCount > 0 && (
-                      <span className="flex items-center gap-1 text-xs text-primary">
-                        <Sparkles className="h-3.5 w-3.5" /> {correctedCount} AI corrected
-                      </span>
+              <div className="space-y-4">
+                {/* Verification Report */}
+                {verificationReport && (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 card-shadow animate-fade-in">
+                    <div className="flex items-center gap-2 mb-4">
+                      <CheckCircle className="h-4.5 w-4.5 text-primary" />
+                      <h3 className="text-sm font-semibold text-foreground">Import Verification Report</h3>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-4">
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-foreground">{verificationReport.totalRows.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">Total Rows</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-success">{verificationReport.inserted.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">Imported</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-primary">{verificationReport.autoCorrected}</p>
+                        <p className="text-xs text-muted-foreground">Auto Corrected</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-destructive">{verificationReport.failed}</p>
+                        <p className="text-xs text-muted-foreground">Failed</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-warning">{verificationReport.needsReview}</p>
+                        <p className="text-xs text-muted-foreground">Needs Review</p>
+                      </div>
+                    </div>
+                    {verificationReport.duplicatesDetected > 0 && (
+                      <div className="mt-3 pt-3 border-t border-primary/10 flex items-center gap-2">
+                        <AlertTriangle className="h-3.5 w-3.5 text-warning" />
+                        <p className="text-xs text-warning font-medium">
+                          {verificationReport.duplicatesDetected} duplicate phone numbers detected in imported data
+                        </p>
+                      </div>
                     )}
                   </div>
-                </div>
-                {importResults.some((r) => !r.success) && (
-                  <div className="overflow-x-auto max-h-60">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-border bg-muted/50">
-                          <th className="px-3 py-2 text-left font-medium text-muted-foreground">Row</th>
-                          <th className="px-3 py-2 text-left font-medium text-muted-foreground">Error</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {importResults.filter((r) => !r.success).map((r) => (
-                          <tr key={r.rowNumber} className="border-b border-border last:border-0 bg-destructive/5">
-                            <td className="px-3 py-2 text-foreground">Row {r.rowNumber}</td>
-                            <td className="px-3 py-2 text-destructive">{r.error}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
                 )}
-                <div className="p-4 border-t border-border flex justify-end">
-                  <Button size="sm" variant="outline" onClick={resetAll}>Import More</Button>
+
+                {/* Failed rows detail */}
+                <div className="rounded-xl border border-border bg-card card-shadow overflow-hidden">
+                  <div className="p-4 border-b border-border">
+                    <h3 className="text-sm font-semibold text-foreground mb-2">Import Summary</h3>
+                    <div className="flex items-center gap-4">
+                      <span className="text-xs text-muted-foreground">Total: {importResults.length}</span>
+                      <span className="flex items-center gap-1 text-xs text-success">
+                        <CheckCircle className="h-3.5 w-3.5" /> {importResults.filter((r) => r.success).length} saved
+                      </span>
+                      <span className="flex items-center gap-1 text-xs text-destructive">
+                        <AlertCircle className="h-3.5 w-3.5" /> {importResults.filter((r) => !r.success).length} failed
+                      </span>
+                      {correctedCount > 0 && (
+                        <span className="flex items-center gap-1 text-xs text-primary">
+                          <Sparkles className="h-3.5 w-3.5" /> {correctedCount} AI corrected
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {importResults.some((r) => !r.success) && (
+                    <div className="overflow-x-auto max-h-60">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-border bg-muted/50">
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Row</th>
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Error</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importResults.filter((r) => !r.success).map((r) => (
+                            <tr key={r.rowNumber} className="border-b border-border last:border-0 bg-destructive/5">
+                              <td className="px-3 py-2 text-foreground">Row {r.rowNumber}</td>
+                              <td className="px-3 py-2 text-destructive">{r.error}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div className="p-4 border-t border-border flex justify-end">
+                    <Button size="sm" variant="outline" onClick={resetAll}>Import More</Button>
+                  </div>
                 </div>
               </div>
             )}
