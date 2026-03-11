@@ -151,14 +151,7 @@ export default function OrdersPage() {
       )}
 
       {editOrder && (
-        <EditOrderDialog order={editOrder} open={!!editOrder} onOpenChange={(open) => !open && setEditOrder(null)} onSave={async (updated) => {
-          const { updateOrder } = await import("@/contexts/OrderStoreContext").then(m => {
-            // We need to use the store's updateOrder
-            throw new Error("use-inline");
-          }).catch(() => ({ updateOrder: null }));
-          setEditOrder(null);
-          refresh();
-        }} />
+        <EditOrderDialogWrapper editOrder={editOrder} setEditOrder={setEditOrder} onDone={refresh} />
       )}
 
       {isAdmin && (
