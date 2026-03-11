@@ -123,8 +123,17 @@ export default function BulkImportPage() {
   const [assignToExec, setAssignToExec] = useState("");
   const [assignDeliveryMethod, setAssignDeliveryMethod] = useState("");
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const [aiCleaning, setAiCleaning] = useState(false);
   const [aiReport, setAiReport] = useState<AiReport | null>(null);
+  const [verificationReport, setVerificationReport] = useState<{
+    totalRows: number;
+    inserted: number;
+    autoCorrected: number;
+    failed: number;
+    needsReview: number;
+    duplicatesDetected: number;
+  } | null>(null);
   const { members } = useTeamMembers();
   const { methods: activeDeliveryMethods } = useDeliveryMethods({ activeOnly: true });
   const { sources } = useOrderSources();
