@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Loader2, UserPlus } from "lucide-react";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { mockSalesExecutives } from "@/data/mockData";
+
 
 interface BulkAssignDialogProps {
   open: boolean;
@@ -24,11 +24,7 @@ export default function BulkAssignDialog({
   const [selectedExec, setSelectedExec] = useState("");
   const { members, loading: teamLoading } = useTeamMembers();
 
-  // Combine DB team members with mock executives for backward compatibility
-  const allExecutives = [
-    ...members.map((m) => ({ id: m.userId, name: m.name })),
-    ...mockSalesExecutives.filter((se) => !members.some((m) => m.userId === se.id)).map((se) => ({ id: se.id, name: se.name })),
-  ];
+  const allExecutives = members.map((m) => ({ id: m.userId, name: m.name }));
 
   const handleAssign = async () => {
     if (!selectedExec) return;

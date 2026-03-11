@@ -15,7 +15,7 @@ import { useOrderSources } from "@/hooks/useOrderSources";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
-import { mockSalesExecutives } from "@/data/mockData";
+
 
 // --- Types ---
 
@@ -129,10 +129,7 @@ export default function BulkImportPage() {
   const { methods: activeDeliveryMethods } = useDeliveryMethods({ activeOnly: true });
   const { sources } = useOrderSources();
 
-  const allExecutives = [
-    ...members.map((m) => ({ id: m.userId, name: m.name })),
-    ...mockSalesExecutives.filter((se) => !members.some((m) => m.userId === se.id)).map((se) => ({ id: se.id, name: se.name })),
-  ];
+  const allExecutives = members.map((m) => ({ id: m.userId, name: m.name }));
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

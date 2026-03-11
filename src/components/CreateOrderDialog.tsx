@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { mockSalesExecutives } from "@/data/mockData";
+
 import { useProductStore } from "@/contexts/ProductStoreContext";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
@@ -35,10 +35,7 @@ export default function CreateOrderDialog() {
   const { addOrder } = useOrderStore();
   const { members } = useTeamMembers();
 
-  const allExecutives = [
-    ...members.map((m) => ({ id: m.userId, name: m.name })),
-    ...mockSalesExecutives.filter((se) => !members.some((m) => m.userId === se.id)).map((se) => ({ id: se.id, name: se.name })),
-  ];
+  const allExecutives = members.map((m) => ({ id: m.userId, name: m.name }));
 
   const [form, setForm] = useState({
     customerName: "",

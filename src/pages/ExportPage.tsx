@@ -4,7 +4,9 @@ import PageHeader from "@/components/layout/PageHeader";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { useAuditLog } from "@/contexts/AuditLogContext";
 import { useRole } from "@/contexts/RoleContext";
-import { mockProducts, mockSalesExecutives, mockDeliveryPartners } from "@/data/mockData";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { useProductStore } from "@/contexts/ProductStoreContext";
+import { useDeliveryMethods } from "@/hooks/useDeliveryMethods";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +38,9 @@ export default function ExportPage() {
   const { logs } = useAuditLog();
   const { isAdmin } = useRole();
   const { toast } = useToast();
+  const { members } = useTeamMembers();
+  const { products } = useProductStore();
+  const { methods: deliveryPartners } = useDeliveryMethods({ activeOnly: false });
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -54,7 +59,7 @@ export default function ExportPage() {
     });
   }, [activeOrders, dateFrom, dateTo, execFilter, productFilter, deliveryFilter]);
 
-  const getDeliveryName = (id: string) => mockDeliveryPartners.find((dp) => dp.id === id)?.name || id;
+  const getDeliveryName = (id: string) => deliveryPartners.find((dp) => dp.id === id)?.name || id;
 
   const exportOrders = () => {
     downloadCSV(
@@ -78,11 +83,11 @@ export default function ExportPage() {
   };
 
   const exportPerformance = () => {
-    const data = mockSalesExecutives.map((se) => {
-      const seOrders = filteredOrders.filter((o) => o.assignedTo === se.id);
+    const data = members.map((m) => {
+      const seOrders = filteredOrders.filter((o) => o.assignedTo === m.userId);
       const revenue = seOrders.reduce((s, o) => s + o.price, 0);
       const repeats = seOrders.filter((o) => o.isRepeat).length;
-      return [se.name, se.email, String(seOrders.length), String(repeats), `৳${revenue}`];
+      return [m.name, m.email, String(seOrders.length), String(repeats), `৳${revenue}`];
     });
     downloadCSV(
       "sales_performance_export.csv",
@@ -96,9 +101,9 @@ export default function ExportPage() {
     downloadCSV(
       "products_export.csv",
       ["SKU", "Title", "Price (৳)", "Duration (days)", "Info"],
-      mockProducts.map((p) => [p.sku, p.title, `৳${p.price}`, String(p.packageDuration), p.info])
+      products.map((p) => [p.sku, p.title, `৳${p.price}`, String(p.packageDuration), p.info || ""])
     );
-    toast({ title: "Exported", description: `${mockProducts.length} products exported.` });
+    toast({ title: "Exported", description: `${products.length} products exported.` });
   };
 
   const exportAuditLogs = () => {
@@ -123,8 +128,8 @@ export default function ExportPage() {
   const exports = [
     { label: "All Orders", count: filteredOrders.length, action: exportOrders },
     { label: "Repeat Orders", count: filteredOrders.filter((o) => o.isRepeat).length, action: exportRepeatOrders },
-    { label: "Sales Performance", count: mockSalesExecutives.length, action: exportPerformance },
-    { label: "Products", count: mockProducts.length, action: exportProducts },
+    { label: "Sales Performance", count: members.length, action: exportPerformance },
+    { label: "Products", count: products.length, action: exportProducts },
     { label: "Audit Logs", count: logs.length, action: exportAuditLogs },
   ];
 
@@ -148,7 +153,7 @@ export default function ExportPage() {
             <SelectTrigger className="h-9 w-44 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All</SelectItem>
-              {mockSalesExecutives.map((se) => <SelectItem key={se.id} value={se.id}>{se.name}</SelectItem>)}
+              {members.map((m) => <SelectItem key={m.userId} value={m.userId}>{m.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -158,7 +163,7 @@ export default function ExportPage() {
             <SelectTrigger className="h-9 w-44 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All</SelectItem>
-              {mockProducts.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
+              {products.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -168,7 +173,7 @@ export default function ExportPage() {
             <SelectTrigger className="h-9 w-44 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All</SelectItem>
-              {mockDeliveryPartners.filter((d) => d.active).map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+              {deliveryPartners.filter((d) => d.isActive).map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>

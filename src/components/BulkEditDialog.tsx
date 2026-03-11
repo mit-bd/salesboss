@@ -9,7 +9,7 @@ import { Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useDeliveryMethods } from "@/hooks/useDeliveryMethods";
 import { useOrderSources } from "@/hooks/useOrderSources";
-import { mockSalesExecutives } from "@/data/mockData";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/contexts/AuditLogContext";
@@ -42,10 +42,7 @@ export default function BulkEditDialog({ open, onOpenChange, selectedIds, onComp
   const { sources: orderSources } = useOrderSources({ activeOnly: true });
   const { buildVersionMap, handleConflictResponse, conflict, clearConflict } = useBulkConflict();
 
-  const allExecutives = [
-    ...members.map((m) => ({ id: m.userId, name: m.name })),
-    ...mockSalesExecutives.filter((se) => !members.some((m) => m.userId === se.id)).map((se) => ({ id: se.id, name: se.name })),
-  ];
+  const allExecutives = members.map((m) => ({ id: m.userId, name: m.name }));
 
   const [fields, setFields] = useState<Record<string, FieldState>>({
     assignedTo: { enabled: false, value: "" },

@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { mockSalesExecutives, mockProducts } from "@/data/mockData";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { useProductStore } from "@/contexts/ProductStoreContext";
 import { useOrderSources } from "@/hooks/useOrderSources";
 import { useDeliveryMethods } from "@/hooks/useDeliveryMethods";
 import { Filter, X } from "lucide-react";
@@ -40,6 +41,8 @@ export default function GlobalFilters({ filters, onChange, showStepFilter = true
   const [open, setOpen] = useState(false);
   const { sources: orderSources } = useOrderSources();
   const { methods: activePartners } = useDeliveryMethods({ activeOnly: true });
+  const { members } = useTeamMembers();
+  const { products } = useProductStore();
 
   const hasActiveFilters = Object.values(filters).some((v) => v !== "");
 
@@ -85,8 +88,8 @@ export default function GlobalFilters({ filters, onChange, showStepFilter = true
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
                 <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                {mockSalesExecutives.map((se) => (
-                  <SelectItem key={se.id} value={se.id}>{se.name}</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.userId} value={m.userId}>{m.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -97,7 +100,7 @@ export default function GlobalFilters({ filters, onChange, showStepFilter = true
               <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="All" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
-                {mockProducts.map((p) => (
+                {products.map((p) => (
                   <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
                 ))}
               </SelectContent>
