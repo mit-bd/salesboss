@@ -65,6 +65,12 @@ export default function OrdersPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search by name, ID, or mobile..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
+        <div className="text-sm text-muted-foreground">
+          Total Orders: <span className="font-semibold text-foreground">{activeOrders.length}</span>
+          {search || Object.values(filters).some(v => v) ? (
+            <span className="ml-2">| Showing: <span className="font-semibold text-foreground">{filtered.length}</span></span>
+          ) : null}
+        </div>
       </div>
 
       <div className="animate-fade-in" style={{ paddingBottom: selectedIds.size > 0 ? "72px" : undefined }}>

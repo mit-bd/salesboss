@@ -163,11 +163,23 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
   const fetchOrders = useCallback(async () => {
     if (role === "owner" || !projectId) { setLoading(false); return; }
-    let query = supabase.from("orders").select("*").order("updated_at", { ascending: false });
-    query = (query as any).eq("project_id", projectId);
-    const { data, error } = await query;
-    if (error) { console.error("[OrderStore] Fetch error:", error); return; }
-    if (isMounted.current) { setOrders((data || []).map(mapRow)); setLoading(false); }
+    const PAGE_SIZE = 1000;
+    let allData: any[] = [];
+    let from = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      let query = supabase.from("orders").select("*").order("updated_at", { ascending: false }).range(from, from + PAGE_SIZE - 1);
+      query = (query as any).eq("project_id", projectId);
+      const { data, error } = await query;
+      if (error) { console.error("[OrderStore] Fetch error:", error); return; }
+      const rows = data || [];
+      allData = allData.concat(rows);
+      hasMore = rows.length === PAGE_SIZE;
+      from += PAGE_SIZE;
+    }
+
+    if (isMounted.current) { setOrders(allData.map(mapRow)); setLoading(false); }
   }, [projectId]);
 
   const fetchHistory = useCallback(async () => {
