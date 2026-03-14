@@ -111,12 +111,12 @@ export default function RolesPage() {
   const currentPerms = rolePermissions[selectedRole] || [];
 
   const togglePermission = (key: string) => {
-    if (selectedRole === "admin") return; // Admin cannot be modified
+    if (selectedRole === "admin") return;
     const updated = currentPerms.includes(key)
       ? currentPerms.filter((k) => k !== key)
       : [...currentPerms, key];
     setRolePermissions((prev) => ({ ...prev, [selectedRole]: updated }));
-    setDirty(JSON.stringify(updated.sort()) !== JSON.stringify(originalPerms.sort()));
+    setDirty(computeDirty(updated, selectedRole));
   };
 
   const toggleCategory = (category: string) => {
@@ -130,21 +130,19 @@ export default function RolesPage() {
       updated = [...new Set([...currentPerms, ...catKeys])];
     }
     setRolePermissions((prev) => ({ ...prev, [selectedRole]: updated }));
-    setDirty(JSON.stringify(updated.sort()) !== JSON.stringify(originalPerms.sort()));
+    setDirty(computeDirty(updated, selectedRole));
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Delete existing permissions for this role
       await (supabase.from as any)("role_permissions").delete().eq("role", selectedRole);
-      // Insert new ones
       if (currentPerms.length > 0) {
         const rows = currentPerms.map((key) => ({ role: selectedRole, permission_key: key }));
         const { error } = await (supabase.from as any)("role_permissions").insert(rows);
         if (error) throw error;
       }
-      setOriginalPerms([...currentPerms]);
+      setSavedPermissions((prev) => ({ ...prev, [selectedRole]: [...currentPerms] }));
       setDirty(false);
       toast({ title: "Permissions updated successfully", description: `Updated permissions for ${ROLE_LABELS[selectedRole] || selectedRole}.` });
       addLog({ actionType: "Role Permissions Updated", userName, role: userRole || "unknown", entity: ROLE_LABELS[selectedRole] || selectedRole, details: `${currentPerms.length} permissions assigned` });
