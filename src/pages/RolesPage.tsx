@@ -62,17 +62,22 @@ export default function RolesPage() {
       if (!grouped[rp.role]) grouped[rp.role] = [];
       grouped[rp.role].push(rp.permission_key);
     }
-    setRolePermissions(grouped);
+    setRolePermissions({ ...grouped });
+    setSavedPermissions(JSON.parse(JSON.stringify(grouped)));
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Compute dirty by comparing current vs saved for selected role
+  const computeDirty = (current: string[], role: string) => {
+    const saved = savedPermissions[role] || [];
+    return JSON.stringify([...current].sort()) !== JSON.stringify([...saved].sort());
+  };
+
   useEffect(() => {
-    const current = rolePermissions[selectedRole] || [];
-    setOriginalPerms([...current]);
-    setDirty(false);
-  }, [selectedRole, rolePermissions]);
+    setDirty(computeDirty(rolePermissions[selectedRole] || [], selectedRole));
+  }, [selectedRole]);
 
   // Cancel: revert to original
   const handleCancel = () => {
