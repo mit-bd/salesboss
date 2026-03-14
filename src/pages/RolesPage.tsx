@@ -239,15 +239,33 @@ export default function RolesPage() {
           })}
         </div>
 
-        {dirty && (
+        {/* Always-visible sticky bottom action bar */}
+        {selectedRole !== "admin" && (
           <div className="sticky bottom-4 mt-6 z-10">
-            <div className="rounded-xl border border-warning/30 bg-warning/5 backdrop-blur-sm p-3 flex items-center justify-between shadow-lg">
-              <p className="text-sm text-warning font-medium">You have unsaved permission changes</p>
+            <div className={cn(
+              "rounded-xl border p-3 flex items-center justify-between shadow-lg backdrop-blur-sm transition-all duration-300",
+              dirty
+                ? "border-warning/30 bg-warning/5"
+                : "border-border bg-card"
+            )}>
+              <p className="text-sm font-medium text-muted-foreground">
+                {dirty ? "You have unsaved permission changes" : "Permission settings for this role"}
+              </p>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={handleCancel} size="sm" className="gap-1.5">
-                  <Undo2 className="h-3.5 w-3.5" /> Cancel
-                </Button>
-                <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5">
+                {dirty && (
+                  <Button variant="outline" onClick={handleCancel} size="sm" className="gap-1.5">
+                    <Undo2 className="h-3.5 w-3.5" /> Cancel Changes
+                  </Button>
+                )}
+                <Button
+                  onClick={handleSave}
+                  disabled={saving || !dirty}
+                  size="sm"
+                  className={cn(
+                    "gap-1.5 transition-all duration-200",
+                    dirty && "animate-pulse-once ring-2 ring-primary/30"
+                  )}
+                >
                   {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                   Update Permissions
                 </Button>
