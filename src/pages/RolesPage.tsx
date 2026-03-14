@@ -74,6 +74,22 @@ export default function RolesPage() {
     setDirty(false);
   }, [selectedRole, rolePermissions]);
 
+  // Cancel: revert to original
+  const handleCancel = () => {
+    setRolePermissions((prev) => ({ ...prev, [selectedRole]: [...originalPerms] }));
+    setDirty(false);
+  };
+
+  // Warn on browser close with unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { if (dirty) { e.preventDefault(); } };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  // Block in-app navigation with unsaved changes
+  const blocker = useBlocker(dirty);
+
   if (!isAdmin) {
     navigate("/");
     return null;
