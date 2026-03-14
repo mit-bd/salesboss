@@ -45,6 +45,8 @@ interface OrderTableProps {
 export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup, pageSize = 20, selectedIds, onSelectionChange, conflictIds, disableInternalPagination }: OrderTableProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
+  const canEditOrder = hasPermission("orders.edit");
   const { updateOrder, activeOrders } = useOrderStore();
   const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
