@@ -86,9 +86,9 @@ export default function RolesPage() {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
-
-  // Block in-app navigation with unsaved changes
-  const blocker = useBlocker(dirty);
+  // In-app navigation guard state
+  const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
   if (!isAdmin) {
     navigate("/");
