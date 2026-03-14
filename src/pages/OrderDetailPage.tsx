@@ -161,15 +161,15 @@ export default function OrderDetailPage() {
                 <CheckCircle className="h-3.5 w-3.5" /> Complete Step {order.followupStep}
               </Button>
             )}
-            {isAdmin && (
-              <>
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditOpen(true)}>
-                  <Edit2 className="h-3.5 w-3.5" /> Edit Order
-                </Button>
-                <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </Button>
-              </>
+            {canEditOrder && (
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditOpen(true)}>
+                <Edit2 className="h-3.5 w-3.5" /> Edit Order
+              </Button>
+            )}
+            {canDeleteOrder && (
+              <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+                <Trash2 className="h-3.5 w-3.5" /> Delete
+              </Button>
             )}
           </div>
         </div>
