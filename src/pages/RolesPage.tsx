@@ -81,7 +81,8 @@ export default function RolesPage() {
 
   // Cancel: revert to original
   const handleCancel = () => {
-    setRolePermissions((prev) => ({ ...prev, [selectedRole]: [...originalPerms] }));
+    const saved = savedPermissions[selectedRole] || [];
+    setRolePermissions((prev) => ({ ...prev, [selectedRole]: [...saved] }));
     setDirty(false);
   };
 
