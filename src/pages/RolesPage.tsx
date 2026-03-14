@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useRole } from "@/contexts/RoleContext";
-import { useNavigate, useBlocker } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
