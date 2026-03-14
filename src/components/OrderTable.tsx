@@ -305,7 +305,7 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                   </td>
 
                   {/* Actions */}
-                  {(isAdmin || onCompleteFollowup) && (
+                  {(isAdmin || canEditOrder || onCompleteFollowup) && (
                     <td className="px-3 py-3" data-action="true">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-fast">
                         {onCompleteFollowup && (
