@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
+import { usePermissions } from "@/contexts/PermissionContext";
 import { cn } from "@/lib/utils";
 import {
   Copy, Phone, MessageCircle, Plus, RefreshCw, Edit2,
@@ -44,6 +45,8 @@ interface OrderTableProps {
 export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup, pageSize = 20, selectedIds, onSelectionChange, conflictIds, disableInternalPagination }: OrderTableProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
+  const canEditOrder = hasPermission("orders.edit");
   const { updateOrder, activeOrders } = useOrderStore();
   const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
@@ -135,7 +138,7 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Delivery</th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Amount (৳)</th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Assigned</th>
-              {(isAdmin || onCompleteFollowup) && <th className="px-3 py-3 w-16"></th>}
+              {(isAdmin || canEditOrder || onCompleteFollowup) && <th className="px-3 py-3 w-16"></th>}
             </tr>
           </thead>
           <tbody>
@@ -302,7 +305,7 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                   </td>
 
                   {/* Actions */}
-                  {(isAdmin || onCompleteFollowup) && (
+                  {(isAdmin || canEditOrder || onCompleteFollowup) && (
                     <td className="px-3 py-3" data-action="true">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-fast">
                         {onCompleteFollowup && (
@@ -310,7 +313,7 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                             <CheckCircle className="h-3 w-3" />
                           </Button>
                         )}
-                        {isAdmin && onEdit && (
+                        {(isAdmin || canEditOrder) && onEdit && (
                           <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" data-action="true" onClick={(e) => { e.stopPropagation(); onEdit(order); }}>
                             <Edit2 className="h-3 w-3" />
                           </Button>

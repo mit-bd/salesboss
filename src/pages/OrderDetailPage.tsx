@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Phone, MapPin, Package, Calendar, RefreshCw, ShoppingCart, Zap, Truck, Edit2, Trash2, CheckCircle, Clock, MessageSquare, User, UserX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/contexts/RoleContext";
+import { usePermissions } from "@/contexts/PermissionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAuditLog } from "@/contexts/AuditLogContext";
 import EditOrderDialog from "@/components/EditOrderDialog";
@@ -50,6 +51,9 @@ export default function OrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAdmin } = useRole();
+  const { hasPermission } = usePermissions();
+  const canEditOrder = isAdmin || hasPermission("orders.edit");
+  const canDeleteOrder = isAdmin || hasPermission("orders.delete");
   const { activeOrders, orders, softDelete, updateOrder, completeFollowup, editFollowup, getOrderHistory, getUpsellsForFollowup, getRepeatOrdersForFollowup, refreshOrders } = useOrderStore();
   const { toast } = useToast();
   const { addLog } = useAuditLog();
@@ -157,15 +161,15 @@ export default function OrderDetailPage() {
                 <CheckCircle className="h-3.5 w-3.5" /> Complete Step {order.followupStep}
               </Button>
             )}
-            {isAdmin && (
-              <>
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditOpen(true)}>
-                  <Edit2 className="h-3.5 w-3.5" /> Edit Order
-                </Button>
-                <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </Button>
-              </>
+            {canEditOrder && (
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditOpen(true)}>
+                <Edit2 className="h-3.5 w-3.5" /> Edit Order
+              </Button>
+            )}
+            {canDeleteOrder && (
+              <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+                <Trash2 className="h-3.5 w-3.5" /> Delete
+              </Button>
             )}
           </div>
         </div>

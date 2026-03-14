@@ -13,6 +13,7 @@ import BulkEditDialog from "@/components/BulkEditDialog";
 import BulkSingleFieldDialog, { BulkFieldType } from "@/components/BulkSingleFieldDialog";
 import OrderTable from "@/components/OrderTable";
 import { useRole } from "@/contexts/RoleContext";
+import { usePermissions } from "@/contexts/PermissionContext";
 import { useServerPaginatedOrders } from "@/hooks/useServerPaginatedOrders";
 import { Order } from "@/types/data";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,8 @@ export default function OrdersPage() {
   const [singleFieldType, setSingleFieldType] = useState<BulkFieldType>("assignExecutive");
   const [pageSize, setPageSize] = useState(50);
   const { isAdmin } = useRole();
+  const { hasPermission } = usePermissions();
+  const canEditOrder = isAdmin || hasPermission("orders.edit");
   const { updateOrder } = useOrderStore();
 
   // Debounce search input
@@ -123,7 +126,7 @@ export default function OrdersPage() {
           <OrderTable
             orders={orders}
             isAdmin={isAdmin}
-            onEdit={setEditOrder}
+            onEdit={canEditOrder ? setEditOrder : undefined}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             conflictIds={conflictIds}
