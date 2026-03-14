@@ -2,15 +2,19 @@ import { useState, useEffect, useCallback } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useRole } from "@/contexts/RoleContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useBlocker } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Shield, Save } from "lucide-react";
+import { Loader2, Shield, Save, Undo2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/contexts/AuditLogContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Permission {
   key: string;
@@ -69,6 +73,22 @@ export default function RolesPage() {
     setOriginalPerms([...current]);
     setDirty(false);
   }, [selectedRole, rolePermissions]);
+
+  // Cancel: revert to original
+  const handleCancel = () => {
+    setRolePermissions((prev) => ({ ...prev, [selectedRole]: [...originalPerms] }));
+    setDirty(false);
+  };
+
+  // Warn on browser close with unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => { if (dirty) { e.preventDefault(); } };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  // Block in-app navigation with unsaved changes
+  const blocker = useBlocker(dirty);
 
   if (!isAdmin) {
     navigate("/");
@@ -148,10 +168,15 @@ export default function RolesPage() {
             <p className="text-sm text-muted-foreground mt-1">Manage permission sets for each role</p>
           </div>
           {dirty && (
-            <Button onClick={handleSave} disabled={saving} className="gap-1.5">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save Changes
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleCancel} className="gap-1.5">
+                <Undo2 className="h-4 w-4" /> Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={saving} className="gap-1.5">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Update Permissions
+              </Button>
+            </div>
           )}
         </div>
 
@@ -225,16 +250,39 @@ export default function RolesPage() {
         </div>
 
         {dirty && (
-          <div className="sticky bottom-4 mt-6">
-            <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 flex items-center justify-between">
+          <div className="sticky bottom-4 mt-6 z-10">
+            <div className="rounded-xl border border-warning/30 bg-warning/5 backdrop-blur-sm p-3 flex items-center justify-between shadow-lg">
               <p className="text-sm text-warning font-medium">You have unsaved permission changes</p>
-              <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5">
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                Save
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={handleCancel} size="sm" className="gap-1.5">
+                  <Undo2 className="h-3.5 w-3.5" /> Cancel
+                </Button>
+                <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5">
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                  Update Permissions
+                </Button>
+              </div>
             </div>
           </div>
         )}
+
+        {/* Navigation blocker dialog */}
+        <AlertDialog open={blocker.state === "blocked"}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+              <AlertDialogDescription>
+                You have unsaved permission changes. Do you want to leave without saving?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => blocker.reset?.()}>Stay</AlertDialogCancel>
+              <AlertDialogAction onClick={() => blocker.proceed?.()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Leave
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppLayout>
   );
