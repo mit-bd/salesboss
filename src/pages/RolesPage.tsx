@@ -167,17 +167,7 @@ export default function RolesPage() {
             </h1>
             <p className="text-sm text-muted-foreground mt-1">Manage permission sets for each role</p>
           </div>
-          {dirty && (
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleCancel} className="gap-1.5">
-                <Undo2 className="h-4 w-4" /> Cancel
-              </Button>
-              <Button onClick={handleSave} disabled={saving} className="gap-1.5">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Update Permissions
-              </Button>
-            </div>
-          )}
+        
         </div>
 
         {/* Role Tabs */}
