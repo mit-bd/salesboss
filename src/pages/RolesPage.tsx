@@ -40,11 +40,11 @@ export default function RolesPage() {
 
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({});
+  const [savedPermissions, setSavedPermissions] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedRole, setSelectedRole] = useState("sub_admin");
   const [dirty, setDirty] = useState(false);
-  const [originalPerms, setOriginalPerms] = useState<string[]>([]);
 
   const fetchData = useCallback(async () => {
     const [permsRes, rpRes] = await Promise.all([
