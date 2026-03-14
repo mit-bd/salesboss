@@ -310,7 +310,7 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                             <CheckCircle className="h-3 w-3" />
                           </Button>
                         )}
-                        {isAdmin && onEdit && (
+                        {(isAdmin || canEditOrder) && onEdit && (
                           <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" data-action="true" onClick={(e) => { e.stopPropagation(); onEdit(order); }}>
                             <Edit2 className="h-3 w-3" />
                           </Button>
