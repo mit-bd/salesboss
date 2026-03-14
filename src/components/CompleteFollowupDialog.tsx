@@ -358,16 +358,36 @@ export default function CompleteFollowupDialog({
           {/* Next Followup Date */}
           {!isFinalStep && (
             <div className="space-y-2">
-              <div>
-                <Label className="text-xs">Next Followup Date *</Label>
-                <Input
-                  type="date"
-                  value={nextDate}
-                  onChange={(e) => { setNextDate(e.target.value); if (error) setError(""); }}
-                  className="mt-1"
-                  min={new Date().toISOString().split("T")[0]}
-                />
-              </div>
+              <Label className="text-xs">Next Followup Date *</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal mt-1",
+                      !nextDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {nextDate ? format(new Date(nextDate + "T00:00:00"), "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start" side="top">
+                  <Calendar
+                    mode="single"
+                    selected={nextDate ? new Date(nextDate + "T00:00:00") : undefined}
+                    onSelect={(date) => {
+                      if (date) {
+                        setNextDate(format(date, "yyyy-MM-dd"));
+                        if (error) setError("");
+                      }
+                    }}
+                    disabled={(date) => date < new Date(new Date().toDateString())}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           )}
 
