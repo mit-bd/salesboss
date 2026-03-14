@@ -13,6 +13,7 @@ import BulkEditDialog from "@/components/BulkEditDialog";
 import BulkSingleFieldDialog, { BulkFieldType } from "@/components/BulkSingleFieldDialog";
 import OrderTable from "@/components/OrderTable";
 import { useRole } from "@/contexts/RoleContext";
+import { usePermissions } from "@/contexts/PermissionContext";
 import { useServerPaginatedOrders } from "@/hooks/useServerPaginatedOrders";
 import { Order } from "@/types/data";
 import { Button } from "@/components/ui/button";
