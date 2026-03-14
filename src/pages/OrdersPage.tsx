@@ -126,7 +126,7 @@ export default function OrdersPage() {
           <OrderTable
             orders={orders}
             isAdmin={isAdmin}
-            onEdit={setEditOrder}
+            onEdit={canEditOrder ? setEditOrder : undefined}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             conflictIds={conflictIds}
