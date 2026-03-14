@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Loader2, CheckCircle, ChevronDown, Plus, X, ShoppingCart, RefreshCw } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Loader2, CheckCircle, ChevronDown, Plus, X, ShoppingCart, RefreshCw, CalendarIcon } from "lucide-react";
 import { Order, UpsellEntry, RepeatOrderEntry } from "@/types/data";
 import { useProductStore } from "@/contexts/ProductStoreContext";
 import { cn } from "@/lib/utils";
