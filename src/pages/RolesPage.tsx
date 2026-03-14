@@ -40,11 +40,11 @@ export default function RolesPage() {
 
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({});
+  const [savedPermissions, setSavedPermissions] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedRole, setSelectedRole] = useState("sub_admin");
   const [dirty, setDirty] = useState(false);
-  const [originalPerms, setOriginalPerms] = useState<string[]>([]);
 
   const fetchData = useCallback(async () => {
     const [permsRes, rpRes] = await Promise.all([
@@ -62,21 +62,27 @@ export default function RolesPage() {
       if (!grouped[rp.role]) grouped[rp.role] = [];
       grouped[rp.role].push(rp.permission_key);
     }
-    setRolePermissions(grouped);
+    setRolePermissions({ ...grouped });
+    setSavedPermissions(JSON.parse(JSON.stringify(grouped)));
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Compute dirty by comparing current vs saved for selected role
+  const computeDirty = (current: string[], role: string) => {
+    const saved = savedPermissions[role] || [];
+    return JSON.stringify([...current].sort()) !== JSON.stringify([...saved].sort());
+  };
+
   useEffect(() => {
-    const current = rolePermissions[selectedRole] || [];
-    setOriginalPerms([...current]);
-    setDirty(false);
-  }, [selectedRole, rolePermissions]);
+    setDirty(computeDirty(rolePermissions[selectedRole] || [], selectedRole));
+  }, [selectedRole]);
 
   // Cancel: revert to original
   const handleCancel = () => {
-    setRolePermissions((prev) => ({ ...prev, [selectedRole]: [...originalPerms] }));
+    const saved = savedPermissions[selectedRole] || [];
+    setRolePermissions((prev) => ({ ...prev, [selectedRole]: [...saved] }));
     setDirty(false);
   };
 
@@ -105,12 +111,12 @@ export default function RolesPage() {
   const currentPerms = rolePermissions[selectedRole] || [];
 
   const togglePermission = (key: string) => {
-    if (selectedRole === "admin") return; // Admin cannot be modified
+    if (selectedRole === "admin") return;
     const updated = currentPerms.includes(key)
       ? currentPerms.filter((k) => k !== key)
       : [...currentPerms, key];
     setRolePermissions((prev) => ({ ...prev, [selectedRole]: updated }));
-    setDirty(JSON.stringify(updated.sort()) !== JSON.stringify(originalPerms.sort()));
+    setDirty(computeDirty(updated, selectedRole));
   };
 
   const toggleCategory = (category: string) => {
@@ -124,21 +130,19 @@ export default function RolesPage() {
       updated = [...new Set([...currentPerms, ...catKeys])];
     }
     setRolePermissions((prev) => ({ ...prev, [selectedRole]: updated }));
-    setDirty(JSON.stringify(updated.sort()) !== JSON.stringify(originalPerms.sort()));
+    setDirty(computeDirty(updated, selectedRole));
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Delete existing permissions for this role
       await (supabase.from as any)("role_permissions").delete().eq("role", selectedRole);
-      // Insert new ones
       if (currentPerms.length > 0) {
         const rows = currentPerms.map((key) => ({ role: selectedRole, permission_key: key }));
         const { error } = await (supabase.from as any)("role_permissions").insert(rows);
         if (error) throw error;
       }
-      setOriginalPerms([...currentPerms]);
+      setSavedPermissions((prev) => ({ ...prev, [selectedRole]: [...currentPerms] }));
       setDirty(false);
       toast({ title: "Permissions updated successfully", description: `Updated permissions for ${ROLE_LABELS[selectedRole] || selectedRole}.` });
       addLog({ actionType: "Role Permissions Updated", userName, role: userRole || "unknown", entity: ROLE_LABELS[selectedRole] || selectedRole, details: `${currentPerms.length} permissions assigned` });
