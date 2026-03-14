@@ -31,6 +31,8 @@ export default function OrdersPage() {
   const [singleFieldType, setSingleFieldType] = useState<BulkFieldType>("assignExecutive");
   const [pageSize, setPageSize] = useState(50);
   const { isAdmin } = useRole();
+  const { hasPermission } = usePermissions();
+  const canEditOrder = isAdmin || hasPermission("orders.edit");
   const { updateOrder } = useOrderStore();
 
   // Debounce search input
