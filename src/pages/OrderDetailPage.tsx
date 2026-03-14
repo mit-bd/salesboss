@@ -51,6 +51,9 @@ export default function OrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAdmin } = useRole();
+  const { hasPermission } = usePermissions();
+  const canEditOrder = isAdmin || hasPermission("orders.edit");
+  const canDeleteOrder = isAdmin || hasPermission("orders.delete");
   const { activeOrders, orders, softDelete, updateOrder, completeFollowup, editFollowup, getOrderHistory, getUpsellsForFollowup, getRepeatOrdersForFollowup, refreshOrders } = useOrderStore();
   const { toast } = useToast();
   const { addLog } = useAuditLog();
