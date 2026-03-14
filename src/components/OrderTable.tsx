@@ -138,7 +138,7 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Delivery</th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Amount (৳)</th>
               <th className="px-3 py-3 text-left font-medium text-muted-foreground text-xs">Assigned</th>
-              {(isAdmin || onCompleteFollowup) && <th className="px-3 py-3 w-16"></th>}
+              {(isAdmin || canEditOrder || onCompleteFollowup) && <th className="px-3 py-3 w-16"></th>}
             </tr>
           </thead>
           <tbody>
