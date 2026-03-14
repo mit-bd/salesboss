@@ -267,7 +267,7 @@ export default function RolesPage() {
         )}
 
         {/* Navigation blocker dialog */}
-        <AlertDialog open={blocker.state === "blocked"}>
+        <AlertDialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
@@ -276,8 +276,8 @@ export default function RolesPage() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => blocker.reset?.()}>Stay</AlertDialogCancel>
-              <AlertDialogAction onClick={() => blocker.proceed?.()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              <AlertDialogCancel onClick={() => { setShowLeaveDialog(false); setPendingNavigation(null); }}>Stay</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { setShowLeaveDialog(false); if (pendingNavigation) navigate(pendingNavigation); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                 Leave
               </AlertDialogAction>
             </AlertDialogFooter>
