@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useRole } from "@/contexts/RoleContext";
-import { useNavigate, useBlocker } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -86,9 +86,9 @@ export default function RolesPage() {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
-
-  // Block in-app navigation with unsaved changes
-  const blocker = useBlocker(dirty);
+  // In-app navigation guard state
+  const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
   if (!isAdmin) {
     navigate("/");
@@ -267,7 +267,7 @@ export default function RolesPage() {
         )}
 
         {/* Navigation blocker dialog */}
-        <AlertDialog open={blocker.state === "blocked"}>
+        <AlertDialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
@@ -276,8 +276,8 @@ export default function RolesPage() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => blocker.reset?.()}>Stay</AlertDialogCancel>
-              <AlertDialogAction onClick={() => blocker.proceed?.()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              <AlertDialogCancel onClick={() => { setShowLeaveDialog(false); setPendingNavigation(null); }}>Stay</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { setShowLeaveDialog(false); if (pendingNavigation) navigate(pendingNavigation); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                 Leave
               </AlertDialogAction>
             </AlertDialogFooter>
