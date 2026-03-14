@@ -140,7 +140,7 @@ export default function RolesPage() {
       }
       setOriginalPerms([...currentPerms]);
       setDirty(false);
-      toast({ title: "Permissions saved", description: `Updated permissions for ${ROLE_LABELS[selectedRole] || selectedRole}.` });
+      toast({ title: "Permissions updated successfully", description: `Updated permissions for ${ROLE_LABELS[selectedRole] || selectedRole}.` });
       addLog({ actionType: "Role Permissions Updated", userName, role: userRole || "unknown", entity: ROLE_LABELS[selectedRole] || selectedRole, details: `${currentPerms.length} permissions assigned` });
     } catch (err: any) {
       toast({ title: "Error saving permissions", description: err.message, variant: "destructive" });
