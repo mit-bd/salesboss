@@ -470,8 +470,12 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       const updatePayload: any = {
         current_status: "completed",
         followup_date: data.nextFollowupDate || null,
+        next_followup_datetime: data.nextFollowupDatetime || null,
       };
-      if (isFinalStep) updatePayload.health = "good";
+      if (isFinalStep) {
+        updatePayload.health = "good";
+        updatePayload.next_followup_datetime = null;
+      }
 
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
