@@ -358,33 +358,9 @@ export default function OwnerUsersPage() {
               </div>
               <div className="border-t border-border pt-3">
                 <Label className="text-xs text-muted-foreground">Password</Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-sm font-medium text-foreground font-mono">
-                    {showViewPassword ? (viewPasswordText || "Not stored") : "●●●●●●●●"}
-                  </p>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    aria-label={showViewPassword ? "Hide password" : "Show password"}
-                    disabled={viewPasswordLoading}
-                    onClick={async () => {
-                      if (showViewPassword) {
-                        setShowViewPassword(false);
-                        return;
-                      }
-                      setViewPasswordLoading(true);
-                      const { data } = await supabase.functions.invoke("manage-team", {
-                        body: { action: "owner_get_password", userId: viewUser.id },
-                      });
-                      setViewPasswordText(data?.password || "");
-                      setShowViewPassword(true);
-                      setViewPasswordLoading(false);
-                    }}
-                  >
-                    {viewPasswordLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : showViewPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                  </Button>
-                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Managed by authentication system. Use "Set Password" to reset.
+                </p>
               </div>
             </div>
           )}

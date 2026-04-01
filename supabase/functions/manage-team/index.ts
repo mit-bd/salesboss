@@ -410,9 +410,11 @@ serve(async (req) => {
         if (createError) return json({ error: createError.message }, 400);
 
         await supabaseAdmin.from("user_roles").insert({ user_id: newUser.user.id, role });
-        const profileUpdatesCreate: any = { password_text: password };
+        const profileUpdatesCreate: any = {};
         if (projectId) profileUpdatesCreate.project_id = projectId;
-        await supabaseAdmin.from("profiles").update(profileUpdatesCreate).eq("user_id", newUser.user.id);
+        if (Object.keys(profileUpdatesCreate).length > 0) {
+          await supabaseAdmin.from("profiles").update(profileUpdatesCreate).eq("user_id", newUser.user.id);
+        }
         return json({ success: true, userId: newUser.user.id });
       }
 
@@ -452,15 +454,12 @@ serve(async (req) => {
         if (!userId || !newPassword) return json({ error: "userId and newPassword required" }, 400);
         const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
         if (error) return json({ error: error.message }, 400);
-        await supabaseAdmin.from("profiles").update({ password_text: newPassword }).eq("user_id", userId);
+        // Password is managed by auth system only - no plaintext storage
         return json({ success: true });
       }
 
       if (action === "owner_get_password") {
-        const { userId } = body;
-        if (!userId) return json({ error: "userId required" }, 400);
-        const { data: profile } = await supabaseAdmin.from("profiles").select("password_text").eq("user_id", userId).maybeSingle();
-        return json({ password: profile?.password_text || null });
+        return json({ password: null, message: "Plaintext password storage has been removed for security. Use 'Set Password' to reset a user's password." });
       }
 
       if (action === "owner_toggle_ban") {
