@@ -162,7 +162,13 @@ export default function OrderDetailPage() {
               </Button>
             )}
             {canEditOrder && (
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditOpen(true)}>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
+                if (!isAdmin && order.assignedTo !== user?.id) {
+                  toast({ title: "Permission Denied", description: "You can only edit orders assigned to you.", variant: "destructive" });
+                  return;
+                }
+                setEditOpen(true);
+              }}>
                 <Edit2 className="h-3.5 w-3.5" /> Edit Order
               </Button>
             )}
