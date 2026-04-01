@@ -454,7 +454,7 @@ serve(async (req) => {
         if (!userId || !newPassword) return json({ error: "userId and newPassword required" }, 400);
         const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
         if (error) return json({ error: error.message }, 400);
-        await supabaseAdmin.from("profiles").update({ password_text: newPassword }).eq("user_id", userId);
+        // Password is managed by auth system only - no plaintext storage
         return json({ success: true });
       }
 
