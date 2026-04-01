@@ -10,12 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Loader2, CheckCircle, ChevronDown, Plus, X, ShoppingCart, RefreshCw, CalendarIcon } from "lucide-react";
+import { Loader2, CheckCircle, ChevronDown, Plus, X, ShoppingCart, RefreshCw, CalendarIcon, Clock } from "lucide-react";
 import { Order, UpsellEntry, RepeatOrderEntry } from "@/types/data";
 import { useProductStore } from "@/contexts/ProductStoreContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFollowupProblems } from "@/hooks/useFollowupProblems";
 import ProblemsQuickInfoSection from "@/components/followup/ProblemsQuickInfoSection";
+import AiFollowupInsightPanel from "@/components/followup/AiFollowupInsightPanel";
 import { cn } from "@/lib/utils";
 
 interface CompleteFollowupDialogProps {
@@ -30,6 +31,7 @@ interface CompleteFollowupDialogProps {
     upsellAttempted: boolean;
     upsellDetails: string;
     nextFollowupDate: string | null;
+    nextFollowupDatetime: string | null;
     upsellEntries: UpsellEntry[];
     repeatOrderEntries: RepeatOrderEntry[];
   }) => Promise<void>;
@@ -80,11 +82,18 @@ function ProductEntryCard({
   );
 }
 
+// Time picker helper
+const HOURS = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, "0"));
+const MINUTES = ["00", "15", "30", "45"];
+
 export default function CompleteFollowupDialog({ order, open, onOpenChange, onComplete }: CompleteFollowupDialogProps) {
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
   const [problems, setProblems] = useState("");
   const [nextDate, setNextDate] = useState("");
+  const [nextHour, setNextHour] = useState("04");
+  const [nextMinute, setNextMinute] = useState("30");
+  const [nextAmPm, setNextAmPm] = useState("PM");
   const [error, setError] = useState("");
 
   // Problems & Quick Info
@@ -121,7 +130,7 @@ export default function CompleteFollowupDialog({ order, open, onOpenChange, onCo
     setProblems(selectedText);
   }, [selectedProblems]);
 
-  // Build quick info summary and append to note area
+  // Build quick info summary
   const quickInfoSummary = useMemo(() => {
     const parts: string[] = [];
     quickInfoFields.forEach((field) => {
@@ -132,6 +141,26 @@ export default function CompleteFollowupDialog({ order, open, onOpenChange, onCo
     });
     return parts.join(", ");
   }, [quickInfoValues, quickInfoFields]);
+
+  // Build next followup datetime ISO string
+  const nextFollowupDatetime = useMemo(() => {
+    if (!nextDate) return null;
+    let hour24 = parseInt(nextHour);
+    if (nextAmPm === "PM" && hour24 !== 12) hour24 += 12;
+    if (nextAmPm === "AM" && hour24 === 12) hour24 = 0;
+    return `${nextDate}T${hour24.toString().padStart(2, "0")}:${nextMinute}:00`;
+  }, [nextDate, nextHour, nextMinute, nextAmPm]);
+
+  const formattedDateTime = useMemo(() => {
+    if (!nextDate) return "";
+    try {
+      const dateStr = `${nextDate}T00:00:00`;
+      const formatted = format(new Date(dateStr), "dd MMM yyyy");
+      return `${formatted} - ${nextHour}:${nextMinute} ${nextAmPm}`;
+    } catch {
+      return "";
+    }
+  }, [nextDate, nextHour, nextMinute, nextAmPm]);
 
   const handleToggleProblem = (label: string) => {
     setSelectedProblems((prev) => {
@@ -166,11 +195,10 @@ export default function CompleteFollowupDialog({ order, open, onOpenChange, onCo
 
   const handleSubmit = async () => {
     if (!note.trim()) { setError("Followup summary note is required"); return; }
-    if (!isFinalStep && !nextDate) { setError("Next followup date is required"); return; }
+    if (!isFinalStep && !nextDate) { setError("Next followup date & time is required"); return; }
     if (addUpsell && upsellEntries.some((e) => !e.productId)) { setError("Please select a product for all upsell entries"); return; }
     if (addRepeat && repeatEntries.some((e) => !e.productId)) { setError("Please select a product for all repeat order entries"); return; }
 
-    // Build final note with quick info
     let finalNote = note.trim();
     if (quickInfoSummary) finalNote += `\n\n📋 ${quickInfoSummary}`;
 
@@ -185,11 +213,13 @@ export default function CompleteFollowupDialog({ order, open, onOpenChange, onCo
         upsellAttempted: addUpsell && upsellEntries.length > 0,
         upsellDetails: addUpsell ? upsellEntries.map((e) => e.productName).join(", ") : "",
         nextFollowupDate: isFinalStep ? null : nextDate,
+        nextFollowupDatetime: isFinalStep ? null : nextFollowupDatetime,
         upsellEntries: addUpsell ? upsellEntries : [],
         repeatOrderEntries: addRepeat ? repeatEntries : [],
       });
       setNote(""); setProblems(""); setSelectedProblems(new Set()); setQuickInfoValues({});
       setAddUpsell(false); setUpsellEntries([]); setAddRepeat(false); setRepeatEntries([]); setNextDate("");
+      setNextHour("04"); setNextMinute("30"); setNextAmPm("PM");
       onOpenChange(false);
     } catch {
       // Error handled by caller
@@ -200,7 +230,7 @@ export default function CompleteFollowupDialog({ order, open, onOpenChange, onCo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-success" />
@@ -214,41 +244,56 @@ export default function CompleteFollowupDialog({ order, open, onOpenChange, onCo
             <p className="text-xs text-muted-foreground">{order.productTitle} · ৳{order.price}</p>
           </div>
 
-          {/* Required Fields */}
-          <div>
-            <Label className="text-xs">Followup Summary Note *</Label>
-            <Textarea
-              value={note}
-              onChange={(e) => { setNote(e.target.value); if (error) setError(""); }}
-              placeholder="What was discussed during this followup..."
-              className="mt-1"
-              rows={3}
-            />
-          </div>
-
-          {/* Smart Problems & Quick Info Section */}
-          <div className="rounded-lg border border-border p-3 space-y-3">
-            <ProblemsQuickInfoSection
-              problems={problemOptions}
-              quickInfoFields={quickInfoFields}
-              selectedProblems={selectedProblems}
-              onToggleProblem={handleToggleProblem}
-              quickInfoValues={quickInfoValues}
-              onQuickInfoChange={handleQuickInfoChange}
-              isAdmin={isAdmin}
-              onAddProblem={handleAddProblem}
-              onEditProblem={updateProblem}
-              onDeleteProblem={deleteProblem}
-              onAddQuickInfoField={handleAddField}
-              onDeleteQuickInfoField={deleteQuickInfoField}
-            />
-
-            {/* Auto-generated problems text (read-only preview) */}
-            {problems && (
-              <div className="rounded bg-muted/50 p-2">
-                <p className="text-xs text-muted-foreground">Selected: <span className="text-foreground">{problems}</span></p>
+          {/* Two Column Layout: Problems + Quick Info | AI Panel */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Left Column: Note + Problems + Quick Info */}
+            <div className="space-y-4">
+              <div>
+                <Label className="text-xs">Followup Summary Note *</Label>
+                <Textarea
+                  value={note}
+                  onChange={(e) => { setNote(e.target.value); if (error) setError(""); }}
+                  placeholder="What was discussed during this followup..."
+                  className="mt-1"
+                  rows={3}
+                />
               </div>
-            )}
+
+              <div className="rounded-lg border border-border p-3 space-y-3">
+                <ProblemsQuickInfoSection
+                  problems={problemOptions}
+                  quickInfoFields={quickInfoFields}
+                  selectedProblems={selectedProblems}
+                  onToggleProblem={handleToggleProblem}
+                  quickInfoValues={quickInfoValues}
+                  onQuickInfoChange={handleQuickInfoChange}
+                  isAdmin={isAdmin}
+                  onAddProblem={handleAddProblem}
+                  onEditProblem={updateProblem}
+                  onDeleteProblem={deleteProblem}
+                  onAddQuickInfoField={handleAddField}
+                  onDeleteQuickInfoField={deleteQuickInfoField}
+                />
+                {problems && (
+                  <div className="rounded bg-muted/50 p-2">
+                    <p className="text-xs text-muted-foreground">Selected: <span className="text-foreground">{problems}</span></p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Column: AI Panel */}
+            <div className="space-y-4">
+              <AiFollowupInsightPanel
+                customerName={order.customerName}
+                productTitle={order.productTitle}
+                productPrice={order.price}
+                stepNumber={order.followupStep}
+                selectedProblems={Array.from(selectedProblems)}
+                quickInfoSummary={quickInfoSummary}
+                products={products}
+              />
+            </div>
           </div>
 
           {/* Upsell Section */}
@@ -315,28 +360,70 @@ export default function CompleteFollowupDialog({ order, open, onOpenChange, onCo
             </div>
           </Collapsible>
 
-          {/* Next Followup Date */}
+          {/* Next Followup Date + Time */}
           {!isFinalStep && (
-            <div className="space-y-2">
-              <Label className="text-xs">Next Followup Date *</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal mt-1", !nextDate && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {nextDate ? format(new Date(nextDate + "T00:00:00"), "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start" side="top">
-                  <Calendar
-                    mode="single"
-                    selected={nextDate ? new Date(nextDate + "T00:00:00") : undefined}
-                    onSelect={(date) => { if (date) { setNextDate(format(date, "yyyy-MM-dd")); if (error) setError(""); } }}
-                    disabled={(date) => date < new Date(new Date().toDateString())}
-                    initialFocus
-                    className={cn("p-3 pointer-events-auto")}
-                  />
-                </PopoverContent>
-              </Popover>
+            <div className="space-y-3">
+              <Label className="text-xs font-medium flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                Next Followup Date & Time *
+              </Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Date Picker */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !nextDate && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {nextDate ? format(new Date(nextDate + "T00:00:00"), "dd MMM yyyy") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start" side="top">
+                    <Calendar
+                      mode="single"
+                      selected={nextDate ? new Date(nextDate + "T00:00:00") : undefined}
+                      onSelect={(date) => { if (date) { setNextDate(format(date, "yyyy-MM-dd")); if (error) setError(""); } }}
+                      disabled={(date) => date < new Date(new Date().toDateString())}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                {/* Time Picker */}
+                <div className="flex items-center gap-2">
+                  <Select value={nextHour} onValueChange={setNextHour}>
+                    <SelectTrigger className="w-[70px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {HOURS.map((h) => (<SelectItem key={h} value={h}>{h}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-sm font-medium text-muted-foreground">:</span>
+                  <Select value={nextMinute} onValueChange={setNextMinute}>
+                    <SelectTrigger className="w-[70px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MINUTES.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={nextAmPm} onValueChange={setNextAmPm}>
+                    <SelectTrigger className="w-[70px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AM">AM</SelectItem>
+                      <SelectItem value="PM">PM</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {formattedDateTime && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Scheduled: {formattedDateTime}
+                </p>
+              )}
             </div>
           )}
 
