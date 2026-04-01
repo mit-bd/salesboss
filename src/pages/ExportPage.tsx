@@ -16,8 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Download } from "lucide-react";
+import { Download, FileArchive, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import JSZip from "jszip";
 
 function downloadCSV(filename: string, headers: string[], rows: string[][]) {
   const csvContent = [
