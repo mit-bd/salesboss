@@ -459,10 +459,7 @@ serve(async (req) => {
       }
 
       if (action === "owner_get_password") {
-        const { userId } = body;
-        if (!userId) return json({ error: "userId required" }, 400);
-        const { data: profile } = await supabaseAdmin.from("profiles").select("password_text").eq("user_id", userId).maybeSingle();
-        return json({ password: profile?.password_text || null });
+        return json({ password: null, message: "Plaintext password storage has been removed for security. Use 'Set Password' to reset a user's password." });
       }
 
       if (action === "owner_toggle_ban") {
