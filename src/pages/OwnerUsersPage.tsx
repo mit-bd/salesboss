@@ -17,7 +17,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Loader2, Plus, Pencil, Shield, Key, Ban, Trash2, Eye, Users, Building2 } from "lucide-react";
+import { Loader2, Plus, Pencil, Shield, Key, Ban, Trash2, Eye, EyeOff, Users, Building2 } from "lucide-react";
 import OwnerLayout from "@/components/owner/OwnerLayout";
 
 interface UserItem {
