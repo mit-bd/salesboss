@@ -410,9 +410,9 @@ serve(async (req) => {
         if (createError) return json({ error: createError.message }, 400);
 
         await supabaseAdmin.from("user_roles").insert({ user_id: newUser.user.id, role });
-        if (projectId) {
-          await supabaseAdmin.from("profiles").update({ project_id: projectId }).eq("user_id", newUser.user.id);
-        }
+        const profileUpdatesCreate: any = { password_text: password };
+        if (projectId) profileUpdatesCreate.project_id = projectId;
+        await supabaseAdmin.from("profiles").update(profileUpdatesCreate).eq("user_id", newUser.user.id);
         return json({ success: true, userId: newUser.user.id });
       }
 
