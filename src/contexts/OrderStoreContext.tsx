@@ -379,6 +379,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       upsellAttempted: boolean;
       upsellDetails: string;
       nextFollowupDate: string | null;
+      nextFollowupDatetime?: string | null;
       upsellEntries: UpsellEntry[];
       repeatOrderEntries: RepeatOrderEntry[];
     }) => {
