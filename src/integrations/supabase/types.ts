@@ -265,6 +265,88 @@ export type Database = {
           },
         ]
       }
+      followup_problems: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          label: string
+          project_id: string | null
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          label: string
+          project_id?: string | null
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          project_id?: string | null
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "followup_problems_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      followup_quick_info_fields: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          field_type: string
+          id: string
+          is_active: boolean
+          label: string
+          options: Json | null
+          project_id: string | null
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          field_type?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          options?: Json | null
+          project_id?: string | null
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          field_type?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          options?: Json | null
+          project_id?: string | null
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "followup_quick_info_fields_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string
