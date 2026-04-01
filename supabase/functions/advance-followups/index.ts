@@ -28,9 +28,8 @@ Deno.serve(async (req) => {
 
     console.log(`Advanced ${data} orders to next followup step`);
 
-    // 2. Create notifications for orders that just became pending (recently advanced)
+    // 2. Create notifications for orders that just became pending
     if (data > 0) {
-      // Find orders that were just advanced (updated_at within last 2 minutes, status pending)
       const { data: advancedOrders, error: fetchError } = await supabase
         .from("orders")
         .select("id, invoice_id, customer_name, followup_step, assigned_to, project_id")
@@ -42,7 +41,6 @@ Deno.serve(async (req) => {
         const notifications: any[] = [];
 
         for (const order of advancedOrders) {
-          // Notify assigned sales executive
           if (order.assigned_to) {
             notifications.push({
               user_id: order.assigned_to,
@@ -54,7 +52,6 @@ Deno.serve(async (req) => {
             });
           }
 
-          // Notify admins in the same project
           if (order.project_id) {
             const { data: adminProfiles } = await supabase
               .from("profiles")
@@ -63,7 +60,6 @@ Deno.serve(async (req) => {
 
             if (adminProfiles) {
               for (const profile of adminProfiles) {
-                // Check if this user is admin
                 const { data: isAdmin } = await supabase.rpc("has_role", {
                   _user_id: profile.user_id,
                   _role: "admin",
@@ -84,14 +80,117 @@ Deno.serve(async (req) => {
         }
 
         if (notifications.length > 0) {
-          const { error: notifError } = await supabase
-            .from("notifications")
-            .insert(notifications);
+          const { error: notifError } = await supabase.from("notifications").insert(notifications);
           if (notifError) {
             console.error("Error creating notifications:", notifError);
           } else {
             console.log(`Created ${notifications.length} followup notifications`);
           }
+        }
+      }
+    }
+
+    // 3. Time-based reminders: Check for followups due within 10 minutes
+    const now = new Date();
+    const tenMinutesFromNow = new Date(now.getTime() + 10 * 60 * 1000);
+
+    const { data: upcomingOrders, error: upcomingError } = await supabase
+      .from("orders")
+      .select("id, invoice_id, customer_name, followup_step, assigned_to, project_id, next_followup_datetime")
+      .eq("current_status", "pending")
+      .eq("is_deleted", false)
+      .not("next_followup_datetime", "is", null)
+      .lte("next_followup_datetime", tenMinutesFromNow.toISOString())
+      .gte("next_followup_datetime", now.toISOString());
+
+    if (!upcomingError && upcomingOrders && upcomingOrders.length > 0) {
+      const reminderNotifs: any[] = [];
+
+      for (const order of upcomingOrders) {
+        const followupTime = new Date(order.next_followup_datetime);
+        const minutesLeft = Math.round((followupTime.getTime() - now.getTime()) / 60000);
+        const timeStr = followupTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+
+        // Check if reminder already sent (within last 15 min for this order)
+        const { data: existingNotif } = await supabase
+          .from("notifications")
+          .select("id")
+          .eq("order_id", order.id)
+          .eq("type", "followup_reminder")
+          .gte("created_at", new Date(now.getTime() - 15 * 60 * 1000).toISOString())
+          .limit(1);
+
+        if (existingNotif && existingNotif.length > 0) continue;
+
+        const message = minutesLeft <= 1
+          ? `📞 Call ${order.customer_name} NOW — Followup Step ${order.followup_step} (${order.invoice_id})`
+          : `⏰ Followup in ${minutesLeft} min — ${order.customer_name} at ${timeStr} (${order.invoice_id})`;
+
+        if (order.assigned_to) {
+          reminderNotifs.push({
+            user_id: order.assigned_to,
+            project_id: order.project_id,
+            type: "followup_reminder",
+            title: minutesLeft <= 1 ? "Call Now" : "Upcoming Followup",
+            message,
+            order_id: order.id,
+          });
+        }
+      }
+
+      if (reminderNotifs.length > 0) {
+        const { error: reminderError } = await supabase.from("notifications").insert(reminderNotifs);
+        if (reminderError) {
+          console.error("Error creating reminder notifications:", reminderError);
+        } else {
+          console.log(`Created ${reminderNotifs.length} reminder notifications`);
+        }
+      }
+    }
+
+    // 4. Check for exact-time followups (due right now or past due within 5 min)
+    const fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000);
+    const { data: dueNowOrders, error: dueNowError } = await supabase
+      .from("orders")
+      .select("id, invoice_id, customer_name, followup_step, assigned_to, project_id, next_followup_datetime")
+      .eq("current_status", "pending")
+      .eq("is_deleted", false)
+      .not("next_followup_datetime", "is", null)
+      .lte("next_followup_datetime", now.toISOString())
+      .gte("next_followup_datetime", fiveMinAgo.toISOString());
+
+    if (!dueNowError && dueNowOrders && dueNowOrders.length > 0) {
+      const dueNotifs: any[] = [];
+
+      for (const order of dueNowOrders) {
+        const { data: existingNotif } = await supabase
+          .from("notifications")
+          .select("id")
+          .eq("order_id", order.id)
+          .eq("type", "followup_now")
+          .gte("created_at", fiveMinAgo.toISOString())
+          .limit(1);
+
+        if (existingNotif && existingNotif.length > 0) continue;
+
+        if (order.assigned_to) {
+          dueNotifs.push({
+            user_id: order.assigned_to,
+            project_id: order.project_id,
+            type: "followup_now",
+            title: "Call Customer Now",
+            message: `📞 Followup Step ${order.followup_step} for ${order.customer_name} is due NOW (${order.invoice_id})`,
+            order_id: order.id,
+          });
+        }
+      }
+
+      if (dueNotifs.length > 0) {
+        const { error: dueError } = await supabase.from("notifications").insert(dueNotifs);
+        if (dueError) {
+          console.error("Error creating due-now notifications:", dueError);
+        } else {
+          console.log(`Created ${dueNotifs.length} due-now notifications`);
         }
       }
     }
