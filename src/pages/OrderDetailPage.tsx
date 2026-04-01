@@ -591,7 +591,6 @@ export default function OrderDetailPage() {
       {canDeleteOrder && (
         <DeleteOrderDialog order={order} open={deleteOpen} onOpenChange={setDeleteOpen} childCount={childOrders.length} onConfirm={async () => { await softDelete(order.id); toast({ title: "Order Deleted" }); navigate("/orders"); }} />
       )}
-      )}
 
       <CompleteFollowupDialog order={order} open={followupOpen} onOpenChange={setFollowupOpen} onComplete={completeFollowup} />
 
