@@ -20,11 +20,15 @@ import { Download, FileArchive, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import JSZip from "jszip";
 
-function downloadCSV(filename: string, headers: string[], rows: string[][]) {
-  const csvContent = [
+function buildCSV(headers: string[], rows: string[][]): string {
+  return [
     headers.join(","),
     ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")),
   ].join("\n");
+}
+
+function downloadCSV(filename: string, headers: string[], rows: string[][]) {
+  const csvContent = buildCSV(headers, rows);
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
