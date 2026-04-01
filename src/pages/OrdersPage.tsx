@@ -14,10 +14,12 @@ import BulkSingleFieldDialog, { BulkFieldType } from "@/components/BulkSingleFie
 import OrderTable from "@/components/OrderTable";
 import { useRole } from "@/contexts/RoleContext";
 import { usePermissions } from "@/contexts/PermissionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useServerPaginatedOrders } from "@/hooks/useServerPaginatedOrders";
 import { Order } from "@/types/data";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function OrdersPage() {
   const [search, setSearch] = useState("");
@@ -32,6 +34,8 @@ export default function OrdersPage() {
   const [pageSize, setPageSize] = useState(50);
   const { isAdmin } = useRole();
   const { hasPermission } = usePermissions();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const canEditOrder = isAdmin || hasPermission("orders.edit");
   const { updateOrder } = useOrderStore();
 
@@ -126,7 +130,13 @@ export default function OrdersPage() {
           <OrderTable
             orders={orders}
             isAdmin={isAdmin}
-            onEdit={canEditOrder ? setEditOrder : undefined}
+            onEdit={canEditOrder ? (order: Order) => {
+              if (!isAdmin && order.assignedTo !== user?.id) {
+                toast({ title: "Permission Denied", description: "You can only edit orders assigned to you.", variant: "destructive" });
+                return;
+              }
+              setEditOrder(order);
+            } : undefined}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             conflictIds={conflictIds}
