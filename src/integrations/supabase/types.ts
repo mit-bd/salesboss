@@ -702,7 +702,6 @@ export type Database = {
           created_at: string
           full_name: string | null
           id: string
-          password_text: string | null
           phone: string | null
           project_id: string | null
           updated_at: string
@@ -714,7 +713,6 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
-          password_text?: string | null
           phone?: string | null
           project_id?: string | null
           updated_at?: string
@@ -726,7 +724,6 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
-          password_text?: string | null
           phone?: string | null
           project_id?: string | null
           updated_at?: string
