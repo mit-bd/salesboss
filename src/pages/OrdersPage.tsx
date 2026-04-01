@@ -130,7 +130,13 @@ export default function OrdersPage() {
           <OrderTable
             orders={orders}
             isAdmin={isAdmin}
-            onEdit={canEditOrder ? setEditOrder : undefined}
+            onEdit={canEditOrder ? (order: Order) => {
+              if (!isAdmin && order.assignedTo !== user?.id) {
+                toast({ title: "Permission Denied", description: "You can only edit orders assigned to you.", variant: "destructive" });
+                return;
+              }
+              setEditOrder(order);
+            } : undefined}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             conflictIds={conflictIds}
