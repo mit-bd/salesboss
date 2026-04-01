@@ -40,8 +40,11 @@ function downloadCSV(filename: string, headers: string[], rows: string[][]) {
 
 export default function ExportPage() {
   const { activeOrders } = useOrderStore();
+  const { followupHistory, upsellRecords, repeatOrderRecords } = useOrderStore();
   const { logs } = useAuditLog();
   const { isAdmin } = useRole();
+  const { toast } = useToast();
+  const [zipLoading, setZipLoading] = useState(false);
   const { toast } = useToast();
   const { members } = useTeamMembers();
   const { products } = useProductStore();
