@@ -56,6 +56,9 @@ export default function OwnerUsersPage() {
   const [roleUser, setRoleUser] = useState<UserItem | null>(null);
   const [passwordUser, setPasswordUser] = useState<UserItem | null>(null);
   const [viewUser, setViewUser] = useState<UserItem | null>(null);
+  const [showViewPassword, setShowViewPassword] = useState(false);
+  const [viewPasswordText, setViewPasswordText] = useState("");
+  const [viewPasswordLoading, setViewPasswordLoading] = useState(false);
 
   // Form states
   const [formEmail, setFormEmail] = useState("");
