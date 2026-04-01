@@ -17,7 +17,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Loader2, Plus, Pencil, Shield, Key, Ban, Trash2, Eye, Users, Building2 } from "lucide-react";
+import { Loader2, Plus, Pencil, Shield, Key, Ban, Trash2, Eye, EyeOff, Users, Building2 } from "lucide-react";
 import OwnerLayout from "@/components/owner/OwnerLayout";
 
 interface UserItem {
@@ -56,6 +56,9 @@ export default function OwnerUsersPage() {
   const [roleUser, setRoleUser] = useState<UserItem | null>(null);
   const [passwordUser, setPasswordUser] = useState<UserItem | null>(null);
   const [viewUser, setViewUser] = useState<UserItem | null>(null);
+  const [showViewPassword, setShowViewPassword] = useState(false);
+  const [viewPasswordText, setViewPasswordText] = useState("");
+  const [viewPasswordLoading, setViewPasswordLoading] = useState(false);
 
   // Form states
   const [formEmail, setFormEmail] = useState("");
@@ -338,7 +341,7 @@ export default function OwnerUsersPage() {
       )}
 
       {/* View Profile Dialog */}
-      <Dialog open={!!viewUser} onOpenChange={(open) => !open && setViewUser(null)}>
+      <Dialog open={!!viewUser} onOpenChange={(open) => { if (!open) { setViewUser(null); setShowViewPassword(false); setViewPasswordText(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>User Profile</DialogTitle></DialogHeader>
           {viewUser && (
@@ -353,14 +356,41 @@ export default function OwnerUsersPage() {
                 <div><Label className="text-xs text-muted-foreground">Last Login</Label><p className="text-sm font-medium text-foreground">{viewUser.lastSignIn ? new Date(viewUser.lastSignIn).toLocaleString() : "Never"}</p></div>
                 <div><Label className="text-xs text-muted-foreground">Created</Label><p className="text-sm font-medium text-foreground">{new Date(viewUser.createdAt).toLocaleDateString()}</p></div>
               </div>
-              <div className="border-t border-border pt-3 text-xs text-muted-foreground">
-                <p>Password: ●●●●●●●● (hashed — use "Set Password" to change)</p>
+              <div className="border-t border-border pt-3">
+                <Label className="text-xs text-muted-foreground">Password</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-sm font-medium text-foreground font-mono">
+                    {showViewPassword ? (viewPasswordText || "Not stored") : "●●●●●●●●"}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    aria-label={showViewPassword ? "Hide password" : "Show password"}
+                    disabled={viewPasswordLoading}
+                    onClick={async () => {
+                      if (showViewPassword) {
+                        setShowViewPassword(false);
+                        return;
+                      }
+                      setViewPasswordLoading(true);
+                      const { data } = await supabase.functions.invoke("manage-team", {
+                        body: { action: "owner_get_password", userId: viewUser.id },
+                      });
+                      setViewPasswordText(data?.password || "");
+                      setShowViewPassword(true);
+                      setViewPasswordLoading(false);
+                    }}
+                  >
+                    {viewPasswordLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : showViewPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setViewUser(null)}>Close</Button>
-            <Button variant="outline" onClick={() => { if (viewUser) { setPasswordUser(viewUser); setNewPassword(""); setViewUser(null); } }}>
+            <Button variant="outline" onClick={() => { setViewUser(null); setShowViewPassword(false); setViewPasswordText(""); }}>Close</Button>
+            <Button variant="outline" onClick={() => { if (viewUser) { setPasswordUser(viewUser); setNewPassword(""); setViewUser(null); setShowViewPassword(false); setViewPasswordText(""); } }}>
               <Key className="h-3.5 w-3.5 mr-1.5" />Set Password
             </Button>
           </DialogFooter>

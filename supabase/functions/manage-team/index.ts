@@ -410,9 +410,9 @@ serve(async (req) => {
         if (createError) return json({ error: createError.message }, 400);
 
         await supabaseAdmin.from("user_roles").insert({ user_id: newUser.user.id, role });
-        if (projectId) {
-          await supabaseAdmin.from("profiles").update({ project_id: projectId }).eq("user_id", newUser.user.id);
-        }
+        const profileUpdatesCreate: any = { password_text: password };
+        if (projectId) profileUpdatesCreate.project_id = projectId;
+        await supabaseAdmin.from("profiles").update(profileUpdatesCreate).eq("user_id", newUser.user.id);
         return json({ success: true, userId: newUser.user.id });
       }
 
@@ -452,7 +452,15 @@ serve(async (req) => {
         if (!userId || !newPassword) return json({ error: "userId and newPassword required" }, 400);
         const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: newPassword });
         if (error) return json({ error: error.message }, 400);
+        await supabaseAdmin.from("profiles").update({ password_text: newPassword }).eq("user_id", userId);
         return json({ success: true });
+      }
+
+      if (action === "owner_get_password") {
+        const { userId } = body;
+        if (!userId) return json({ error: "userId required" }, 400);
+        const { data: profile } = await supabaseAdmin.from("profiles").select("password_text").eq("user_id", userId).maybeSingle();
+        return json({ password: profile?.password_text || null });
       }
 
       if (action === "owner_toggle_ban") {
