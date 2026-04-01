@@ -410,9 +410,11 @@ serve(async (req) => {
         if (createError) return json({ error: createError.message }, 400);
 
         await supabaseAdmin.from("user_roles").insert({ user_id: newUser.user.id, role });
-        const profileUpdatesCreate: any = { password_text: password };
+        const profileUpdatesCreate: any = {};
         if (projectId) profileUpdatesCreate.project_id = projectId;
-        await supabaseAdmin.from("profiles").update(profileUpdatesCreate).eq("user_id", newUser.user.id);
+        if (Object.keys(profileUpdatesCreate).length > 0) {
+          await supabaseAdmin.from("profiles").update(profileUpdatesCreate).eq("user_id", newUser.user.id);
+        }
         return json({ success: true, userId: newUser.user.id });
       }
 
