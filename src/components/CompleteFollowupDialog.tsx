@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Loader2, CheckCircle, ChevronDown, Plus, X, ShoppingCart, RefreshCw, CalendarIcon } from "lucide-react";
 import { Order, UpsellEntry, RepeatOrderEntry } from "@/types/data";
 import { useProductStore } from "@/contexts/ProductStoreContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useFollowupProblems } from "@/hooks/useFollowupProblems";
+import ProblemsQuickInfoSection from "@/components/followup/ProblemsQuickInfoSection";
 import { cn } from "@/lib/utils";
 
 interface CompleteFollowupDialogProps {
@@ -33,12 +36,7 @@ interface CompleteFollowupDialogProps {
 }
 
 function ProductEntryCard({
-  entry,
-  index,
-  onChange,
-  onRemove,
-  products,
-  label,
+  entry, index, onChange, onRemove, products, label,
 }: {
   entry: UpsellEntry | RepeatOrderEntry;
   index: number;
@@ -61,60 +59,48 @@ function ProductEntryCard({
           value={entry.productId}
           onValueChange={(val) => {
             const product = products.find((p) => p.id === val);
-            onChange(index, {
-              ...entry,
-              productId: val,
-              productName: product?.title || "",
-              price: product?.price || entry.price,
-            });
+            onChange(index, { ...entry, productId: val, productName: product?.title || "", price: product?.price || entry.price });
           }}
         >
-          <SelectTrigger className="mt-1">
-            <SelectValue placeholder="Select product" />
-          </SelectTrigger>
+          <SelectTrigger className="mt-1"><SelectValue placeholder="Select product" /></SelectTrigger>
           <SelectContent>
-            {products.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.title} — ৳{p.price}
-              </SelectItem>
-            ))}
+            {products.map((p) => (<SelectItem key={p.id} value={p.id}>{p.title} — ৳{p.price}</SelectItem>))}
           </SelectContent>
         </Select>
       </div>
       <div>
         <Label className="text-xs">Price</Label>
-        <Input
-          type="number"
-          value={entry.price}
-          onChange={(e) => onChange(index, { ...entry, price: Number(e.target.value) })}
-          className="mt-1"
-        />
+        <Input type="number" value={entry.price} onChange={(e) => onChange(index, { ...entry, price: Number(e.target.value) })} className="mt-1" />
       </div>
       <div>
         <Label className="text-xs">Note</Label>
-        <Textarea
-          value={entry.note}
-          onChange={(e) => onChange(index, { ...entry, note: e.target.value })}
-          placeholder={`${label} note...`}
-          className="mt-1"
-          rows={2}
-        />
+        <Textarea value={entry.note} onChange={(e) => onChange(index, { ...entry, note: e.target.value })} placeholder={`${label} note...`} className="mt-1" rows={2} />
       </div>
     </div>
   );
 }
 
-export default function CompleteFollowupDialog({
-  order,
-  open,
-  onOpenChange,
-  onComplete,
-}: CompleteFollowupDialogProps) {
+export default function CompleteFollowupDialog({ order, open, onOpenChange, onComplete }: CompleteFollowupDialogProps) {
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
   const [problems, setProblems] = useState("");
   const [nextDate, setNextDate] = useState("");
   const [error, setError] = useState("");
+
+  // Problems & Quick Info
+  const [selectedProblems, setSelectedProblems] = useState<Set<string>>(new Set());
+  const [quickInfoValues, setQuickInfoValues] = useState<Record<string, string>>({});
+  const { role, profile } = useAuth();
+  const isAdmin = role === "admin" || role === "sub_admin";
+  const {
+    problems: problemOptions,
+    quickInfoFields,
+    addProblem,
+    updateProblem,
+    deleteProblem,
+    addQuickInfoField,
+    deleteQuickInfoField,
+  } = useFollowupProblems();
 
   // Upsell state
   const [addUpsell, setAddUpsell] = useState(false);
@@ -129,58 +115,64 @@ export default function CompleteFollowupDialog({
   const { products } = useProductStore();
   const isFinalStep = order.followupStep === 5;
 
-  const addUpsellEntry = () => {
-    setUpsellEntries((prev) => [...prev, { productId: "", productName: "", price: 0, note: "" }]);
+  // Auto-generate problems text from selections
+  useEffect(() => {
+    const selectedText = Array.from(selectedProblems).join(", ");
+    setProblems(selectedText);
+  }, [selectedProblems]);
+
+  // Build quick info summary and append to note area
+  const quickInfoSummary = useMemo(() => {
+    const parts: string[] = [];
+    quickInfoFields.forEach((field) => {
+      const val = quickInfoValues[field.id];
+      if (val && val.trim()) {
+        parts.push(`${field.label}: ${val}`);
+      }
+    });
+    return parts.join(", ");
+  }, [quickInfoValues, quickInfoFields]);
+
+  const handleToggleProblem = (label: string) => {
+    setSelectedProblems((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
   };
 
-  const addRepeatEntry = () => {
-    setRepeatEntries((prev) => [...prev, { productId: "", productName: "", price: 0, note: "" }]);
+  const handleQuickInfoChange = (fieldId: string, value: string) => {
+    setQuickInfoValues((prev) => ({ ...prev, [fieldId]: value }));
   };
 
-  const updateUpsellEntry = (i: number, updated: UpsellEntry | RepeatOrderEntry) => {
-    setUpsellEntries((prev) => prev.map((e, idx) => (idx === i ? (updated as UpsellEntry) : e)));
+  const handleAddProblem = async (label: string) => {
+    await addProblem(label, profile?.project_id);
   };
 
-  const updateRepeatEntry = (i: number, updated: UpsellEntry | RepeatOrderEntry) => {
-    setRepeatEntries((prev) => prev.map((e, idx) => (idx === i ? (updated as RepeatOrderEntry) : e)));
+  const handleAddField = async (label: string, fieldType: string, options: string[]) => {
+    await addQuickInfoField(label, fieldType, options, profile?.project_id);
   };
 
-  const removeUpsellEntry = (i: number) => {
-    setUpsellEntries((prev) => prev.filter((_, idx) => idx !== i));
-  };
-
-  const removeRepeatEntry = (i: number) => {
-    setRepeatEntries((prev) => prev.filter((_, idx) => idx !== i));
-  };
+  const addUpsellEntry = () => setUpsellEntries((prev) => [...prev, { productId: "", productName: "", price: 0, note: "" }]);
+  const addRepeatEntry = () => setRepeatEntries((prev) => [...prev, { productId: "", productName: "", price: 0, note: "" }]);
+  const updateUpsellEntry = (i: number, updated: UpsellEntry | RepeatOrderEntry) => setUpsellEntries((prev) => prev.map((e, idx) => (idx === i ? (updated as UpsellEntry) : e)));
+  const updateRepeatEntry = (i: number, updated: UpsellEntry | RepeatOrderEntry) => setRepeatEntries((prev) => prev.map((e, idx) => (idx === i ? (updated as RepeatOrderEntry) : e)));
+  const removeUpsellEntry = (i: number) => setUpsellEntries((prev) => prev.filter((_, idx) => idx !== i));
+  const removeRepeatEntry = (i: number) => setRepeatEntries((prev) => prev.filter((_, idx) => idx !== i));
 
   const totalUpsellValue = upsellEntries.reduce((sum, e) => sum + e.price, 0);
   const totalRepeatValue = repeatEntries.reduce((sum, e) => sum + e.price, 0);
 
   const handleSubmit = async () => {
-    if (!note.trim()) {
-      setError("Followup summary note is required");
-      return;
-    }
-    if (!isFinalStep && !nextDate) {
-      setError("Next followup date is required");
-      return;
-    }
-    // Validate upsell entries have products selected
-    if (addUpsell && upsellEntries.length > 0) {
-      const invalid = upsellEntries.some((e) => !e.productId);
-      if (invalid) {
-        setError("Please select a product for all upsell entries");
-        return;
-      }
-    }
-    // Validate repeat entries have products selected
-    if (addRepeat && repeatEntries.length > 0) {
-      const invalid = repeatEntries.some((e) => !e.productId);
-      if (invalid) {
-        setError("Please select a product for all repeat order entries");
-        return;
-      }
-    }
+    if (!note.trim()) { setError("Followup summary note is required"); return; }
+    if (!isFinalStep && !nextDate) { setError("Next followup date is required"); return; }
+    if (addUpsell && upsellEntries.some((e) => !e.productId)) { setError("Please select a product for all upsell entries"); return; }
+    if (addRepeat && repeatEntries.some((e) => !e.productId)) { setError("Please select a product for all repeat order entries"); return; }
+
+    // Build final note with quick info
+    let finalNote = note.trim();
+    if (quickInfoSummary) finalNote += `\n\n📋 ${quickInfoSummary}`;
 
     setError("");
     setSaving(true);
@@ -188,7 +180,7 @@ export default function CompleteFollowupDialog({
       await onComplete({
         orderId: order.id,
         stepNumber: order.followupStep,
-        note,
+        note: finalNote,
         problemsDiscussed: problems,
         upsellAttempted: addUpsell && upsellEntries.length > 0,
         upsellDetails: addUpsell ? upsellEntries.map((e) => e.productName).join(", ") : "",
@@ -196,14 +188,8 @@ export default function CompleteFollowupDialog({
         upsellEntries: addUpsell ? upsellEntries : [],
         repeatOrderEntries: addRepeat ? repeatEntries : [],
       });
-      // Reset form
-      setNote("");
-      setProblems("");
-      setAddUpsell(false);
-      setUpsellEntries([]);
-      setAddRepeat(false);
-      setRepeatEntries([]);
-      setNextDate("");
+      setNote(""); setProblems(""); setSelectedProblems(new Set()); setQuickInfoValues({});
+      setAddUpsell(false); setUpsellEntries([]); setAddRepeat(false); setRepeatEntries([]); setNextDate("");
       onOpenChange(false);
     } catch {
       // Error handled by caller
@@ -240,32 +226,36 @@ export default function CompleteFollowupDialog({
             />
           </div>
 
-          <div>
-            <Label className="text-xs">Problems Discussed</Label>
-            <Textarea
-              value={problems}
-              onChange={(e) => setProblems(e.target.value)}
-              placeholder="Any issues or concerns raised..."
-              className="mt-1"
-              rows={2}
+          {/* Smart Problems & Quick Info Section */}
+          <div className="rounded-lg border border-border p-3 space-y-3">
+            <ProblemsQuickInfoSection
+              problems={problemOptions}
+              quickInfoFields={quickInfoFields}
+              selectedProblems={selectedProblems}
+              onToggleProblem={handleToggleProblem}
+              quickInfoValues={quickInfoValues}
+              onQuickInfoChange={handleQuickInfoChange}
+              isAdmin={isAdmin}
+              onAddProblem={handleAddProblem}
+              onEditProblem={updateProblem}
+              onDeleteProblem={deleteProblem}
+              onAddQuickInfoField={handleAddField}
+              onDeleteQuickInfoField={deleteQuickInfoField}
             />
+
+            {/* Auto-generated problems text (read-only preview) */}
+            {problems && (
+              <div className="rounded bg-muted/50 p-2">
+                <p className="text-xs text-muted-foreground">Selected: <span className="text-foreground">{problems}</span></p>
+              </div>
+            )}
           </div>
 
           {/* Upsell Section */}
           <Collapsible open={upsellOpen} onOpenChange={setUpsellOpen}>
             <div className="rounded-lg border border-border">
               <div className="flex items-center gap-2 p-3">
-                <Checkbox
-                  id="add-upsell"
-                  checked={addUpsell}
-                  onCheckedChange={(checked) => {
-                    setAddUpsell(!!checked);
-                    if (checked) {
-                      setUpsellOpen(true);
-                      if (upsellEntries.length === 0) addUpsellEntry();
-                    }
-                  }}
-                />
+                <Checkbox id="add-upsell" checked={addUpsell} onCheckedChange={(checked) => { setAddUpsell(!!checked); if (checked) { setUpsellOpen(true); if (upsellEntries.length === 0) addUpsellEntry(); } }} />
                 <Label htmlFor="add-upsell" className="text-xs cursor-pointer flex items-center gap-1.5 flex-1">
                   <ShoppingCart className="h-3.5 w-3.5 text-info" /> Add Upsell
                 </Label>
@@ -284,19 +274,9 @@ export default function CompleteFollowupDialog({
                 <CollapsibleContent className="px-3 pb-3">
                   <div className="space-y-3">
                     {upsellEntries.map((entry, i) => (
-                      <ProductEntryCard
-                        key={i}
-                        entry={entry}
-                        index={i}
-                        onChange={updateUpsellEntry}
-                        onRemove={removeUpsellEntry}
-                        products={products}
-                        label="Upsell"
-                      />
+                      <ProductEntryCard key={i} entry={entry} index={i} onChange={updateUpsellEntry} onRemove={removeUpsellEntry} products={products} label="Upsell" />
                     ))}
-                    <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs" onClick={addUpsellEntry}>
-                      <Plus className="h-3 w-3" /> Add Upsell
-                    </Button>
+                    <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs" onClick={addUpsellEntry}><Plus className="h-3 w-3" /> Add Upsell</Button>
                   </div>
                 </CollapsibleContent>
               )}
@@ -307,17 +287,7 @@ export default function CompleteFollowupDialog({
           <Collapsible open={repeatOpen} onOpenChange={setRepeatOpen}>
             <div className="rounded-lg border border-border">
               <div className="flex items-center gap-2 p-3">
-                <Checkbox
-                  id="add-repeat"
-                  checked={addRepeat}
-                  onCheckedChange={(checked) => {
-                    setAddRepeat(!!checked);
-                    if (checked) {
-                      setRepeatOpen(true);
-                      if (repeatEntries.length === 0) addRepeatEntry();
-                    }
-                  }}
-                />
+                <Checkbox id="add-repeat" checked={addRepeat} onCheckedChange={(checked) => { setAddRepeat(!!checked); if (checked) { setRepeatOpen(true); if (repeatEntries.length === 0) addRepeatEntry(); } }} />
                 <Label htmlFor="add-repeat" className="text-xs cursor-pointer flex items-center gap-1.5 flex-1">
                   <RefreshCw className="h-3.5 w-3.5 text-warning" /> Receive Repeat Order
                 </Label>
@@ -336,19 +306,9 @@ export default function CompleteFollowupDialog({
                 <CollapsibleContent className="px-3 pb-3">
                   <div className="space-y-3">
                     {repeatEntries.map((entry, i) => (
-                      <ProductEntryCard
-                        key={i}
-                        entry={entry}
-                        index={i}
-                        onChange={updateRepeatEntry}
-                        onRemove={removeRepeatEntry}
-                        products={products}
-                        label="Repeat Order"
-                      />
+                      <ProductEntryCard key={i} entry={entry} index={i} onChange={updateRepeatEntry} onRemove={removeRepeatEntry} products={products} label="Repeat Order" />
                     ))}
-                    <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs" onClick={addRepeatEntry}>
-                      <Plus className="h-3 w-3" /> Add Repeat Order
-                    </Button>
+                    <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs" onClick={addRepeatEntry}><Plus className="h-3 w-3" /> Add Repeat Order</Button>
                   </div>
                 </CollapsibleContent>
               )}
@@ -361,13 +321,7 @@ export default function CompleteFollowupDialog({
               <Label className="text-xs">Next Followup Date *</Label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal mt-1",
-                      !nextDate && "text-muted-foreground"
-                    )}
-                  >
+                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal mt-1", !nextDate && "text-muted-foreground")}>
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {nextDate ? format(new Date(nextDate + "T00:00:00"), "PPP") : <span>Pick a date</span>}
                   </Button>
@@ -376,12 +330,7 @@ export default function CompleteFollowupDialog({
                   <Calendar
                     mode="single"
                     selected={nextDate ? new Date(nextDate + "T00:00:00") : undefined}
-                    onSelect={(date) => {
-                      if (date) {
-                        setNextDate(format(date, "yyyy-MM-dd"));
-                        if (error) setError("");
-                      }
-                    }}
+                    onSelect={(date) => { if (date) { setNextDate(format(date, "yyyy-MM-dd")); if (error) setError(""); } }}
                     disabled={(date) => date < new Date(new Date().toDateString())}
                     initialFocus
                     className={cn("p-3 pointer-events-auto")}
@@ -402,9 +351,7 @@ export default function CompleteFollowupDialog({
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
             <Button onClick={handleSubmit} disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Complete Step {order.followupStep}
