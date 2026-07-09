@@ -270,24 +270,6 @@ export default function RolesPage() {
             </div>
           </div>
         )}
-
-        {/* Navigation blocker dialog */}
-        <AlertDialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-              <AlertDialogDescription>
-                You have unsaved permission changes. Do you want to leave without saving?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => { setShowLeaveDialog(false); setPendingNavigation(null); }}>Stay</AlertDialogCancel>
-              <AlertDialogAction onClick={() => { setShowLeaveDialog(false); if (pendingNavigation) navigate(pendingNavigation); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Leave
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     </AppLayout>
   );
