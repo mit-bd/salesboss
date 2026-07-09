@@ -9,11 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Shield, CalendarCheck, Clock, AlertTriangle, History, CreditCard } from "lucide-react";
 import { format } from "date-fns";
 
-interface BillingActivity {
-  action: string;
-  performedBy: string;
-  date: string;
-}
 
 export default function BillingPage() {
   const { profile, role } = useAuth();
@@ -57,12 +52,9 @@ export default function BillingPage() {
   const isNearExpiry = daysRemaining !== null && daysRemaining > 0 && daysRemaining <= 3;
   const isExpired = daysRemaining !== null && daysRemaining <= 0;
 
-  // Mock billing history — in production this would come from a billing_history table
-  const billingHistory: BillingActivity[] = [
-    ...(sub?.expiry_date
-      ? [{ action: "Subscription Set", performedBy: "Owner", date: sub.expiry_date }]
-      : []),
-  ];
+  // Billing history is not recorded in this project yet. Show an honest
+  // empty state instead of fabricating transactions from the expiry date.
+
 
   if (loading) {
     return (
