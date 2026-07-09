@@ -36,20 +36,6 @@ export default function SettingsPage() {
   }, [isDirty]);
 
 
-  // Hydrate from DB profile
-
-  const isDirty = useMemo(() => {
-    return form.name !== originalForm.name || form.phone !== originalForm.phone || imageFile !== null;
-  }, [form, originalForm, imageFile]);
-
-  // Warn on navigation with unsaved changes
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (isDirty) { e.preventDefault(); e.returnValue = ""; }
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [isDirty]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
