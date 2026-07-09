@@ -360,8 +360,11 @@ export default function BulkImportPage() {
   };
 
   const handleSheetsImport = () => {
-    if (!sheetsUrl.trim()) return;
-    toast({ title: "Google Sheets", description: "Google Sheets import will be available soon." });
+    toast({
+      title: "Google Sheets Import — Unavailable",
+      description: "This integration is not implemented yet. Please export the sheet to CSV and use Upload CSV.",
+      variant: "destructive",
+    });
   };
 
   const resetAll = () => {
@@ -402,9 +405,17 @@ export default function BulkImportPage() {
                 <Button variant="outline" className="gap-2" onClick={() => fileRef.current?.click()}>
                   <FileSpreadsheet className="h-4 w-4" /> Upload CSV
                 </Button>
-                <div className="flex items-center gap-2">
-                  <Input placeholder="Google Sheets URL" value={sheetsUrl} onChange={(e) => setSheetsUrl(e.target.value)} className="w-64" />
-                  <Button variant="outline" onClick={handleSheetsImport}>Import</Button>
+                <div className="flex items-center gap-2 opacity-60">
+                  <Input
+                    placeholder="Google Sheets URL (unavailable)"
+                    value={sheetsUrl}
+                    onChange={(e) => setSheetsUrl(e.target.value)}
+                    disabled
+                    className="w-64"
+                  />
+                  <Button variant="outline" onClick={handleSheetsImport} disabled title="Not implemented — export sheet as CSV and use Upload CSV">
+                    Unavailable
+                  </Button>
                 </div>
               </div>
             </div>
