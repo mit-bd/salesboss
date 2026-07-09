@@ -11,10 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/contexts/AuditLogContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 interface Permission {
   key: string;
@@ -92,9 +88,6 @@ export default function RolesPage() {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
-  // In-app navigation guard state
-  const [showLeaveDialog, setShowLeaveDialog] = useState(false);
-  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
   if (!isAdmin) {
     navigate("/");
