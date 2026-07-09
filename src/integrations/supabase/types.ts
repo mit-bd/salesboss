@@ -206,6 +206,39 @@ export type Database = {
           },
         ]
       }
+      followup_automation_runs: {
+        Row: {
+          advanced_count: number
+          due_now_count: number
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          reminder_count: number
+          skipped_locked: boolean
+          started_at: string
+        }
+        Insert: {
+          advanced_count?: number
+          due_now_count?: number
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          reminder_count?: number
+          skipped_locked?: boolean
+          started_at?: string
+        }
+        Update: {
+          advanced_count?: number
+          due_now_count?: number
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          reminder_count?: number
+          skipped_locked?: boolean
+          started_at?: string
+        }
+        Relationships: []
+      }
       followup_history: {
         Row: {
           completed_at: string
@@ -1098,6 +1131,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      prune_followup_automation_runs: { Args: never; Returns: undefined }
+      run_followup_automation: { Args: never; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "sub_admin" | "sales_executive" | "owner"
