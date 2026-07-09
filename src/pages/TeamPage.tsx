@@ -77,7 +77,7 @@ export default function TeamPage() {
     if (error || data?.error) {
       toast({ title: "Error", description: data?.error || error?.message, variant: "destructive" });
     } else {
-      toast({ title: enabled ? "Voice AI Enabled" : "Voice AI Disabled" });
+      toast({ title: enabled ? "Voice Input Enabled" : "Voice Input Disabled", description: "Uses the browser's built-in Speech Recognition (support varies by browser)." });
       fetchUsers();
     }
   };
@@ -136,7 +136,7 @@ export default function TeamPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Voice AI</TableHead>
+                <TableHead title="Uses the browser's built-in Speech Recognition API (Chrome/Edge). Not a hosted AI voice service.">Voice Input</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead>Last Login</TableHead>

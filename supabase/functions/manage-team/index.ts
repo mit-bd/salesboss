@@ -1,15 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
-
-const json = (data: any, status = 200) =>
-  new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+import { buildCorsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req);
+  const json = (data: any, status = 200) =>
+    new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -22,16 +19,20 @@ serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
-    // ============ PUBLIC ACTIONS ============
-    if (action === "check_admin_exists") {
-      const { data: adminRoles } = await supabaseAdmin.from("user_roles").select("id").eq("role", "admin").limit(1);
-      return json({ adminExists: (adminRoles?.length || 0) > 0 });
-    }
-
+    // ============ BOOTSTRAP ACTION (unauthenticated by design) ============
+    // Needed by the public registration page to route the first-ever signup
+    // to the Owner role. Returns only a boolean about global bootstrap state
+    // and does not expose organizational data.
     if (action === "check_owner_exists") {
-      const { data: ownerRoles } = await supabaseAdmin.from("user_roles").select("id").eq("role", "owner").limit(1);
+      const { data: ownerRoles } = await supabaseAdmin
+        .from("user_roles")
+        .select("id")
+        .eq("role", "owner")
+        .limit(1);
       return json({ ownerExists: (ownerRoles?.length || 0) > 0 });
     }
+
+    // ============ ALL OTHER ACTIONS REQUIRE AUTH ============
 
     // ============ AUTH CHECK ============
     const authHeader = req.headers.get("Authorization");

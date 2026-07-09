@@ -26,11 +26,12 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
   const fetchPermissions = useCallback(async () => {
     if (!role) { setPermissions([]); setLoading(false); return; }
     setLoading(true);
-    const { data, error } = await (supabase.from as any)("role_permissions")
+    const { data, error } = await supabase
+      .from("role_permissions")
       .select("permission_key")
       .eq("role", role);
     if (error) { console.error("[Permissions] Fetch error:", error); setLoading(false); return; }
-    setPermissions((data || []).map((r: any) => r.permission_key));
+    setPermissions((data || []).map((r) => r.permission_key));
     setLoading(false);
   }, [role]);
 

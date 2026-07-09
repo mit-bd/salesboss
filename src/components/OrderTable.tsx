@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Order } from "@/types/data";
-import { mockDeliveryPartners } from "@/data/mockData";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -22,8 +22,10 @@ const stepColors = [
   "bg-step-4/10 text-step-4", "bg-step-5/10 text-step-5",
 ];
 
+// Delivery method is already stored as its display name on the order row;
+// return it verbatim, falling back to an empty string.
 function getDeliveryName(id: string): string {
-  return mockDeliveryPartners.find((dp) => dp.id === id)?.name || id;
+  return id || "";
 }
 
 function truncate(str: string, len: number) {

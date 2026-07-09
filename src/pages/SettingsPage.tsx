@@ -4,21 +4,10 @@ import PageHeader from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Upload, User, Mail, Bell, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { mockEmailReportConfig } from "@/data/mockData";
-import { EmailReportConfig } from "@/types/data";
 import { useRole } from "@/contexts/RoleContext";
 
 export default function SettingsPage() {
@@ -30,11 +19,6 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "" });
   const [originalForm, setOriginalForm] = useState({ name: "", phone: "" });
-
-  // Email report state
-  const [emailConfig, setEmailConfig] = useState<EmailReportConfig>({ ...mockEmailReportConfig });
-  const [newRecipient, setNewRecipient] = useState("");
-
 
   // Hydrate from DB profile
 
@@ -50,6 +34,8 @@ export default function SettingsPage() {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [isDirty]);
+
+
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -102,28 +88,6 @@ export default function SettingsPage() {
     setSaving(false);
   };
 
-  const addRecipient = () => {
-    const email = newRecipient.trim();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast({ title: "Invalid Email", description: "Please enter a valid email address.", variant: "destructive" });
-      return;
-    }
-    if (emailConfig.recipients.includes(email)) {
-      toast({ title: "Duplicate", description: "This email is already in the list.", variant: "destructive" });
-      return;
-    }
-    setEmailConfig((prev) => ({ ...prev, recipients: [...prev.recipients, email] }));
-    setNewRecipient("");
-    toast({ title: "Recipient Added", description: `${email} added to report recipients.` });
-  };
-
-  const removeRecipient = (email: string) => {
-    setEmailConfig((prev) => ({ ...prev, recipients: prev.recipients.filter((r) => r !== email) }));
-  };
-
-  const saveEmailConfig = () => {
-    toast({ title: "Email Reports Saved", description: `${emailConfig.frequency} reports ${emailConfig.enabled ? "enabled" : "disabled"}.` });
-  };
 
   return (
     <AppLayout>
@@ -170,74 +134,15 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Email Report Automation */}
+        {/* Email Report Automation — not yet implemented */}
         <div className="rounded-xl border border-border bg-card p-5 card-shadow">
-          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
             <Mail className="h-4 w-4" /> Email Report Automation
           </h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-foreground">Enable Automated Reports</p>
-                <p className="text-xs text-muted-foreground">Send performance reports to configured recipients</p>
-              </div>
-              <Switch
-                checked={emailConfig.enabled}
-                onCheckedChange={(checked) => setEmailConfig((prev) => ({ ...prev, enabled: checked }))}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Report Frequency</Label>
-              <Select
-                value={emailConfig.frequency}
-                onValueChange={(v) => setEmailConfig((prev) => ({ ...prev, frequency: v as EmailReportConfig["frequency"] }))}
-              >
-                <SelectTrigger className="h-9 w-48 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="daily">Daily</SelectItem>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Report includes</Label>
-              <div className="flex flex-wrap gap-2">
-                {["Total Orders", "Repeat Orders", "Revenue (৳)", "Followup Completion %", "Sales Executive Summary"].map((item) => (
-                  <Badge key={item} variant="secondary" className="text-xs">{item}</Badge>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Recipients</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="email"
-                  placeholder="Add email address"
-                  value={newRecipient}
-                  onChange={(e) => setNewRecipient(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addRecipient()}
-                  className="h-9 text-sm"
-                />
-                <Button size="sm" variant="outline" onClick={addRecipient} className="h-9">Add</Button>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {emailConfig.recipients.map((email) => (
-                  <Badge key={email} variant="secondary" className="text-xs gap-1">
-                    {email}
-                    <button onClick={() => removeRecipient(email)} className="ml-1 text-muted-foreground hover:text-foreground">×</button>
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <Button size="sm" onClick={saveEmailConfig}>Save Email Settings</Button>
-            </div>
-          </div>
+          <p className="text-sm text-muted-foreground">
+            Scheduled email reports are not yet available. This module will let admins configure recipients, frequency,
+            and report contents once the backend email pipeline is provisioned. No settings are persisted here today.
+          </p>
         </div>
 
 

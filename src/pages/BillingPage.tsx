@@ -9,11 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Shield, CalendarCheck, Clock, AlertTriangle, History, CreditCard } from "lucide-react";
 import { format } from "date-fns";
 
-interface BillingActivity {
-  action: string;
-  performedBy: string;
-  date: string;
-}
 
 export default function BillingPage() {
   const { profile, role } = useAuth();
@@ -57,12 +52,9 @@ export default function BillingPage() {
   const isNearExpiry = daysRemaining !== null && daysRemaining > 0 && daysRemaining <= 3;
   const isExpired = daysRemaining !== null && daysRemaining <= 0;
 
-  // Mock billing history — in production this would come from a billing_history table
-  const billingHistory: BillingActivity[] = [
-    ...(sub?.expiry_date
-      ? [{ action: "Subscription Set", performedBy: "Owner", date: sub.expiry_date }]
-      : []),
-  ];
+  // Billing history is not recorded in this project yet. Show an honest
+  // empty state instead of fabricating transactions from the expiry date.
+
 
   if (loading) {
     return (
@@ -191,23 +183,10 @@ export default function BillingPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {billingHistory.length > 0 ? (
-            <div className="space-y-3">
-              {billingHistory.map((entry, i) => (
-                <div key={i} className="flex items-center justify-between rounded-lg border border-border p-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{entry.action}</p>
-                    <p className="text-xs text-muted-foreground">By {entry.performedBy}</p>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {format(new Date(entry.date), "dd MMMM yyyy")}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">No billing activity recorded yet.</p>
-          )}
+          <p className="text-sm text-muted-foreground text-center py-8">
+            No billing transactions are recorded for this project. Payment history will appear here once a payment
+            processor is connected and transactions are stored in the backend.
+          </p>
         </CardContent>
       </Card>
     </AppLayout>

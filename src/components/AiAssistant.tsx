@@ -300,7 +300,7 @@ export default function AiAssistant() {
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setMessages((prev) => [...prev, { role: "assistant", content: "⚠ Speech recognition is not supported in this browser." }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: "⚠ Your browser does not support the SpeechRecognition API. Voice input requires Chrome, Edge, or another Chromium-based browser." }]);
       return;
     }
 
