@@ -183,23 +183,10 @@ export default function BillingPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {billingHistory.length > 0 ? (
-            <div className="space-y-3">
-              {billingHistory.map((entry, i) => (
-                <div key={i} className="flex items-center justify-between rounded-lg border border-border p-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{entry.action}</p>
-                    <p className="text-xs text-muted-foreground">By {entry.performedBy}</p>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {format(new Date(entry.date), "dd MMMM yyyy")}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">No billing activity recorded yet.</p>
-          )}
+          <p className="text-sm text-muted-foreground text-center py-8">
+            No billing transactions are recorded for this project. Payment history will appear here once a payment
+            processor is connected and transactions are stored in the backend.
+          </p>
         </CardContent>
       </Card>
     </AppLayout>
