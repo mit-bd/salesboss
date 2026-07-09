@@ -19,36 +19,58 @@ export default function ProtectedRoute({ children, allowedRoles, requiredPermiss
   const { isInAdminMode } = useOwnerProject();
   const [suspended, setSuspended] = useState<boolean | null>(null);
 
-  // Check if user's project is suspended
+  // Check if user's project is suspended. Cached per project_id for 60s to
+  // avoid repeated queries on every route mount, and guarded by a timeout so a
+  // network failure cannot leave the user stuck on a permanent spinner.
   useEffect(() => {
     if (!profile?.project_id || role === "owner") {
       setSuspended(false);
       return;
     }
 
+    let cancelled = false;
+    const projectId = profile.project_id;
+
+    // 60s cache
+    const cacheKey = `__sub_cache__${projectId}`;
+    const cached = (window as any)[cacheKey] as { at: number; suspended: boolean } | undefined;
+    if (cached && Date.now() - cached.at < 60_000) {
+      setSuspended(cached.suspended);
+      return;
+    }
+
+    // Fail-open timeout so we never hang on the spinner
+    const timeoutId = window.setTimeout(() => {
+      if (!cancelled) setSuspended(false);
+    }, 8000);
+
     supabase
       .from("projects")
       .select("subscription_status, expiry_date")
-      .eq("id", profile.project_id)
+      .eq("id", projectId)
       .maybeSingle()
-      .then(({ data }) => {
-        if (!data) { setSuspended(false); return; }
+      .then(({ data, error }) => {
+        window.clearTimeout(timeoutId);
+        if (cancelled) return;
+        if (error || !data) { setSuspended(false); return; }
+
+        let isSuspended = false;
         if (data.subscription_status === "suspended") {
-          setSuspended(true);
-          return;
-        }
-        // Check if past grace period (expiry + 3 days)
-        if (data.expiry_date) {
+          isSuspended = true;
+        } else if (data.expiry_date) {
           const expiry = new Date(data.expiry_date);
           const graceEnd = new Date(expiry);
           graceEnd.setDate(graceEnd.getDate() + 3);
-          if (new Date() > graceEnd) {
-            setSuspended(true);
-            return;
-          }
+          if (new Date() > graceEnd) isSuspended = true;
         }
-        setSuspended(false);
+        (window as any)[cacheKey] = { at: Date.now(), suspended: isSuspended };
+        setSuspended(isSuspended);
       });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
   }, [profile?.project_id, role]);
 
   // Wait for auth to finish loading
