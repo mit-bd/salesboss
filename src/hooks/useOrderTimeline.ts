@@ -21,7 +21,7 @@ export function useOrderTimeline(orderId: string | undefined) {
       setLoading(true);
       const [ord, activity, followups] = await Promise.all([
         supabase.from("orders").select("id,created_at,customer_name,product_title,price,assigned_to_name").eq("id", orderId).maybeSingle(),
-        supabase.from("order_activity_logs").select("id,action,description,performed_by_name,created_at").eq("order_id", orderId).order("created_at", { ascending: false }),
+        supabase.from("order_activity_logs").select("id,action_type,action_description,user_name,created_at").eq("order_id", orderId).order("created_at", { ascending: false }),
         supabase.from("followup_history").select("id,step_number,note,next_followup_date,completed_at,completed_by_name").eq("order_id", orderId).order("completed_at", { ascending: false }),
       ]);
       const list: OrderTimelineEvent[] = [];
@@ -34,8 +34,8 @@ export function useOrderTimeline(orderId: string | undefined) {
         });
       }
       (activity.data || []).forEach((a: any) => list.push({
-        id: `act-${a.id}`, at: a.created_at, type: a.action || "activity",
-        title: a.action || "Activity", detail: a.description || "", actor: a.performed_by_name || undefined,
+        id: `act-${a.id}`, at: a.created_at, type: a.action_type || "activity",
+        title: a.action_type || "Activity", detail: a.action_description || "", actor: a.user_name || undefined,
       }));
       (followups.data || []).forEach((f: any) => list.push({
         id: `fh-${f.id}`, at: f.completed_at, type: "followup",

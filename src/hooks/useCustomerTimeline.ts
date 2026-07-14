@@ -38,7 +38,7 @@ export function useCustomerTimeline(customerId: string | undefined, mobile: stri
         fetchIn("followup_history", "id,order_id,step_number,note,completed_at,completed_by_name,next_followup_date", "order_id"),
         fetchIn("upsell_records", "id,order_id,product_title,amount,created_at,created_by_name", "order_id"),
         fetchIn("repeat_order_records", "id,parent_order_id,child_order_id,created_at", "parent_order_id"),
-        fetchIn("order_activity_logs", "id,order_id,action,description,performed_by_name,created_at", "order_id"),
+        fetchIn("order_activity_logs", "id,order_id,action_type,action_description,user_name,created_at", "order_id"),
       ]);
 
       const list: TimelineEvent[] = [];
@@ -104,11 +104,11 @@ export function useCustomerTimeline(customerId: string | undefined, mobile: stri
         list.push({
           id: `activity-${a.id}`,
           at: a.created_at,
-          type: a.action || "activity",
-          title: a.action || "Activity",
-          detail: a.description || "",
+          type: a.action_type || "activity",
+          title: a.action_type || "Activity",
+          detail: a.action_description || "",
           orderId: a.order_id,
-          actor: a.performed_by_name || undefined,
+          actor: a.user_name || undefined,
         });
       });
 
