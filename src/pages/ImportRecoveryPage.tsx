@@ -39,7 +39,7 @@ export default function ImportRecoveryPage() {
 
   return (
     <AppLayout>
-      <PageHeader title="Import Recovery" subtitle="Resume, retry, or cancel background imports" />
+      <PageHeader title="Import Recovery" description="Resume, retry, or cancel background imports" />
       <div className="p-4 md:p-6 space-y-4">
         <ImportPerformancePanel />
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>

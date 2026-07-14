@@ -4,7 +4,7 @@ import { Sparkles, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function AIDataQualityCard() {
-  const { data, loading } = useDataQuality();
+  const { snapshot: data, loading } = useDataQuality();
 
   if (loading) return <div className="flex items-center gap-2 text-sm text-muted-foreground p-4"><Loader2 className="h-4 w-4 animate-spin" /> Loading data quality…</div>;
   if (!data) return null;

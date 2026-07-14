@@ -19,7 +19,7 @@ export function useResumeBanner() {
 
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("import_runs")
         .select("id,status,total_rows,total_batches,processed_batches,resumed_from_row,speed_rows_per_sec,resumed_by,resumed_at,started_at")
         .in("status", ["paused", "resumable", "processing", "failed_partial"])
