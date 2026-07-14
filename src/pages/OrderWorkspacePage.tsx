@@ -143,29 +143,30 @@ export default function OrderWorkspacePage() {
   return (
     <AppLayout>
       <div className="animate-fade-in p-4 max-w-[1600px]">
-        {/* Top bar */}
+        {/* Sticky workspace summary */}
+        <WorkspaceHeaderSummary
+          position={pos.position}
+          total={pos.total}
+          isFirstOrder={pos.isFirstOrder}
+          isOnlyOrder={pos.isOnlyOrder}
+          isRepeatCustomer={pos.isRepeatCustomer}
+          lifetimeValue={customer?.lifetime_value || 0}
+          healthScore={aiScore?.scores?.health ?? null}
+          aiScore={aiScore?.scores?.overall ?? null}
+          lastFollowupAt={customer?.last_followup_at}
+          currentExecutive={order.assigned_to_name || customer?.last_executive_name || null}
+          prevOrderId={pos.prevOrderId}
+          nextOrderId={pos.nextOrderId}
+          onPrev={() => pos.prevOrderId && openOrder(pos.prevOrderId)}
+          onNext={() => pos.nextOrderId && openOrder(pos.nextOrderId)}
+        />
+
+        {/* Top action bar */}
         <div className="mb-4 flex items-center justify-between">
           <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-4 w-4" /> Back
           </Button>
           <div className="flex items-center gap-2">
-            <Button
-              size="sm" variant="outline" className="gap-1.5"
-              disabled={!currentPosition.prev}
-              onClick={() => currentPosition.prev && navigate(`/orders/${currentPosition.prev}/workspace`)}
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> Prev order
-            </Button>
-            <span className="text-xs text-muted-foreground px-2">
-              {currentPosition.index >= 0 ? `Order ${currentPosition.index + 1} of ${customerOrders.length}` : ""}
-            </span>
-            <Button
-              size="sm" variant="outline" className="gap-1.5"
-              disabled={!currentPosition.next}
-              onClick={() => currentPosition.next && navigate(`/orders/${currentPosition.next}/workspace`)}
-            >
-              Next order <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
             {canComplete && (
               <Button size="sm" className="gap-1.5" onClick={() => setFollowupOpen(true)}>
                 <CheckCircle className="h-3.5 w-3.5" /> Complete Step {storeOrder!.followupStep}
@@ -178,6 +179,13 @@ export default function OrderWorkspacePage() {
             )}
           </div>
         </div>
+
+        {/* Order navigator strip */}
+        {pos.orders.length > 1 && (
+          <div className="mb-4">
+            <OrderNavigator orders={pos.orders} currentOrderId={orderId!} onOpen={openOrder} />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr_360px] gap-4">
           {/* Left rail */}
