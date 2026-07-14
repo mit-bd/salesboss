@@ -711,6 +711,8 @@ export default function BulkImportPage() {
         {/* ---------- SIMULATE ---------- */}
         {step === "simulate" && (
           <div className="space-y-4">
+            <HealthScorePanel health={aiHealth} recommendations={aiRecommendations} />
+            <WarningCenter warnings={aiWarnings} />
             <div className="rounded-xl border border-border bg-card p-5 card-shadow">
               <h3 className="text-sm font-semibold mb-3">Import simulation</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
