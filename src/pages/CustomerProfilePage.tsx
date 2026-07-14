@@ -243,6 +243,11 @@ export default function CustomerProfilePage() {
             )}
           </div>
         </div>
+
+        {/* Activity Timeline (real business events) */}
+        <div className="mt-4">
+          <CustomerTimeline customerId={customer.id} mobile={customer.mobile_number} />
+        </div>
       </div>
     </AppLayout>
   );
