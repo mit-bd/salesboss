@@ -96,10 +96,22 @@ export default function OwnerDashboardPage() {
 
   return (
     <OwnerLayout title="Owner Dashboard" subtitle="Platform management overview" pendingCount={stats?.pendingRequests}>
-      {loading ? (
+      {state.status === "loading" ? (
         <div className="flex justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
+      ) : state.status === "error" ? (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Unable to load dashboard analytics</AlertTitle>
+          <AlertDescription className="space-y-3">
+            <p className="text-sm">{state.message}</p>
+            <Button size="sm" variant="outline" onClick={fetchStats}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
       ) : (
         <div className="space-y-6">
           {/* Stat Cards */}
