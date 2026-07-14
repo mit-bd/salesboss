@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Loader2, Building2, Users, Clock, CheckCircle, XCircle, ShoppingCart,
-  AlertTriangle, RefreshCw, Repeat, ClipboardList,
+  AlertTriangle, RefreshCw, Repeat, ClipboardList, AlertCircle,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -30,25 +32,46 @@ interface Stats {
   };
 }
 
+type FetchState =
+  | { status: "loading" }
+  | { status: "success"; data: Stats }
+  | { status: "error"; message: string };
+
 export default function OwnerDashboardPage() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState<FetchState>({ status: "loading" });
+
+  const fetchStats = useCallback(async () => {
+    setState({ status: "loading" });
+    try {
+      const { data, error } = await supabase.functions.invoke("manage-team", {
+        body: { action: "dashboard_stats" },
+      });
+      if (error) {
+        console.error("[OwnerDashboard] Edge function error:", error.message);
+        setState({ status: "error", message: error.message || "Failed to load dashboard data." });
+        return;
+      }
+      if (!data || typeof data !== "object") {
+        setState({ status: "error", message: "Empty response from analytics service." });
+        return;
+      }
+      if ((data as any).error) {
+        setState({ status: "error", message: String((data as any).error) });
+        return;
+      }
+      setState({ status: "success", data: data as Stats });
+    } catch (err: any) {
+      console.error("[OwnerDashboard] Network/unexpected error:", err?.message ?? err);
+      setState({ status: "error", message: err?.message || "Network error. Please try again." });
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke("manage-team", {
-          body: { action: "dashboard_stats" },
-        });
-        if (!error && data) setStats(data);
-      } catch (err) {
-        console.error("[OwnerDashboard] Stats fetch failed:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchStats();
-  }, []);
+  }, [fetchStats]);
+
+  const stats = state.status === "success" ? state.data : null;
+
 
   const statCards = [
     { label: "Total Projects", value: stats?.totalProjects ?? 0, icon: Building2, color: "text-primary" },
