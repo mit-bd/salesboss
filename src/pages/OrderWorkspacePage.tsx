@@ -338,7 +338,7 @@ export default function OrderWorkspacePage() {
                     <KV label="First Order" value={customer?.first_order_date || "—"} />
                     <KV label="Latest Order" value={customer?.last_order_date || "—"} />
                     <KV label="Total Orders" value={customer?.total_orders ?? "—"} />
-                    <KV label="Position" value={currentPosition.index >= 0 ? `#${currentPosition.index + 1} of ${customerOrders.length}` : "—"} />
+                    <KV label="Position" value={pos.total ? (pos.isOnlyOrder ? "First Order" : `#${pos.position} of ${pos.total}`) : "—"} />
                   </div>
                 </div>
               </div>
@@ -488,8 +488,8 @@ export default function OrderWorkspacePage() {
               </TabsContent>
 
               <TabsContent value="activity" className="mt-4">
-                <Section title="Activity History">
-                  <OrderActivityTimeline orderId={orderId!} />
+                <Section title="Activity History (with change diffs)">
+                  <ActivityDiffViewer logs={activityLogs} loading={activityLoading} hasMore={activityHasMore} onLoadMore={activityLoadMore} />
                 </Section>
               </TabsContent>
 
