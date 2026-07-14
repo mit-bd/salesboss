@@ -226,3 +226,12 @@ export default function CustomerProfilePage() {
     </AppLayout>
   );
 }
+
+function MiniStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-3 card-shadow">
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="text-sm font-semibold text-foreground mt-0.5 truncate">{value}</p>
+    </div>
+  );
+}
