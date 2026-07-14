@@ -14,6 +14,25 @@ interface Customer {
   mobile_number: string;
   address: string;
   created_at: string;
+  first_order_date?: string | null;
+  last_order_date?: string | null;
+  total_orders?: number;
+  delivered_orders?: number;
+  pending_orders?: number;
+  cancelled_orders?: number;
+  returned_orders?: number;
+  repeat_orders?: number;
+  lifetime_cod?: number;
+  lifetime_shipping?: number;
+  lifetime_value?: number;
+  avg_order_value?: number;
+  last_product?: string | null;
+  last_delivery_status?: string | null;
+  last_followup_at?: string | null;
+  last_executive_name?: string | null;
+  is_repeat_customer?: boolean;
+  stage?: string;
+  is_active?: boolean;
 }
 
 export default function CustomerProfilePage() {
