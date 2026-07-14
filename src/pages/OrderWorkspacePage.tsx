@@ -17,13 +17,21 @@ import { useCustomerTags } from "@/hooks/useCustomerTags";
 import { useCustomerAIScore } from "@/hooks/useCustomerAIScore";
 import { useCustomerTimeline } from "@/hooks/useCustomerTimeline";
 import { useOrderTimeline } from "@/hooks/useOrderTimeline";
+import { useOrderPosition } from "@/hooks/useOrderPosition";
+import { useOrderActivityLogs } from "@/hooks/useOrderActivityLogs";
+import { useImportRunInfo } from "@/hooks/useImportRunInfo";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { useRole } from "@/contexts/RoleContext";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import EditOrderDialog from "@/components/EditOrderDialog";
 import CompleteFollowupDialog from "@/components/CompleteFollowupDialog";
-import OrderActivityTimeline from "@/components/OrderActivityTimeline";
+import WorkspaceHeaderSummary from "@/components/workspace/WorkspaceHeaderSummary";
+import OrderPositionCard from "@/components/workspace/OrderPositionCard";
+import RelatedOrdersPanel from "@/components/workspace/RelatedOrdersPanel";
+import OrderNavigator from "@/components/workspace/OrderNavigator";
+import ActivityDiffViewer from "@/components/workspace/ActivityDiffViewer";
+import AIRecommendationCard from "@/components/workspace/AIRecommendationCard";
 
 const BST_FMT = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Dhaka", year: "numeric", month: "short", day: "2-digit",
