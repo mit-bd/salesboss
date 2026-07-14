@@ -122,13 +122,31 @@ export default function CustomerProfilePage() {
           </Button>
           <div className="rounded-xl border border-border bg-card p-5 card-shadow">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1 min-w-0">
                 <h1 className="text-xl font-semibold text-foreground">{customer.name}</h1>
                 <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> {customer.mobile_number}</span>
                   <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {customer.address || "No address"}</span>
                 </div>
                 <p className="text-xs text-muted-foreground/60 mt-1">Customer since {new Date(customer.created_at).toLocaleDateString()}</p>
+                {tags.length > 0 && (
+                  <div className="flex items-center flex-wrap gap-1.5 mt-3">
+                    <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+                    {tags.map((t) => (
+                      <Badge
+                        key={t.id}
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] h-5 px-1.5",
+                          t.assigned_by === "manual" ? "border-primary/40 text-primary" : "border-warning/40 text-warning"
+                        )}
+                        title={t.reason || undefined}
+                      >
+                        {t.tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
