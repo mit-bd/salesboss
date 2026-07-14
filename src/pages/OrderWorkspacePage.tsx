@@ -303,41 +303,17 @@ export default function OrderWorkspacePage() {
               )}
             </Section>
 
-            {/* Repeat orders rail */}
-            <Section title="All Orders" icon={Repeat2}>
-              {customerOrders.length === 0 && <p className="text-xs text-muted-foreground">No other orders.</p>}
-              <div className="space-y-1.5 max-h-72 overflow-y-auto">
-                {customerOrders.map((o) => {
-                  const isCurrent = o.id === orderId;
-                  return (
-                    <button
-                      key={o.id}
-                      onClick={() => navigate(`/orders/${o.id}/workspace`)}
-                      className={cn(
-                        "w-full text-left rounded-md border p-2 text-xs transition-colors",
-                        isCurrent
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:bg-muted/50",
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-[11px]">{o.generated_order_id || o.invoice_id || o.id.slice(0, 8)}</span>
-                        <span className="text-[10px] text-muted-foreground">{o.order_date || o.created_at?.split("T")[0]}</span>
-                      </div>
-                      <div className="flex items-center justify-between mt-0.5">
-                        <span className="truncate mr-2 text-foreground">{o.product_title || "—"}</span>
-                        <span className="font-semibold">৳{(o.price || 0).toLocaleString()}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        {o.is_repeat && <Badge variant="outline" className="text-[9px] h-4 border-warning/40 text-warning">REPEAT</Badge>}
-                        {o.is_upsell && <Badge variant="outline" className="text-[9px] h-4 border-info/40 text-info">UPSELL</Badge>}
-                        {o.delivery_status && <span className="text-[10px] text-muted-foreground capitalize">{o.delivery_status}</span>}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </Section>
+            {/* Order position intelligence */}
+            <OrderPositionCard pos={pos} />
+
+            {/* Related orders — full detail panel */}
+            <RelatedOrdersPanel
+              orders={pos.orders}
+              currentOrderId={orderId!}
+              onOpen={openOrder}
+              prevOrderId={pos.prevOrderId}
+              nextOrderId={pos.nextOrderId}
+            />
           </div>
 
           {/* Center */}
