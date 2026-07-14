@@ -533,12 +533,12 @@ export default function OrderWorkspacePage() {
             <Section title="AI Recommendations" icon={Sparkles}>
               {!aiScore && <p className="text-xs text-muted-foreground">Generate the AI score to see recommendations.</p>}
               {aiScore && (
-                <div className="space-y-3 text-xs">
-                  <RecCard label="Next Best Action" rec={aiScore.recommendations?.next_best_action} field="action" />
-                  <RecCard label="Recommended Product" rec={aiScore.recommendations?.recommended_product} field="product" />
-                  <RecCard label="Recommended Upsell" rec={aiScore.recommendations?.recommended_upsell} field="product" />
-                  <RecCard label="Followup Timing" rec={aiScore.recommendations?.recommended_followup_time} field="when" />
-                  <RecCard label="Customer Risk" rec={aiScore.recommendations?.customer_risk} field="level" tone="destructive" />
+                <div className="space-y-2 text-xs">
+                  <AIRecommendationCard label="Next Best Action" rec={aiScore.recommendations?.next_best_action} field="action" />
+                  <AIRecommendationCard label="Recommended Product" rec={aiScore.recommendations?.recommended_product} field="product" />
+                  <AIRecommendationCard label="Recommended Upsell" rec={aiScore.recommendations?.recommended_upsell} field="product" />
+                  <AIRecommendationCard label="Followup Timing" rec={aiScore.recommendations?.recommended_followup_time} field="when" />
+                  <AIRecommendationCard label="Customer Risk" rec={aiScore.recommendations?.customer_risk} field="level" priority={((aiScore.recommendations?.customer_risk as any)?.level || "medium").toLowerCase() as any} />
                 </div>
               )}
             </Section>
@@ -564,59 +564,37 @@ export default function OrderWorkspacePage() {
   );
 }
 
-function RecCard({ label, rec, field, tone = "primary" }: { label: string; rec?: any; field: string; tone?: string }) {
-  if (!rec || !rec[field]) return (
-    <div className="rounded-md border border-border p-2">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-xs text-muted-foreground mt-0.5">Not enough data.</p>
-    </div>
-  );
-  return (
-    <div className={cn("rounded-md border p-2", tone === "destructive" ? "border-destructive/30 bg-destructive/5" : "border-border")}>
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
-        {typeof rec.confidence === "number" && (
-          <span className="text-[10px] text-muted-foreground">{Math.round(rec.confidence)}% conf.</span>
-        )}
-      </div>
-      <p className="text-xs font-medium text-foreground mt-0.5 capitalize">{String(rec[field])}</p>
-      {rec.why && <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{rec.why}</p>}
-    </div>
-  );
-}
-
 function ImportInfoCard({ order }: { order: any }) {
-  const runId = order?.import_run_id;
-  const [run, setRun] = useState<any>(null);
-  const [loaded, setLoaded] = useState(false);
-  useMemo(() => {
-    if (!runId) { setLoaded(true); return; }
-    (async () => {
-      const mod = await import("@/integrations/supabase/client");
-      const { data } = await mod.supabase.from("import_runs").select("*").eq("id", runId).maybeSingle();
-      setRun(data); setLoaded(true);
-    })();
-  }, [runId]);
+  const { run, loading } = useImportRunInfo(order?.import_run_id);
 
-  if (!runId) {
+  if (!order?.import_run_id) {
     return (
       <Section title="Import Information" icon={ShieldAlert}>
-        <p className="text-xs text-muted-foreground">This order was not created through the bulk import engine.</p>
+        <div className="rounded-md border border-dashed border-border p-3">
+          <p className="text-xs font-medium text-foreground">Created Manually</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            This order was not created through the bulk import engine.
+          </p>
+        </div>
       </Section>
     );
   }
+
   return (
     <Section title="Import Information" icon={ShieldAlert}>
-      {!loaded && <Skeleton className="h-16" />}
-      {loaded && !run && <p className="text-xs text-muted-foreground">Import run no longer available.</p>}
+      {loading && <Skeleton className="h-16" />}
+      {!loading && !run && <p className="text-xs text-muted-foreground">Import run no longer available.</p>}
       {run && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <KV label="Import Source" value={run.source || run.courier_name || "—"} />
           <KV label="Imported By" value={run.created_by_name || run.uploaded_by_name || "—"} />
-          <KV label="Imported At (BST)" value={fmtBST(run.started_at || run.created_at)} />
-          <KV label="Batch" value={`${run.processed_batches || 0} / ${run.total_batches || 0}`} />
+          <KV label="Import Date (BST)" value={fmtBST(run.started_at || run.created_at)} />
+          <KV label="Original File" value={run.original_file_name || run.file_name || "—"} />
+          <KV label="Import Run ID" value={run.id?.slice(0, 8) || "—"} mono />
+          <KV label="Import Batch" value={`${run.processed_batches || 0} / ${run.total_batches || 0}`} />
           <KV label="Health Score" value={(run.health_score?.overall ?? "—") + (run.health_score?.overall != null ? " / 100" : "")} />
           <KV label="AI Corrections" value={run.cleaned_rows ?? "—"} />
+          <KV label="Status" value={<span className="capitalize">{run.status || "—"}</span>} />
         </div>
       )}
     </Section>
