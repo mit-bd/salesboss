@@ -102,6 +102,8 @@ export default function OrderWorkspacePage() {
   const { data: aiScore, loading: aiLoading, error: aiError, refresh: refreshAI } = useCustomerAIScore(customer?.id);
   const { events: custTimeline, loading: custTimelineLoading } = useCustomerTimeline(customer?.id, customer?.mobile_number);
   const { events: orderTimeline, loading: orderTimelineLoading } = useOrderTimeline(orderId);
+  const { logs: activityLogs, loading: activityLoading, hasMore: activityHasMore, loadMore: activityLoadMore } = useOrderActivityLogs(orderId);
+  const pos = useOrderPosition(customer?.id, orderId);
   const { isAdmin } = useRole();
   const { hasPermission } = usePermissions();
   const { user } = useAuth();
@@ -109,15 +111,7 @@ export default function OrderWorkspacePage() {
   const [editOpen, setEditOpen] = useState(false);
   const [followupOpen, setFollowupOpen] = useState(false);
 
-  const currentPosition = useMemo(() => {
-    if (!customerOrders.length || !orderId) return { index: -1, prev: null as string | null, next: null as string | null };
-    const idx = customerOrders.findIndex((o) => o.id === orderId);
-    return {
-      index: idx,
-      prev: idx > 0 ? customerOrders[idx - 1].id : null,
-      next: idx >= 0 && idx < customerOrders.length - 1 ? customerOrders[idx + 1].id : null,
-    };
-  }, [customerOrders, orderId]);
+  const openOrder = (id: string) => navigate(`/orders/${id}/workspace`, { replace: true });
 
   const storeOrder = storeOrders.find((o) => o.id === orderId);
   const canEdit = isAdmin || hasPermission("orders.edit");
