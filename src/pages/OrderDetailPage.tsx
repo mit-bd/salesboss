@@ -156,6 +156,9 @@ export default function OrderDetailPage() {
             <ArrowLeft className="h-4 w-4" /> Back
           </Button>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate(`/orders/${order.id}/workspace`)}>
+              <Zap className="h-3.5 w-3.5" /> Open in Workspace
+            </Button>
             {canComplete && (
               <Button size="sm" className="gap-1.5" onClick={() => setFollowupOpen(true)}>
                 <CheckCircle className="h-3.5 w-3.5" /> Complete Step {order.followupStep}
