@@ -21,6 +21,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { useImportTemplates } from "@/hooks/useImportTemplates";
 import { useActivityLog } from "@/hooks/useActivityLog";
+import WarningCenter, { type ImportWarningLite } from "@/components/import/WarningCenter";
+import HealthScorePanel, { type HealthScore, type Recommendation } from "@/components/import/HealthScorePanel";
 
 // ---------- Canonical fields ----------
 const CANONICAL: { key: string; label: string; required: boolean }[] = [
@@ -123,6 +125,10 @@ export default function BulkImportPage() {
   const [matchedTemplate, setMatchedTemplate] = useState<any>(null);
   const [cleanedRows, setCleanedRows] = useState<CleanedRow[]>([]);
   const [aiReport, setAiReport] = useState<{ autoCorrected: number; needsReview: number; corrections: string[] } | null>(null);
+  const [aiWarnings, setAiWarnings] = useState<ImportWarningLite[]>([]);
+  const [aiHealth, setAiHealth] = useState<HealthScore | null>(null);
+  const [aiRecommendations, setAiRecommendations] = useState<Recommendation[]>([]);
+  const [resumableRuns, setResumableRuns] = useState<any[]>([]);
   const [cleaning, setCleaning] = useState(false);
 
   const [assignToExec, setAssignToExec] = useState("");
@@ -258,6 +264,9 @@ export default function BulkImportPage() {
         needsReview: data?.report?.needsReview ?? 0,
         corrections: data?.report?.corrections ?? [],
       });
+      setAiWarnings((data?.warnings || []) as ImportWarningLite[]);
+      setAiHealth((data?.health || null) as HealthScore | null);
+      setAiRecommendations((data?.recommendations || []) as Recommendation[]);
       setStep("simulate");
     } catch (err: any) {
       toast({ title: "AI cleaning failed", description: err.message || "Try again", variant: "destructive" });
@@ -702,6 +711,8 @@ export default function BulkImportPage() {
         {/* ---------- SIMULATE ---------- */}
         {step === "simulate" && (
           <div className="space-y-4">
+            <HealthScorePanel health={aiHealth} recommendations={aiRecommendations} />
+            <WarningCenter warnings={aiWarnings} />
             <div className="rounded-xl border border-border bg-card p-5 card-shadow">
               <h3 className="text-sm font-semibold mb-3">Import simulation</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">

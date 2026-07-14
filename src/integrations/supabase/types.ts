@@ -127,6 +127,51 @@ export type Database = {
           },
         ]
       }
+      customer_tags: {
+        Row: {
+          assigned_by: string
+          created_at: string
+          customer_id: string
+          id: string
+          project_id: string
+          reason: string | null
+          tag: string
+        }
+        Insert: {
+          assigned_by?: string
+          created_at?: string
+          customer_id: string
+          id?: string
+          project_id: string
+          reason?: string | null
+          tag: string
+        }
+        Update: {
+          assigned_by?: string
+          created_at?: string
+          customer_id?: string
+          id?: string
+          project_id?: string
+          reason?: string | null
+          tag?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_tags_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_tags_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address: string
@@ -440,40 +485,110 @@ export type Database = {
           },
         ]
       }
+      import_learning_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          event_type: string
+          id: string
+          import_run_id: string | null
+          payload: Json
+          project_id: string
+          template_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          event_type: string
+          id?: string
+          import_run_id?: string | null
+          payload?: Json
+          project_id: string
+          template_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          event_type?: string
+          id?: string
+          import_run_id?: string | null
+          payload?: Json
+          project_id?: string
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_learning_events_import_run_id_fkey"
+            columns: ["import_run_id"]
+            isOneToOne: false
+            referencedRelation: "import_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_learning_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_learning_events_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "import_mapping_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       import_mapping_templates: {
         Row: {
           created_at: string
           created_by: string | null
+          date_format: string | null
           header_signature: string[]
           id: string
+          last_used_at: string | null
           mapping: Json
           name: string
+          phone_format: string | null
+          product_alias_hints: Json | null
           project_id: string
           source_hint: string | null
+          status_aliases: Json | null
           updated_at: string
           usage_count: number
         }
         Insert: {
           created_at?: string
           created_by?: string | null
+          date_format?: string | null
           header_signature?: string[]
           id?: string
+          last_used_at?: string | null
           mapping?: Json
           name: string
+          phone_format?: string | null
+          product_alias_hints?: Json | null
           project_id: string
           source_hint?: string | null
+          status_aliases?: Json | null
           updated_at?: string
           usage_count?: number
         }
         Update: {
           created_at?: string
           created_by?: string | null
+          date_format?: string | null
           header_signature?: string[]
           id?: string
+          last_used_at?: string | null
           mapping?: Json
           name?: string
+          phone_format?: string | null
+          product_alias_hints?: Json | null
           project_id?: string
           source_hint?: string | null
+          status_aliases?: Json | null
           updated_at?: string
           usage_count?: number
         }
@@ -485,16 +600,20 @@ export type Database = {
           created_at: string
           duplicates: number
           existing_customers: number
+          health_score: Json | null
           id: string
           imported: number
           invalid_cod: number
           invalid_phone: number
+          last_processed_row: number | null
           missing_mandatory: number
           new_customers: number
           processing_ms: number
           project_id: string
+          recommendations: Json | null
           repeat_orders: number
           report: Json
+          resume_token: string | null
           skipped: number
           source_filename: string | null
           total_rows: number
@@ -507,16 +626,20 @@ export type Database = {
           created_at?: string
           duplicates?: number
           existing_customers?: number
+          health_score?: Json | null
           id?: string
           imported?: number
           invalid_cod?: number
           invalid_phone?: number
+          last_processed_row?: number | null
           missing_mandatory?: number
           new_customers?: number
           processing_ms?: number
           project_id: string
+          recommendations?: Json | null
           repeat_orders?: number
           report?: Json
+          resume_token?: string | null
           skipped?: number
           source_filename?: string | null
           total_rows?: number
@@ -529,16 +652,20 @@ export type Database = {
           created_at?: string
           duplicates?: number
           existing_customers?: number
+          health_score?: Json | null
           id?: string
           imported?: number
           invalid_cod?: number
           invalid_phone?: number
+          last_processed_row?: number | null
           missing_mandatory?: number
           new_customers?: number
           processing_ms?: number
           project_id?: string
+          recommendations?: Json | null
           repeat_orders?: number
           report?: Json
+          resume_token?: string | null
           skipped?: number
           source_filename?: string | null
           total_rows?: number
@@ -547,6 +674,72 @@ export type Database = {
           user_name?: string | null
         }
         Relationships: []
+      }
+      import_warnings: {
+        Row: {
+          category: string
+          created_at: string
+          field: string | null
+          id: string
+          import_run_id: string
+          message: string
+          project_id: string
+          reason: string | null
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          row_number: number
+          severity: string
+          suggested_fix: Json | null
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          field?: string | null
+          id?: string
+          import_run_id: string
+          message: string
+          project_id: string
+          reason?: string | null
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          row_number: number
+          severity?: string
+          suggested_fix?: Json | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          field?: string | null
+          id?: string
+          import_run_id?: string
+          message?: string
+          project_id?: string
+          reason?: string | null
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          row_number?: number
+          severity?: string
+          suggested_fix?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_warnings_import_run_id_fkey"
+            columns: ["import_run_id"]
+            isOneToOne: false
+            referencedRelation: "import_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_warnings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notifications: {
         Row: {
@@ -881,6 +1074,63 @@ export type Database = {
           label?: string
         }
         Relationships: []
+      }
+      product_aliases: {
+        Row: {
+          alias: string
+          confidence: number | null
+          created_at: string
+          created_by: string | null
+          id: string
+          normalized_alias: string | null
+          product_id: string | null
+          project_id: string
+          source: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          alias: string
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          normalized_alias?: string | null
+          product_id?: string | null
+          project_id: string
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          alias?: string
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          normalized_alias?: string | null
+          product_id?: string | null
+          project_id?: string
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_aliases_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_aliases_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       products: {
         Row: {
@@ -1283,6 +1533,10 @@ export type Database = {
     }
     Functions: {
       advance_followup_steps: { Args: never; Returns: number }
+      apply_customer_tags: {
+        Args: { p_customer_id: string }
+        Returns: undefined
+      }
       bulk_complete_followups: {
         Args: {
           p_completed_by: string
@@ -1314,6 +1568,7 @@ export type Database = {
         Args: { p_order_ids: string[]; p_updates: Json; p_versions: Json }
         Returns: Json
       }
+      data_quality_snapshot: { Args: { p_project_id: string }; Returns: Json }
       find_or_create_customer:
         | {
             Args: { p_address: string; p_mobile: string; p_name: string }
