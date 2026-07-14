@@ -6,6 +6,7 @@ import {
   RefreshCw, ArrowUpRight, Upload, Settings, Truck, BarChart3,
   Trash2, Shield, Download, Database, Target, LogOut, KeyRound,
   ChevronDown, ChevronRight, Globe, Building2, UserPlus, ArrowLeft, CreditCard,
+  Sparkles, Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -65,6 +66,8 @@ const navCategories: NavCategory[] = [
       { label: "Delivery Methods", icon: Truck, path: "/delivery-methods", permission: "delivery.view" },
       { label: "Order Sources", icon: Globe, path: "/order-sources" },
       { label: "Bulk Import", icon: Upload, path: "/bulk-import", permission: "orders.create" },
+      { label: "Product Aliases", icon: Sparkles, path: "/product-aliases", permission: "products.view" },
+      { label: "Data Quality", icon: Activity, path: "/data-quality", permission: "orders.create" },
     ],
   },
   {
