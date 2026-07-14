@@ -43,6 +43,7 @@ export default function CustomerProfilePage() {
   const { orders, activeOrders, followupHistory } = useOrderStore();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
+  const { tags } = useCustomerTags(id);
 
   useEffect(() => {
     const fetchCustomer = async () => {
