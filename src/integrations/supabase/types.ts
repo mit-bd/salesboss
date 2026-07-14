@@ -134,7 +134,7 @@ export type Database = {
           id: string
           mobile_number: string
           name: string
-          project_id: string | null
+          project_id: string
           updated_at: string
         }
         Insert: {
@@ -143,7 +143,7 @@ export type Database = {
           id?: string
           mobile_number: string
           name?: string
-          project_id?: string | null
+          project_id: string
           updated_at?: string
         }
         Update: {
@@ -152,7 +152,7 @@ export type Database = {
           id?: string
           mobile_number?: string
           name?: string
-          project_id?: string | null
+          project_id?: string
           updated_at?: string
         }
         Relationships: [
@@ -1110,10 +1110,20 @@ export type Database = {
         Args: { p_order_ids: string[]; p_updates: Json; p_versions: Json }
         Returns: Json
       }
-      find_or_create_customer: {
-        Args: { p_address: string; p_mobile: string; p_name: string }
-        Returns: string
-      }
+      find_or_create_customer:
+        | {
+            Args: { p_address: string; p_mobile: string; p_name: string }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_address: string
+              p_mobile: string
+              p_name: string
+              p_project_id?: string
+            }
+            Returns: string
+          }
       get_next_sku_sequence: { Args: { p_sku: string }; Returns: number }
       get_user_project_id: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
