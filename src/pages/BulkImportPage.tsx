@@ -1,305 +1,416 @@
-import { useState, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X, Loader2, Sparkles, Wand2, AlertTriangle } from "lucide-react";
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X, Loader2, Sparkles, Wand2, AlertTriangle, ArrowRight, ArrowLeft, Save, Trash2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useDeliveryMethods } from "@/hooks/useDeliveryMethods";
-import { useOrderSources } from "@/hooks/useOrderSources";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
+import { useImportTemplates } from "@/hooks/useImportTemplates";
+import { useActivityLog } from "@/hooks/useActivityLog";
 
+// ---------- Canonical fields ----------
+const CANONICAL: { key: string; label: string; required: boolean }[] = [
+  { key: "externalOrderId", label: "Order ID", required: true },
+  { key: "recipientName", label: "Recipient Name", required: true },
+  { key: "recipientPhone", label: "Recipient Phone", required: true },
+  { key: "recipientAddress", label: "Recipient Address", required: true },
+  { key: "codAmount", label: "COD Amount", required: true },
+  { key: "trackingCode", label: "Tracking Code", required: false },
+  { key: "invoiceNo", label: "Invoice", required: false },
+  { key: "deliveryStatus", label: "Delivery Status", required: false },
+  { key: "approvalStatus", label: "Approval Status", required: false },
+  { key: "deliveryTime", label: "Delivery Time", required: false },
+  { key: "riderName", label: "Rider", required: false },
+  { key: "riderPhone", label: "Rider Phone", required: false },
+  { key: "shippingCharge", label: "Shipping Charge", required: false },
+  { key: "codCharge", label: "COD Charge", required: false },
+  { key: "paymentStatus", label: "Payment Status", required: false },
+  { key: "note", label: "Note", required: false },
+  { key: "product", label: "Product", required: false },
+  { key: "orderDate", label: "Order Date", required: false },
+  { key: "deliveryDate", label: "Delivery Date", required: false },
+  { key: "deliveryMethod", label: "Delivery Method", required: false },
+  { key: "orderSource", label: "Order Source", required: false },
+  { key: "itemDescription", label: "Item Description", required: false },
+];
+const REQUIRED_KEYS = CANONICAL.filter((c) => c.required).map((c) => c.key);
 
-// --- Types ---
-
-interface ParsedRow {
+type Mapping = Record<string, string>; // canonicalKey -> sourceHeader
+type RawRow = Record<string, string>;
+interface CleanedRow {
   rowNumber: number;
-  customerName: string;
-  mobile: string;
-  address: string;
-  orderSource: string;
-  product?: string;
-  price?: string;
+  externalOrderId?: string;
+  recipientName?: string;
+  recipientPhone?: string;
+  recipientAddress?: string;
+  codAmount?: string;
+  trackingCode?: string;
+  invoiceNo?: string;
+  deliveryStatus?: string;
+  approvalStatus?: string;
+  deliveryTime?: string;
+  riderName?: string;
+  riderPhone?: string;
+  shippingCharge?: string;
+  codCharge?: string;
+  paymentStatus?: string;
   note?: string;
+  product?: string;
   orderDate?: string;
   deliveryDate?: string;
   deliveryMethod?: string;
+  orderSource?: string;
   itemDescription?: string;
-  error?: string;
   autoCorrected?: boolean;
   needsReview?: boolean;
   corrections?: string[];
 }
+type DupDecision = "update" | "skip" | "create";
 
-interface ImportResult {
-  rowNumber: number;
-  success: boolean;
-  error?: string;
+type Step = "upload" | "mapping" | "clean" | "simulate" | "duplicates" | "execute" | "report";
+
+// ---------- Helpers ----------
+function normalizePhone(v: string): string {
+  const d = (v || "").replace(/[^\d]/g, "");
+  if (!d) return "";
+  if (d.startsWith("880") && d.length === 13) return "0" + d.slice(3);
+  if (d.startsWith("88") && d.length === 13) return "0" + d.slice(3);
+  if (d.length === 10 && d.startsWith("1")) return "0" + d;
+  return d;
 }
-
-interface AiReport {
-  totalRows: number;
-  autoCorrected: number;
-  needsReview: number;
-  ready: number;
-  corrections: string[];
-}
-
-// --- Constants ---
-
-const REQUIRED_COLUMNS = ["customerName", "mobile", "address"];
-
-const AUTO_MAP: Record<string, string[]> = {
-  customerName: ["customer name", "name", "customer", "customer_name", "client", "client name"],
-  mobile: ["mobile", "phone", "mobile number", "contact number", "contact", "phone number", "mobile_number", "phone_number"],
-  address: ["address", "addr", "location"],
-  orderSource: ["order source", "source", "order_source"],
-  product: ["product", "product title", "product_title", "item"],
-  price: ["price", "amount", "total", "cost"],
-  note: ["note", "notes", "order note", "remark", "remarks"],
-  orderDate: ["order date", "orderdate", "order_date", "date"],
-  deliveryDate: ["delivery date", "deliverydate", "delivery_date"],
-  deliveryMethod: ["delivery method", "deliverymethod", "delivery_method", "delivery partner", "courier"],
-  itemDescription: ["item description", "itemdescription", "item_description", "description", "details"],
-};
-
-// --- Helpers ---
-
-function parseCSV(text: string): { headers: string[]; rows: string[][] } {
-  const lines = text.trim().split("\n").map((l) => l.split(",").map((c) => c.trim().replace(/^"|"$/g, "")));
-  return { headers: lines[0] || [], rows: lines.slice(1) };
-}
-
-function validateRow(row: Record<string, string>): string | undefined {
-  if (!row.customerName?.trim()) return "Missing customer name";
-  if (!row.mobile?.trim()) return "Missing mobile";
-  if (!/^\d{10,15}$/.test(row.mobile.replace(/\s/g, ""))) return "Invalid mobile number";
-  if (!row.address?.trim()) return "Missing address";
-  return undefined;
-}
-
-function safeDate(val: string | undefined): string | null {
-  if (!val?.trim()) return null;
-  return /^\d{4}-\d{2}-\d{2}$/.test(val.trim()) ? val.trim() : null;
-}
-
-function safePrice(val: string | undefined): number {
-  if (!val?.trim()) return 0;
-  const n = parseFloat(val);
+function toNum(v: string | undefined): number {
+  if (!v) return 0;
+  const n = parseFloat(String(v).replace(/[^\d.\-]/g, ""));
   return isNaN(n) ? 0 : n;
 }
-
-function autoMapColumns(headers: string[]): Record<string, string> {
-  const mapping: Record<string, string> = {};
-  headers.forEach((h) => {
-    const hl = h.toLowerCase().trim();
-    for (const [key, aliases] of Object.entries(AUTO_MAP)) {
-      if (aliases.includes(hl)) mapping[key] = h;
-    }
-  });
-  return mapping;
+function safeDate(v: string | undefined): string | null {
+  if (!v) return null;
+  const t = String(v).trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null;
 }
 
-// --- Component ---
-
+// ---------- Component ----------
 export default function BulkImportPage() {
   const { toast } = useToast();
   const { profile, user } = useAuth();
   const { refreshOrders } = useOrderStore();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [sheetsUrl, setSheetsUrl] = useState("");
-  const [parsedData, setParsedData] = useState<ParsedRow[] | null>(null);
-  const [importResults, setImportResults] = useState<ImportResult[] | null>(null);
-  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
-  const [rawHeaders, setRawHeaders] = useState<string[]>([]);
-  const [rawRows, setRawRows] = useState<string[][]>([]);
-  const [assignToExec, setAssignToExec] = useState("");
-  const [assignDeliveryMethod, setAssignDeliveryMethod] = useState("");
-  const [importing, setImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
-  const [aiCleaning, setAiCleaning] = useState(false);
-  const [aiReport, setAiReport] = useState<AiReport | null>(null);
-  const [verificationReport, setVerificationReport] = useState<{
-    totalRows: number;
-    inserted: number;
-    autoCorrected: number;
-    failed: number;
-    needsReview: number;
-    duplicatesDetected: number;
-  } | null>(null);
+  const { logActivity } = useActivityLog();
   const { members } = useTeamMembers();
   const { methods: activeDeliveryMethods } = useDeliveryMethods({ activeOnly: true });
-  const { sources } = useOrderSources();
+  const { templates, saveTemplate, deleteTemplate, renameTemplate, bumpUsage } = useImportTemplates();
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [step, setStep] = useState<Step>("upload");
+  const [fileName, setFileName] = useState<string>("");
+  const [rawHeaders, setRawHeaders] = useState<string[]>([]);
+  const [rawRows, setRawRows] = useState<RawRow[]>([]);
+  const [mapping, setMapping] = useState<Mapping>({});
+  const [detecting, setDetecting] = useState(false);
+  const [matchedTemplate, setMatchedTemplate] = useState<any>(null);
+  const [cleanedRows, setCleanedRows] = useState<CleanedRow[]>([]);
+  const [aiReport, setAiReport] = useState<{ autoCorrected: number; needsReview: number; corrections: string[] } | null>(null);
+  const [cleaning, setCleaning] = useState(false);
+
+  const [assignToExec, setAssignToExec] = useState("");
+  const [assignDeliveryMethod, setAssignDeliveryMethod] = useState("");
+
+  // duplicates
+  const [existingByExtId, setExistingByExtId] = useState<Record<string, any>>({});
+  const [dupDecisions, setDupDecisions] = useState<Record<string, DupDecision>>({});
+  const [confirmCreateFor, setConfirmCreateFor] = useState<string | null>(null);
+
+  // execute
+  const [executing, setExecuting] = useState(false);
+  const [execStage, setExecStage] = useState("");
+  const [execProgress, setExecProgress] = useState({ current: 0, total: 0 });
+
+  // report
+  const [finalReport, setFinalReport] = useState<any>(null);
+
+  // template save dialog
+  const [saveTplOpen, setSaveTplOpen] = useState(false);
+  const [tplName, setTplName] = useState("");
 
   const allExecutives = members.map((m) => ({ id: m.userId, name: m.name }));
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ---------------- File load ----------------
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const { headers, rows } = parseCSV(text);
+    setFileName(file.name);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: false });
+      if (!json.length) {
+        toast({ title: "Empty file", description: "No rows found.", variant: "destructive" });
+        return;
+      }
+      const headers = Object.keys(json[0]);
+      const rows: RawRow[] = json.map((r) => {
+        const o: RawRow = {};
+        headers.forEach((h) => { o[h] = String((r as any)[h] ?? "").trim(); });
+        return o;
+      });
       setRawHeaders(headers);
       setRawRows(rows);
-      setColumnMapping(autoMapColumns(headers));
-      setParsedData(null);
-      setImportResults(null);
-      setAiReport(null);
-    };
-    reader.readAsText(file);
-  };
-
-  const handlePreview = () => {
-    const rows: ParsedRow[] = rawRows.map((row, idx) => {
-      const obj: Record<string, string> = {};
-      rawHeaders.forEach((h, i) => { obj[h] = row[i] || ""; });
-      const mapped: Record<string, string> = {};
-      Object.entries(columnMapping).forEach(([key, col]) => { mapped[key] = obj[col] || ""; });
-      const error = validateRow(mapped);
-      return { ...mapped, rowNumber: idx + 2, error } as ParsedRow;
-    });
-    setParsedData(rows);
-    setImportResults(null);
-    setAiReport(null);
-  };
-
-  const handleAiClean = async () => {
-    if (!parsedData) return;
-    setAiCleaning(true);
-
-    try {
-      const rowsForAi = parsedData.map((r) => ({
-        rowNumber: r.rowNumber,
-        customerName: r.customerName,
-        mobile: r.mobile,
-        address: r.address,
-        orderSource: r.orderSource,
-        product: r.product || "",
-        price: r.price || "",
-        note: r.note || "",
-        orderDate: r.orderDate || "",
-        deliveryDate: r.deliveryDate || "",
-        deliveryMethod: r.deliveryMethod || "",
-        itemDescription: r.itemDescription || "",
-      }));
-
-      const { data, error } = await supabase.functions.invoke("ai-import-cleaner", {
-        body: { rows: rowsForAi, headers: rawHeaders },
-      });
-
-      if (error) throw error;
-
-      if (data?.cleanedRows && Array.isArray(data.cleanedRows)) {
-        const cleaned: ParsedRow[] = data.cleanedRows.map((r: any) => {
-          const validationError = validateRow(r);
-          return {
-            rowNumber: r.rowNumber,
-            customerName: r.customerName || "",
-            mobile: r.mobile || "",
-            address: r.address || "",
-            orderSource: r.orderSource || "",
-            product: r.product || "",
-            price: r.price || "",
-            note: r.note || "",
-            orderDate: r.orderDate || "",
-            deliveryDate: r.deliveryDate || "",
-            deliveryMethod: r.deliveryMethod || "",
-            itemDescription: r.itemDescription || "",
-            autoCorrected: r.autoCorrected || false,
-            needsReview: r.needsReview || false,
-            corrections: r.corrections || [],
-            error: r.needsReview ? (validationError || "Needs review") : validationError,
-          };
-        });
-        setParsedData(cleaned);
-        setAiReport(data.report || null);
-
-        toast({
-          title: "AI Cleaning Complete",
-          description: `${data.report?.autoCorrected || 0} rows auto-corrected, ${data.report?.needsReview || 0} need review.`,
-        });
-      }
+      setStep("mapping");
+      await runDetect(headers);
     } catch (err: any) {
-      console.error("AI clean error:", err);
-      toast({
-        title: "AI Cleaning Failed",
-        description: err.message || "Could not process data with AI. You can still import manually.",
-        variant: "destructive",
-      });
+      toast({ title: "Failed to read file", description: err.message || "Unknown error", variant: "destructive" });
     } finally {
-      setAiCleaning(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
   };
 
-  const BATCH_SIZE = 200;
+  // ---------------- AI mapping detect ----------------
+  const runDetect = async (headers: string[]) => {
+    setDetecting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-import-cleaner", {
+        body: { headers, mode: "detect" },
+      });
+      if (error) throw error;
+      const m: Mapping = (data?.mapping || {}) as Mapping;
+      setMapping(m);
+      setMatchedTemplate(data?.matchedTemplate || null);
+    } catch (err: any) {
+      console.error(err);
+      // Best-effort local mapping fallback
+      const guess: Mapping = {};
+      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const table: Record<string, string[]> = {
+        externalOrderId: ["orderid", "orderno", "consignmentid", "trackingid", "invoice"],
+        recipientName: ["customername", "recipient", "receiver", "customer", "client", "name"],
+        recipientPhone: ["phone", "mobile", "contact", "customerphone", "recipientphone"],
+        recipientAddress: ["address", "recipientaddress"],
+        codAmount: ["cod", "amount", "codamount", "total", "cash"],
+        trackingCode: ["trackingcode", "trackingnumber"],
+        deliveryStatus: ["status", "deliverystatus"],
+        product: ["product", "item"],
+        note: ["note", "notes", "remark"],
+        orderDate: ["orderdate", "date"],
+      };
+      for (const h of headers) {
+        const n = norm(h);
+        for (const [k, aliases] of Object.entries(table)) {
+          if (!guess[k] && aliases.includes(n)) guess[k] = h;
+        }
+      }
+      setMapping(guess);
+    } finally {
+      setDetecting(false);
+    }
+  };
 
-  const handleImport = async () => {
-    if (!parsedData || !profile?.project_id || !user) return;
+  const applyTemplate = (tpl: any) => {
+    // remap template's canonical->header if header exists in this file
+    const m: Mapping = {};
+    for (const [k, v] of Object.entries(tpl.mapping || {})) {
+      if (typeof v === "string" && rawHeaders.includes(v)) m[k] = v;
+    }
+    setMapping(m);
+    bumpUsage(tpl.id, tpl.usage_count || 0).catch(() => {});
+    toast({ title: "Template applied", description: tpl.name });
+  };
 
-    setImporting(true);
-    const results: ImportResult[] = [];
-    let successCount = 0;
-    let errorCount = 0;
+  // ---------------- AI clean ----------------
+  const runClean = async () => {
+    setCleaning(true);
+    try {
+      // Build mapped rows
+      const rowsForAi = rawRows.map((r, i) => {
+        const o: any = { rowNumber: i + 2 };
+        for (const [k, h] of Object.entries(mapping)) o[k] = r[h] || "";
+        return o;
+      });
+      const { data, error } = await supabase.functions.invoke("ai-import-cleaner", {
+        body: { headers: rawHeaders, rows: rowsForAi, mode: "clean" },
+      });
+      if (error) throw error;
+      const cleaned: CleanedRow[] = (data?.cleanedRows || []).map((r: any) => {
+        // Extra local phone normalization safety
+        if (r.recipientPhone) r.recipientPhone = normalizePhone(r.recipientPhone);
+        const missing = REQUIRED_KEYS.filter((k) => !String(r[k] || "").trim());
+        return {
+          ...r,
+          needsReview: r.needsReview || missing.length > 0,
+        };
+      });
+      setCleanedRows(cleaned);
+      setAiReport({
+        autoCorrected: data?.report?.autoCorrected ?? 0,
+        needsReview: data?.report?.needsReview ?? 0,
+        corrections: data?.report?.corrections ?? [],
+      });
+      setStep("simulate");
+    } catch (err: any) {
+      toast({ title: "AI cleaning failed", description: err.message || "Try again", variant: "destructive" });
+    } finally {
+      setCleaning(false);
+    }
+  };
+
+  // ---------------- Simulation ----------------
+  const simulation = useMemo(() => {
+    const missing = cleanedRows.filter((r) => REQUIRED_KEYS.some((k) => !String((r as any)[k] || "").trim())).length;
+    const invalidPhone = cleanedRows.filter((r) => {
+      const p = normalizePhone(r.recipientPhone || "");
+      return !/^01\d{9}$/.test(p);
+    }).length;
+    const invalidCod = cleanedRows.filter((r) => r.codAmount && isNaN(parseFloat(String(r.codAmount).replace(/[^\d.\-]/g, "")))).length;
+    const seen = new Set<string>();
+    let dupInFile = 0;
+    cleanedRows.forEach((r) => {
+      const id = (r.externalOrderId || "").trim();
+      if (!id) return;
+      if (seen.has(id)) dupInFile++;
+      else seen.add(id);
+    });
+    const safe = cleanedRows.length - missing;
+    return { total: cleanedRows.length, safe, missing, invalidPhone, invalidCod, dupInFile };
+  }, [cleanedRows]);
+
+  const goToDuplicates = async () => {
+    if (!profile?.project_id) return;
+    // find DB duplicates for external_order_id
+    const ids = Array.from(new Set(cleanedRows.map((r) => (r.externalOrderId || "").trim()).filter(Boolean)));
+    if (!ids.length) { setExistingByExtId({}); setStep("execute"); return; }
+    const { data } = await supabase
+      .from("orders")
+      .select("id, external_order_id, customer_name, mobile, product_title, price, order_date, delivery_status")
+      .eq("project_id", profile.project_id)
+      .eq("is_deleted", false)
+      .in("external_order_id", ids as any);
+    const map: Record<string, any> = {};
+    (data || []).forEach((row: any) => { map[row.external_order_id] = row; });
+    setExistingByExtId(map);
+    if (Object.keys(map).length === 0) { setStep("execute"); return; }
+    // default all duplicates to "update"
+    const decisions: Record<string, DupDecision> = {};
+    Object.keys(map).forEach((id) => { decisions[id] = "update"; });
+    setDupDecisions(decisions);
+    setStep("duplicates");
+  };
+
+  const applyToAll = (decision: DupDecision) => {
+    const next: Record<string, DupDecision> = {};
+    Object.keys(existingByExtId).forEach((id) => { next[id] = decision; });
+    setDupDecisions(next);
+  };
+
+  // ---------------- Execute ----------------
+  const runImport = async () => {
+    if (!profile?.project_id || !user) return;
+    setExecuting(true);
+    setStep("execute");
+    setExecStage("Preparing...");
+    const t0 = performance.now();
 
     const execName = assignToExec && assignToExec !== "__none__"
       ? allExecutives.find((e) => e.id === assignToExec)?.name || ""
       : "";
+    const dmName = (assignDeliveryMethod && assignDeliveryMethod !== "__none__")
+      ? activeDeliveryMethods.find((dm) => dm.id === assignDeliveryMethod)?.name || ""
+      : "";
 
-    const validRows = parsedData.filter(r => !r.error);
-    const invalidRows = parsedData.filter(r => r.error);
+    // Filter rejectable rows
+    const rejects: Array<{ rowNumber: number; reason: string }> = [];
+    const eligible: CleanedRow[] = [];
+    for (const r of cleanedRows) {
+      const missing = REQUIRED_KEYS.filter((k) => !String((r as any)[k] || "").trim());
+      if (missing.length) {
+        rejects.push({ rowNumber: r.rowNumber, reason: `Missing: ${missing.join(", ")}` });
+        continue;
+      }
+      const phone = normalizePhone(r.recipientPhone || "");
+      if (!/^01\d{9}$/.test(phone)) {
+        rejects.push({ rowNumber: r.rowNumber, reason: "Invalid phone" });
+        continue;
+      }
+      r.recipientPhone = phone;
+      eligible.push(r);
+    }
 
-    // Add invalid rows to results immediately
-    invalidRows.forEach(row => {
-      results.push({ rowNumber: row.rowNumber, success: false, error: row.error });
-      errorCount++;
-    });
+    // Duplicate handling
+    setExecStage("Checking duplicates...");
+    const toUpdate: CleanedRow[] = [];
+    const toInsert: CleanedRow[] = [];
+    const skipped: number[] = [];
+    for (const r of eligible) {
+      const id = (r.externalOrderId || "").trim();
+      if (id && existingByExtId[id]) {
+        const dec = dupDecisions[id] || "update";
+        if (dec === "skip") { skipped.push(r.rowNumber); continue; }
+        if (dec === "update") { toUpdate.push(r); continue; }
+        toInsert.push(r); // create anyway
+      } else {
+        toInsert.push(r);
+      }
+    }
 
-    const totalValid = validRows.length;
-    setImportProgress({ current: 0, total: totalValid });
+    let inserted = 0, updatedCount = 0, failed = 0, newCustomers = 0, existingCustomers = 0, repeatOrders = 0;
+    const failures: Array<{ rowNumber: number; error: string }> = [];
 
-    // Process in batches
-    for (let batchStart = 0; batchStart < totalValid; batchStart += BATCH_SIZE) {
-      const batch = validRows.slice(batchStart, batchStart + BATCH_SIZE);
+    setExecStage("Creating orders...");
+    setExecProgress({ current: 0, total: toInsert.length + toUpdate.length });
 
-      // Process each row in batch concurrently (limited concurrency)
-      const batchPromises = batch.map(async (row) => {
+    // Track which customers existed before (to distinguish new vs existing).
+    const existingCustomerMobiles = new Set<string>();
+    if (toInsert.length) {
+      const phones = Array.from(new Set(toInsert.map((r) => r.recipientPhone!).filter(Boolean)));
+      const { data: existCust } = await supabase
+        .from("customers").select("mobile_number,total_orders")
+        .eq("project_id", profile.project_id)
+        .in("mobile_number", phones as any);
+      (existCust || []).forEach((c: any) => existingCustomerMobiles.add(c.mobile_number));
+    }
+
+    // INSERT batches
+    const BATCH = 100;
+    for (let start = 0; start < toInsert.length; start += BATCH) {
+      const batch = toInsert.slice(start, start + BATCH);
+      await Promise.all(batch.map(async (r) => {
         try {
-          const { data: customerId, error: custErr } = await supabase.rpc("find_or_create_customer", {
-            p_name: row.customerName,
-            p_mobile: row.mobile.replace(/\s/g, ""),
-            p_address: row.address,
+          const { data: customerId, error: cerr } = await supabase.rpc("find_or_create_customer", {
+            p_name: r.recipientName!,
+            p_mobile: r.recipientPhone!,
+            p_address: r.recipientAddress!,
+            p_project_id: profile.project_id,
           });
+          if (cerr) throw new Error(`Customer: ${cerr.message}`);
+          const isExisting = existingCustomerMobiles.has(r.recipientPhone!);
+          if (isExisting) { existingCustomers++; repeatOrders++; }
+          else { newCustomers++; existingCustomerMobiles.add(r.recipientPhone!); }
 
-          if (custErr) throw new Error(`Customer error: ${custErr.message}`);
-
-          const dmName = (assignDeliveryMethod && assignDeliveryMethod !== "__none__")
-            ? activeDeliveryMethods.find((dm) => dm.id === assignDeliveryMethod)?.name || row.deliveryMethod || ""
-            : row.deliveryMethod || "";
-
-          const orderDate = safeDate(row.orderDate);
-          const deliveryDate = safeDate(row.deliveryDate);
-
-          const { error: insertErr } = await supabase.from("orders").insert({
-            customer_name: row.customerName,
-            mobile: row.mobile.replace(/\s/g, ""),
-            address: row.address,
-            order_source: row.orderSource?.trim() || "Website",
-            product_title: row.product?.trim() || "",
-            price: safePrice(row.price),
-            order_date: orderDate || new Date().toISOString().slice(0, 10),
-            delivery_date: deliveryDate,
-            delivery_method: dmName || "",
-            item_description: row.itemDescription?.trim() || "",
-            note: row.note?.trim() || "",
+          const { error: ierr } = await supabase.from("orders").insert({
+            customer_name: r.recipientName!,
+            recipient_name: r.recipientName!,
+            mobile: r.recipientPhone!,
+            address: r.recipientAddress!,
+            order_source: r.orderSource?.trim() || "Import",
+            product_title: r.product?.trim() || "",
+            price: toNum(r.codAmount),
+            order_date: safeDate(r.orderDate) || new Date().toISOString().slice(0, 10),
+            delivery_date: safeDate(r.deliveryDate),
+            delivery_method: dmName || r.deliveryMethod?.trim() || "",
+            item_description: r.itemDescription?.trim() || "",
+            note: r.note?.trim() || "",
             customer_id: customerId,
             project_id: profile.project_id,
             created_by: user.id,
@@ -307,441 +418,544 @@ export default function BulkImportPage() {
             assigned_to_name: execName,
             current_status: "pending",
             followup_step: 1,
+            external_order_id: (r.externalOrderId || "").trim() || null,
+            tracking_code: r.trackingCode?.trim() || null,
+            invoice_no: r.invoiceNo?.trim() || null,
+            delivery_status: r.deliveryStatus?.trim() || null,
+            approval_status: r.approvalStatus?.trim() || null,
+            delivery_time: r.deliveryTime?.trim() || null,
+            rider_name: r.riderName?.trim() || null,
+            rider_phone: r.riderPhone?.trim() || null,
+            shipping_charge: toNum(r.shippingCharge),
+            cod_charge: toNum(r.codCharge),
+            payment_status: r.paymentStatus?.trim() || null,
           });
-
-          if (insertErr) throw new Error(insertErr.message);
-          return { rowNumber: row.rowNumber, success: true as const };
-        } catch (err: any) {
-          return { rowNumber: row.rowNumber, success: false as const, error: err.message || "Unknown error" };
+          if (ierr) throw new Error(ierr.message);
+          inserted++;
+        } catch (e: any) {
+          failed++;
+          failures.push({ rowNumber: r.rowNumber, error: e.message || "Unknown" });
         }
-      });
-
-      const batchResults = await Promise.all(batchPromises);
-      batchResults.forEach(r => {
-        results.push(r);
-        if (r.success) successCount++;
-        else errorCount++;
-      });
-
-      setImportProgress({ current: Math.min(batchStart + BATCH_SIZE, totalValid), total: totalValid });
+      }));
+      setExecProgress({ current: Math.min(start + BATCH, toInsert.length), total: toInsert.length + toUpdate.length });
     }
 
-    // Post-import verification: check DB count
-    const { count: dbCount } = await (supabase.from("orders").select("*", { count: "exact", head: true }) as any)
-      .eq("project_id", profile.project_id).eq("is_deleted", false);
+    // UPDATE existing orders
+    if (toUpdate.length) setExecStage("Updating existing orders...");
+    for (const r of toUpdate) {
+      try {
+        const existing = existingByExtId[(r.externalOrderId || "").trim()];
+        if (!existing) continue;
+        const patch: Record<string, unknown> = {
+          product_title: r.product?.trim() || undefined,
+          price: r.codAmount ? toNum(r.codAmount) : undefined,
+          delivery_status: r.deliveryStatus?.trim() || undefined,
+          approval_status: r.approvalStatus?.trim() || undefined,
+          tracking_code: r.trackingCode?.trim() || undefined,
+          delivery_time: r.deliveryTime?.trim() || undefined,
+          rider_name: r.riderName?.trim() || undefined,
+          rider_phone: r.riderPhone?.trim() || undefined,
+          shipping_charge: r.shippingCharge ? toNum(r.shippingCharge) : undefined,
+          cod_charge: r.codCharge ? toNum(r.codCharge) : undefined,
+          payment_status: r.paymentStatus?.trim() || undefined,
+          delivery_date: safeDate(r.deliveryDate) || undefined,
+          note: r.note?.trim() || undefined,
+        };
+        Object.keys(patch).forEach((k) => patch[k] === undefined && delete patch[k]);
+        if (Object.keys(patch).length) {
+          const { error: uerr } = await supabase.from("orders").update(patch).eq("id", existing.id);
+          if (uerr) throw new Error(uerr.message);
+          updatedCount++;
+        }
+      } catch (e: any) {
+        failed++;
+        failures.push({ rowNumber: r.rowNumber, error: e.message || "Update failed" });
+      }
+    }
 
-    // Detect duplicate phones in imported data
-    const phones = parsedData.filter(r => !r.error).map(r => r.mobile.replace(/\s/g, ""));
-    const phoneSet = new Set(phones);
-    const duplicatesDetected = phones.length - phoneSet.size;
+    setExecStage("Finalizing...");
+    const processing_ms = Math.round(performance.now() - t0);
+    const aiFixed = cleanedRows.filter((r) => r.autoCorrected).length;
 
-    const autoCorrectedCount = parsedData.filter(r => r.autoCorrected).length;
-    const needsReviewCount = parsedData.filter(r => r.needsReview).length;
+    const report = {
+      totalRows: cleanedRows.length,
+      imported: inserted,
+      updated: updatedCount,
+      skipped: skipped.length + rejects.length,
+      duplicates: Object.keys(existingByExtId).length,
+      newCustomers,
+      existingCustomers,
+      repeatOrders,
+      aiFixedFields: aiFixed,
+      missingMandatory: rejects.filter((x) => x.reason.startsWith("Missing")).length,
+      invalidPhone: rejects.filter((x) => x.reason === "Invalid phone").length,
+      invalidCod: simulation.invalidCod,
+      failed,
+      processingMs: processing_ms,
+      failures: failures.slice(0, 200),
+    };
 
-    setVerificationReport({
-      totalRows: parsedData.length,
-      inserted: successCount,
-      autoCorrected: autoCorrectedCount,
-      failed: errorCount,
-      needsReview: needsReviewCount,
-      duplicatesDetected,
+    // Persist import_runs
+    await supabase.from("import_runs").insert({
+      project_id: profile.project_id,
+      user_id: user.id,
+      user_name: profile.full_name || user.email || "",
+      source_filename: fileName,
+      total_rows: report.totalRows,
+      imported: report.imported,
+      updated_count: report.updated,
+      skipped: report.skipped,
+      duplicates: report.duplicates,
+      new_customers: report.newCustomers,
+      existing_customers: report.existingCustomers,
+      repeat_orders: report.repeatOrders,
+      ai_fixed_fields: report.aiFixedFields,
+      missing_mandatory: report.missingMandatory,
+      invalid_phone: report.invalidPhone,
+      invalid_cod: report.invalidCod,
+      processing_ms: report.processingMs,
+      report: report as any,
     });
 
-    setImportResults(results);
-    setImporting(false);
-    setImportProgress({ current: 0, total: 0 });
-
+    setFinalReport(report);
+    setExecuting(false);
+    setStep("report");
     await refreshOrders();
-
-    toast({
-      title: "Import Complete",
-      description: `Imported Successfully: ${successCount} Orders.${errorCount > 0 ? ` ${errorCount} rows failed.` : ""}`,
-    });
+    toast({ title: "Import complete", description: `${inserted} inserted, ${updatedCount} updated, ${report.skipped} skipped.` });
   };
 
-  const handleSheetsImport = () => {
-    toast({
-      title: "Google Sheets Import — Unavailable",
-      description: "This integration is not implemented yet. Please export the sheet to CSV and use Upload CSV.",
-      variant: "destructive",
-    });
+  // ---------------- Save template ----------------
+  const handleSaveTemplate = async () => {
+    if (!tplName.trim()) return;
+    try {
+      await saveTemplate({
+        name: tplName.trim(),
+        header_signature: rawHeaders,
+        mapping,
+      });
+      toast({ title: "Template saved" });
+      setSaveTplOpen(false);
+      setTplName("");
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
+    }
   };
 
   const resetAll = () => {
-    setRawHeaders([]);
-    setRawRows([]);
-    setParsedData(null);
-    setImportResults(null);
-    setAiReport(null);
-    setVerificationReport(null);
-    setImportProgress({ current: 0, total: 0 });
+    setStep("upload");
+    setFileName("");
+    setRawHeaders([]); setRawRows([]);
+    setMapping({}); setMatchedTemplate(null);
+    setCleanedRows([]); setAiReport(null);
+    setExistingByExtId({}); setDupDecisions({});
+    setFinalReport(null);
   };
 
-  const validCount = parsedData?.filter((r) => !r.error).length ?? 0;
-  const errorCount = parsedData?.filter((r) => r.error).length ?? 0;
-  const correctedCount = parsedData?.filter((r) => r.autoCorrected).length ?? 0;
+  const downloadFailures = () => {
+    if (!finalReport?.failures?.length) return;
+    const csv = "row,error\n" + finalReport.failures.map((f: any) => `${f.rowNumber},"${(f.error || "").replace(/"/g, '""')}"`).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `import-failures-${Date.now()}.csv`;
+    a.click();
+  };
 
+  // ---------------- Render ----------------
   return (
     <AppLayout>
-      <PageHeader title="Bulk Import" description="Import orders from CSV with AI-powered data cleaning" />
+      <PageHeader title="AI Smart Import" description="Analyze, clean, validate, and import courier/CRM data with AI" />
 
-      <div className="max-w-4xl animate-fade-in">
-        {!rawHeaders.length ? (
+      <div className="max-w-5xl animate-fade-in space-y-4">
+        <StepIndicator step={step} />
+
+        {/* ---------- UPLOAD ---------- */}
+        {step === "upload" && (
           <>
             <div className="rounded-xl border-2 border-dashed border-border bg-card p-12 text-center card-shadow">
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
                 <Upload className="h-7 w-7 text-primary" />
               </div>
-              <h3 className="text-lg font-semibold text-foreground mb-2">Upload your file</h3>
-              <p className="text-sm text-muted-foreground mb-2">
-                Drag and drop a CSV file, or click to browse.
-              </p>
+              <h3 className="text-lg font-semibold mb-2">Upload CSV or XLSX</h3>
               <p className="text-xs text-muted-foreground mb-6 flex items-center justify-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
-                AI will automatically clean and organize messy data
+                <Sparkles className="h-3.5 w-3.5 text-primary" /> AI will detect columns, clean data, and detect duplicates
               </p>
-              <div className="flex justify-center gap-3">
-                <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
-                <Button variant="outline" className="gap-2" onClick={() => fileRef.current?.click()}>
-                  <FileSpreadsheet className="h-4 w-4" /> Upload CSV
-                </Button>
-                <div className="flex items-center gap-2 opacity-60">
-                  <Input
-                    placeholder="Google Sheets URL (unavailable)"
-                    value={sheetsUrl}
-                    onChange={(e) => setSheetsUrl(e.target.value)}
-                    disabled
-                    className="w-64"
-                  />
-                  <Button variant="outline" onClick={handleSheetsImport} disabled title="Not implemented — export sheet as CSV and use Upload CSV">
-                    Unavailable
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 rounded-xl border border-border bg-card p-5 card-shadow">
-              <h3 className="text-sm font-semibold text-foreground mb-3">Column Guide</h3>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">Required:</p>
-                <div className="grid grid-cols-3 gap-1">
-                  <span>• Customer Name *</span>
-                  <span>• Mobile Number *</span>
-                  <span>• Address *</span>
-                </div>
-                <p className="font-medium text-foreground mt-2">Optional:</p>
-                <div className="grid grid-cols-3 gap-1">
-                  <span>• Order Source</span>
-                  <span>• Product</span>
-                  <span>• Price</span>
-                  <span>• Order Date</span>
-                  <span>• Delivery Date</span>
-                  <span>• Delivery Method</span>
-                  <span>• Item Description</span>
-                  <span>• Order Note</span>
-                </div>
-                <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
-                  <p className="text-xs text-primary font-medium flex items-center gap-1.5">
-                    <Wand2 className="h-3.5 w-3.5" /> AI Data Organizer
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    After previewing, click "AI Clean Data" to auto-fix phone formats, names, product matching, and more. Messy data? No problem!
-                  </p>
-                </div>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-foreground">Column Mapping</h3>
-              <Button variant="ghost" size="sm" onClick={resetAll}>
-                <X className="h-4 w-4 mr-1" /> Reset
+              <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileUpload} />
+              <Button className="gap-2" onClick={() => fileRef.current?.click()}>
+                <FileSpreadsheet className="h-4 w-4" /> Choose file
               </Button>
             </div>
 
-            <div className="rounded-xl border border-border bg-card p-5 card-shadow">
-              <div className="grid grid-cols-2 gap-3">
-                {["customerName", "mobile", "address", "orderSource", "product", "price", "orderDate", "deliveryDate", "deliveryMethod", "itemDescription", "note"].map((field) => (
-                  <div key={field} className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-foreground min-w-24 capitalize">
-                      {field.replace(/([A-Z])/g, " $1")} {REQUIRED_COLUMNS.includes(field) ? "*" : ""}
-                    </span>
-                    <select
-                      value={columnMapping[field] || ""}
-                      onChange={(e) => setColumnMapping((m) => ({ ...m, [field]: e.target.value }))}
-                      className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-xs"
-                    >
-                      <option value="">-- Select --</option>
-                      {rawHeaders.map((h) => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Assign to executive (optional)</Label>
-                  <Select value={assignToExec} onValueChange={setAssignToExec}>
-                    <SelectTrigger className="mt-1 h-8 text-xs">
-                      <SelectValue placeholder="No assignment" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">No assignment</SelectItem>
-                      {allExecutives.map((e) => (
-                        <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground">Delivery method (optional override)</Label>
-                  <Select value={assignDeliveryMethod} onValueChange={setAssignDeliveryMethod}>
-                    <SelectTrigger className="mt-1 h-8 text-xs">
-                      <SelectValue placeholder="Use CSV value" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Use CSV value</SelectItem>
-                      {activeDeliveryMethods.map((dm) => (
-                        <SelectItem key={dm.id} value={dm.id}>{dm.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            {templates.length > 0 && (
+              <div className="rounded-xl border border-border bg-card p-5 card-shadow">
+                <h3 className="text-sm font-semibold mb-3">Saved import templates</h3>
+                <div className="space-y-2">
+                  {templates.map((t) => (
+                    <div key={t.id} className="flex items-center justify-between text-sm border border-border rounded-lg px-3 py-2">
+                      <div>
+                        <p className="font-medium">{t.name}</p>
+                        <p className="text-xs text-muted-foreground">Used {t.usage_count}× · {(t.header_signature || []).length} columns</p>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => deleteTemplate(t.id)} className="text-destructive">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div className="flex justify-end mt-4">
-                <Button size="sm" onClick={handlePreview} disabled={importing || aiCleaning}>Preview Data</Button>
+            )}
+          </>
+        )}
+
+        {/* ---------- MAPPING ---------- */}
+        {step === "mapping" && (
+          <div className="rounded-xl border border-border bg-card p-5 card-shadow">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-semibold">Column mapping</h3>
+                <p className="text-xs text-muted-foreground">{fileName} · {rawRows.length} rows · {rawHeaders.length} columns</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {detecting && <span className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Detecting…</span>}
+                {matchedTemplate && (
+                  <Badge variant="outline" className="text-xs">Matched template: {matchedTemplate.name}</Badge>
+                )}
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setSaveTplOpen(true)}>
+                  <Save className="h-3.5 w-3.5" /> Save as template
+                </Button>
               </div>
             </div>
 
-            {/* AI Report */}
-            {aiReport && (
-              <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 card-shadow animate-fade-in">
-                <div className="flex items-center gap-2 mb-3">
-                  <Sparkles className="h-4.5 w-4.5 text-primary" />
-                  <h3 className="text-sm font-semibold text-foreground">AI Import Report</h3>
-                </div>
-                <div className="grid grid-cols-4 gap-4 mb-3">
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-foreground">{aiReport.totalRows}</p>
-                    <p className="text-xs text-muted-foreground">Total Rows</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-foreground">{aiReport.ready}</p>
-                    <p className="text-xs text-muted-foreground">Ready to Import</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-primary">{aiReport.autoCorrected}</p>
-                    <p className="text-xs text-muted-foreground">Auto Corrected</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-warning">{aiReport.needsReview}</p>
-                    <p className="text-xs text-muted-foreground">Needs Review</p>
-                  </div>
-                </div>
-                {aiReport.corrections.length > 0 && (
-                  <div className="mt-2 pt-3 border-t border-primary/10">
-                    <p className="text-xs font-medium text-foreground mb-1.5">Corrections Applied:</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {aiReport.corrections.slice(0, 10).map((c, i) => (
-                        <Badge key={i} variant="secondary" className="text-[10px]">{c}</Badge>
-                      ))}
-                      {aiReport.corrections.length > 10 && (
-                        <Badge variant="outline" className="text-[10px]">+{aiReport.corrections.length - 10} more</Badge>
-                      )}
-                    </div>
-                  </div>
-                )}
+            {templates.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                <span className="text-xs text-muted-foreground self-center">Apply template:</span>
+                {templates.map((t) => (
+                  <Button key={t.id} size="sm" variant="outline" className="h-7 text-xs" onClick={() => applyTemplate(t)}>
+                    {t.name}
+                  </Button>
+                ))}
               </div>
             )}
 
-            {/* Preview Table */}
-            {parsedData && !importResults && (
-              <div className="rounded-xl border border-border bg-card card-shadow overflow-hidden">
-                <div className="p-4 border-b border-border flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1 text-xs text-success"><CheckCircle className="h-3.5 w-3.5" /> {validCount} valid</span>
-                    {correctedCount > 0 && (
-                      <span className="flex items-center gap-1 text-xs text-primary"><Sparkles className="h-3.5 w-3.5" /> {correctedCount} corrected</span>
-                    )}
-                    <span className="flex items-center gap-1 text-xs text-destructive"><AlertCircle className="h-3.5 w-3.5" /> {errorCount} errors</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {CANONICAL.map((f) => (
+                <div key={f.key} className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Label className="text-xs">
+                      {f.label} {f.required && <span className="text-destructive">*</span>}
+                    </Label>
+                    <Select value={mapping[f.key] || "__none__"} onValueChange={(v) => {
+                      setMapping((m) => {
+                        const next = { ...m };
+                        if (v === "__none__") delete next[f.key]; else next[f.key] = v;
+                        return next;
+                      });
+                    }}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Not mapped" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Not mapped</SelectItem>
+                        {rawHeaders.map((h) => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleAiClean}
-                      disabled={aiCleaning || importing}
-                      className="gap-1.5"
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 flex items-center justify-between">
+              <Button variant="ghost" onClick={resetAll}>Cancel</Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => runDetect(rawHeaders)} disabled={detecting}>
+                  <Sparkles className="h-4 w-4 mr-1.5" /> Re-detect
+                </Button>
+                <Button
+                  disabled={REQUIRED_KEYS.some((k) => !mapping[k])}
+                  onClick={() => setStep("clean")}
+                >
+                  Next: AI clean <ArrowRight className="h-4 w-4 ml-1.5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---------- CLEAN ---------- */}
+        {step === "clean" && (
+          <div className="rounded-xl border border-border bg-card p-5 card-shadow">
+            <h3 className="text-sm font-semibold mb-2">AI cleaning</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              The AI will normalize phones, statuses, dates and product names. Rows with missing mandatory data will be flagged for review.
+            </p>
+            <div className="flex items-center gap-2">
+              <Button onClick={runClean} disabled={cleaning}>
+                {cleaning ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Cleaning…</> : <><Wand2 className="h-4 w-4 mr-1.5" /> Start AI clean</>}
+              </Button>
+              <Button variant="ghost" onClick={() => setStep("mapping")}>
+                <ArrowLeft className="h-4 w-4 mr-1.5" /> Back
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ---------- SIMULATE ---------- */}
+        {step === "simulate" && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-border bg-card p-5 card-shadow">
+              <h3 className="text-sm font-semibold mb-3">Import simulation</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                <Stat label="Total rows" value={simulation.total} />
+                <Stat label="Safe to import" value={simulation.safe} tone="success" />
+                <Stat label="Missing mandatory" value={simulation.missing} tone="destructive" />
+                <Stat label="Invalid phone" value={simulation.invalidPhone} tone="destructive" />
+                <Stat label="Invalid COD" value={simulation.invalidCod} tone="warning" />
+                <Stat label="Duplicate Order IDs (in file)" value={simulation.dupInFile} tone="warning" />
+                <Stat label="AI auto-corrected" value={aiReport?.autoCorrected ?? 0} tone="success" />
+                <Stat label="Needs review" value={aiReport?.needsReview ?? 0} tone="warning" />
+              </div>
+              {!!aiReport?.corrections?.length && (
+                <div className="mt-4">
+                  <p className="text-xs font-medium mb-1">AI corrections summary</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {aiReport.corrections.slice(0, 12).map((c, i) => (
+                      <Badge key={i} variant="secondary" className="text-[10px]">{c}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-5 card-shadow">
+              <h3 className="text-sm font-semibold mb-3">Default assignment (optional)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Assign all to executive</Label>
+                  <Select value={assignToExec} onValueChange={setAssignToExec}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Unassigned</SelectItem>
+                      {allExecutives.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Delivery method</Label>
+                  <Select value={assignDeliveryMethod} onValueChange={setAssignDeliveryMethod}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="From file" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Use value from file</SelectItem>
+                      {activeDeliveryMethods.map((dm) => <SelectItem key={dm.id} value={dm.id}>{dm.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" onClick={() => setStep("clean")}><ArrowLeft className="h-4 w-4 mr-1.5" /> Back</Button>
+              <Button onClick={goToDuplicates}>Continue <ArrowRight className="h-4 w-4 ml-1.5" /></Button>
+            </div>
+          </div>
+        )}
+
+        {/* ---------- DUPLICATES ---------- */}
+        {step === "duplicates" && (
+          <div className="rounded-xl border border-border bg-card p-5 card-shadow">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-semibold">Duplicate Order IDs</h3>
+                <p className="text-xs text-muted-foreground">{Object.keys(existingByExtId).length} orders already exist. Choose what to do.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => applyToAll("update")}>Update all</Button>
+                <Button size="sm" variant="outline" onClick={() => applyToAll("skip")}>Skip all</Button>
+              </div>
+            </div>
+            <div className="border border-border rounded-lg divide-y divide-border max-h-[420px] overflow-auto">
+              {Object.entries(existingByExtId).map(([extId, existing]) => {
+                const incoming = cleanedRows.find((r) => (r.externalOrderId || "").trim() === extId);
+                const dec = dupDecisions[extId] || "update";
+                return (
+                  <div key={extId} className="p-3 text-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium">Order ID: {extId}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground mb-2">
+                      <div className="border border-border rounded p-2">
+                        <p className="text-[10px] uppercase font-semibold text-foreground mb-1">Existing</p>
+                        <p>{existing.customer_name} · {existing.mobile}</p>
+                        <p>{existing.product_title || "—"} · ৳{existing.price} · {existing.delivery_status || "—"}</p>
+                        <p>{existing.order_date}</p>
+                      </div>
+                      <div className="border border-border rounded p-2">
+                        <p className="text-[10px] uppercase font-semibold text-foreground mb-1">Incoming</p>
+                        <p>{incoming?.recipientName} · {incoming?.recipientPhone}</p>
+                        <p>{incoming?.product || "—"} · ৳{incoming?.codAmount} · {incoming?.deliveryStatus || "—"}</p>
+                        <p>{incoming?.orderDate || "—"}</p>
+                      </div>
+                    </div>
+                    <RadioGroup
+                      value={dec}
+                      onValueChange={(v) => {
+                        if (v === "create") { setConfirmCreateFor(extId); return; }
+                        setDupDecisions((d) => ({ ...d, [extId]: v as DupDecision }));
+                      }}
+                      className="flex flex-wrap gap-4"
                     >
-                      {aiCleaning ? (
-                        <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Cleaning...</>
-                      ) : (
-                        <><Wand2 className="h-3.5 w-3.5" /> AI Clean Data</>
-                      )}
-                    </Button>
-                    <Button size="sm" onClick={handleImport} disabled={validCount === 0 || importing}>
-                      {importing ? (
-                        <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Processing {importProgress.current} / {importProgress.total}</>
-                      ) : `Import ${validCount} Orders`}
-                    </Button>
+                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <RadioGroupItem value="update" /> Update existing
+                      </label>
+                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <RadioGroupItem value="skip" /> Skip
+                      </label>
+                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <RadioGroupItem value="create" /> Create new order anyway
+                      </label>
+                    </RadioGroup>
                   </div>
-                </div>
-                <div className="overflow-x-auto max-h-80">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/50">
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Row</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Status</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Name</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Mobile</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Address</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Product</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Price</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Info</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {parsedData.map((row, i) => (
-                        <tr key={i} className={cn(
-                          "border-b border-border last:border-0",
-                          row.error && "bg-destructive/5",
-                          row.autoCorrected && !row.error && "bg-primary/5",
-                        )}>
-                          <td className="px-3 py-2 text-muted-foreground">{row.rowNumber}</td>
-                          <td className="px-3 py-2">
-                            {row.error ? (
-                              <AlertCircle className="h-3.5 w-3.5 text-destructive" />
-                            ) : row.autoCorrected ? (
-                              <Sparkles className="h-3.5 w-3.5 text-primary" />
-                            ) : (
-                              <CheckCircle className="h-3.5 w-3.5 text-success" />
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-foreground">{row.customerName}</td>
-                          <td className="px-3 py-2 text-muted-foreground">{row.mobile}</td>
-                          <td className="px-3 py-2 text-muted-foreground truncate max-w-32">{row.address}</td>
-                          <td className="px-3 py-2 text-muted-foreground">{row.product}</td>
-                          <td className="px-3 py-2 text-muted-foreground">{row.price}</td>
-                          <td className="px-3 py-2">
-                            {row.error ? (
-                              <span className="text-destructive">{row.error}</span>
-                            ) : row.corrections && row.corrections.length > 0 ? (
-                              <span className="text-primary text-[10px]">{row.corrections.join("; ")}</span>
-                            ) : null}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+                );
+              })}
+            </div>
+            <div className="mt-4 flex items-center justify-between">
+              <Button variant="ghost" onClick={() => setStep("simulate")}><ArrowLeft className="h-4 w-4 mr-1.5" /> Back</Button>
+              <Button onClick={runImport}>Start import <ArrowRight className="h-4 w-4 ml-1.5" /></Button>
+            </div>
+          </div>
+        )}
 
-            {/* Import Progress Bar */}
-            {importing && importProgress.total > 0 && (
-              <div className="rounded-xl border border-border bg-card p-5 card-shadow animate-fade-in">
-                <div className="flex items-center gap-2 mb-3">
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  <h3 className="text-sm font-semibold text-foreground">Importing Orders...</h3>
-                </div>
-                <Progress value={(importProgress.current / importProgress.total) * 100} className="h-2 mb-2" />
-                <p className="text-xs text-muted-foreground">
-                  Processing Row {importProgress.current.toLocaleString()} / {importProgress.total.toLocaleString()}
-                </p>
-              </div>
-            )}
-
-            {/* Import Results + Verification Report */}
-            {importResults && (
-              <div className="space-y-4">
-                {/* Verification Report */}
-                {verificationReport && (
-                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 card-shadow animate-fade-in">
-                    <div className="flex items-center gap-2 mb-4">
-                      <CheckCircle className="h-4.5 w-4.5 text-primary" />
-                      <h3 className="text-sm font-semibold text-foreground">Import Verification Report</h3>
-                    </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-4">
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-foreground">{verificationReport.totalRows.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">Total Rows</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-success">{verificationReport.inserted.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">Imported</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-primary">{verificationReport.autoCorrected}</p>
-                        <p className="text-xs text-muted-foreground">Auto Corrected</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-destructive">{verificationReport.failed}</p>
-                        <p className="text-xs text-muted-foreground">Failed</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-warning">{verificationReport.needsReview}</p>
-                        <p className="text-xs text-muted-foreground">Needs Review</p>
-                      </div>
-                    </div>
-                    {verificationReport.duplicatesDetected > 0 && (
-                      <div className="mt-3 pt-3 border-t border-primary/10 flex items-center gap-2">
-                        <AlertTriangle className="h-3.5 w-3.5 text-warning" />
-                        <p className="text-xs text-warning font-medium">
-                          {verificationReport.duplicatesDetected} duplicate phone numbers detected in imported data
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Failed rows detail */}
-                <div className="rounded-xl border border-border bg-card card-shadow overflow-hidden">
-                  <div className="p-4 border-b border-border">
-                    <h3 className="text-sm font-semibold text-foreground mb-2">Import Summary</h3>
-                    <div className="flex items-center gap-4">
-                      <span className="text-xs text-muted-foreground">Total: {importResults.length}</span>
-                      <span className="flex items-center gap-1 text-xs text-success">
-                        <CheckCircle className="h-3.5 w-3.5" /> {importResults.filter((r) => r.success).length} saved
-                      </span>
-                      <span className="flex items-center gap-1 text-xs text-destructive">
-                        <AlertCircle className="h-3.5 w-3.5" /> {importResults.filter((r) => !r.success).length} failed
-                      </span>
-                      {correctedCount > 0 && (
-                        <span className="flex items-center gap-1 text-xs text-primary">
-                          <Sparkles className="h-3.5 w-3.5" /> {correctedCount} AI corrected
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {importResults.some((r) => !r.success) && (
-                    <div className="overflow-x-auto max-h-60">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-border bg-muted/50">
-                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Row</th>
-                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Error</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {importResults.filter((r) => !r.success).map((r) => (
-                            <tr key={r.rowNumber} className="border-b border-border last:border-0 bg-destructive/5">
-                              <td className="px-3 py-2 text-foreground">Row {r.rowNumber}</td>
-                              <td className="px-3 py-2 text-destructive">{r.error}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                  <div className="p-4 border-t border-border flex justify-end">
-                    <Button size="sm" variant="outline" onClick={resetAll}>Import More</Button>
-                  </div>
-                </div>
-              </div>
+        {/* ---------- EXECUTE ---------- */}
+        {step === "execute" && executing && (
+          <div className="rounded-xl border border-border bg-card p-8 card-shadow text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
+            <p className="text-sm font-medium">{execStage}</p>
+            {execProgress.total > 0 && (
+              <>
+                <Progress value={(execProgress.current / execProgress.total) * 100} className="mt-4" />
+                <p className="text-xs text-muted-foreground mt-2">{execProgress.current} / {execProgress.total}</p>
+              </>
             )}
           </div>
         )}
+
+        {step === "execute" && !executing && Object.keys(existingByExtId).length === 0 && (
+          <div className="rounded-xl border border-border bg-card p-5 card-shadow">
+            <p className="text-sm mb-3">No duplicate Order IDs found. Ready to import.</p>
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" onClick={() => setStep("simulate")}><ArrowLeft className="h-4 w-4 mr-1.5" /> Back</Button>
+              <Button onClick={runImport}>Start import <ArrowRight className="h-4 w-4 ml-1.5" /></Button>
+            </div>
+          </div>
+        )}
+
+        {/* ---------- REPORT ---------- */}
+        {step === "report" && finalReport && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-border bg-card p-5 card-shadow">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle className="h-5 w-5 text-success" />
+                <h3 className="text-sm font-semibold">Import report</h3>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <Stat label="Total rows" value={finalReport.totalRows} />
+                <Stat label="Imported" value={finalReport.imported} tone="success" />
+                <Stat label="Updated" value={finalReport.updated} tone="success" />
+                <Stat label="Skipped" value={finalReport.skipped} tone="warning" />
+                <Stat label="Duplicates found" value={finalReport.duplicates} />
+                <Stat label="New customers" value={finalReport.newCustomers} />
+                <Stat label="Existing customers" value={finalReport.existingCustomers} />
+                <Stat label="Repeat orders" value={finalReport.repeatOrders} />
+                <Stat label="AI fixed fields" value={finalReport.aiFixedFields} />
+                <Stat label="Missing mandatory" value={finalReport.missingMandatory} tone="destructive" />
+                <Stat label="Invalid phone" value={finalReport.invalidPhone} tone="destructive" />
+                <Stat label="Failed" value={finalReport.failed} tone="destructive" />
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-3">Processed in {(finalReport.processingMs / 1000).toFixed(1)}s</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {!!finalReport.failures?.length && (
+                <Button variant="outline" onClick={downloadFailures}><Download className="h-4 w-4 mr-1.5" /> Download failures CSV</Button>
+              )}
+              <Button onClick={resetAll}>Import another file</Button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Save template dialog */}
+      <Dialog open={saveTplOpen} onOpenChange={setSaveTplOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Save mapping as template</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <Label>Template name</Label>
+            <Input value={tplName} onChange={(e) => setTplName(e.target.value)} placeholder="e.g. Steadfast export" />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSaveTplOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveTemplate} disabled={!tplName.trim()}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm create anyway */}
+      <AlertDialog open={!!confirmCreateFor} onOpenChange={(o) => !o && setConfirmCreateFor(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create duplicate order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This Order ID already exists. Are you sure you want to create another order with the same Order ID?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmCreateFor(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (confirmCreateFor) setDupDecisions((d) => ({ ...d, [confirmCreateFor]: "create" }));
+              setConfirmCreateFor(null);
+            }}>Yes, create anyway</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
+  );
+}
+
+// ---------- Small UI bits ----------
+function StepIndicator({ step }: { step: Step }) {
+  const steps: { key: Step; label: string }[] = [
+    { key: "upload", label: "Upload" },
+    { key: "mapping", label: "Mapping" },
+    { key: "clean", label: "AI Clean" },
+    { key: "simulate", label: "Simulate" },
+    { key: "duplicates", label: "Duplicates" },
+    { key: "execute", label: "Import" },
+    { key: "report", label: "Report" },
+  ];
+  const idx = steps.findIndex((s) => s.key === step);
+  return (
+    <div className="flex items-center gap-1 text-xs">
+      {steps.map((s, i) => (
+        <div key={s.key} className="flex items-center gap-1">
+          <span className={cn(
+            "px-2 py-1 rounded",
+            i === idx ? "bg-primary text-primary-foreground" : i < idx ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
+          )}>{i + 1}. {s.label}</span>
+          {i < steps.length - 1 && <span className="text-muted-foreground">›</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: number | string; tone?: "success" | "warning" | "destructive" }) {
+  return (
+    <div className="border border-border rounded-lg p-3">
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className={cn(
+        "text-lg font-semibold mt-0.5",
+        tone === "success" && "text-success",
+        tone === "warning" && "text-warning",
+        tone === "destructive" && "text-destructive"
+      )}>{value}</p>
+    </div>
   );
 }

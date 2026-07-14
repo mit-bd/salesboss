@@ -130,29 +130,89 @@ export type Database = {
       customers: {
         Row: {
           address: string
+          avg_order_value: number
+          cancelled_orders: number
           created_at: string
+          delivered_orders: number
+          first_order_date: string | null
           id: string
+          is_active: boolean
+          is_repeat_customer: boolean
+          last_delivery_status: string | null
+          last_executive_name: string | null
+          last_followup_at: string | null
+          last_order_date: string | null
+          last_product: string | null
+          lifetime_cod: number
+          lifetime_shipping: number
+          lifetime_value: number
           mobile_number: string
           name: string
+          name_manually_edited: boolean
+          pending_orders: number
           project_id: string
+          repeat_orders: number
+          returned_orders: number
+          stage: string
+          total_orders: number
           updated_at: string
         }
         Insert: {
           address?: string
+          avg_order_value?: number
+          cancelled_orders?: number
           created_at?: string
+          delivered_orders?: number
+          first_order_date?: string | null
           id?: string
+          is_active?: boolean
+          is_repeat_customer?: boolean
+          last_delivery_status?: string | null
+          last_executive_name?: string | null
+          last_followup_at?: string | null
+          last_order_date?: string | null
+          last_product?: string | null
+          lifetime_cod?: number
+          lifetime_shipping?: number
+          lifetime_value?: number
           mobile_number: string
           name?: string
+          name_manually_edited?: boolean
+          pending_orders?: number
           project_id: string
+          repeat_orders?: number
+          returned_orders?: number
+          stage?: string
+          total_orders?: number
           updated_at?: string
         }
         Update: {
           address?: string
+          avg_order_value?: number
+          cancelled_orders?: number
           created_at?: string
+          delivered_orders?: number
+          first_order_date?: string | null
           id?: string
+          is_active?: boolean
+          is_repeat_customer?: boolean
+          last_delivery_status?: string | null
+          last_executive_name?: string | null
+          last_followup_at?: string | null
+          last_order_date?: string | null
+          last_product?: string | null
+          lifetime_cod?: number
+          lifetime_shipping?: number
+          lifetime_value?: number
           mobile_number?: string
           name?: string
+          name_manually_edited?: boolean
+          pending_orders?: number
           project_id?: string
+          repeat_orders?: number
+          returned_orders?: number
+          stage?: string
+          total_orders?: number
           updated_at?: string
         }
         Relationships: [
@@ -380,6 +440,114 @@ export type Database = {
           },
         ]
       }
+      import_mapping_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          header_signature: string[]
+          id: string
+          mapping: Json
+          name: string
+          project_id: string
+          source_hint: string | null
+          updated_at: string
+          usage_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          header_signature?: string[]
+          id?: string
+          mapping?: Json
+          name: string
+          project_id: string
+          source_hint?: string | null
+          updated_at?: string
+          usage_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          header_signature?: string[]
+          id?: string
+          mapping?: Json
+          name?: string
+          project_id?: string
+          source_hint?: string | null
+          updated_at?: string
+          usage_count?: number
+        }
+        Relationships: []
+      }
+      import_runs: {
+        Row: {
+          ai_fixed_fields: number
+          created_at: string
+          duplicates: number
+          existing_customers: number
+          id: string
+          imported: number
+          invalid_cod: number
+          invalid_phone: number
+          missing_mandatory: number
+          new_customers: number
+          processing_ms: number
+          project_id: string
+          repeat_orders: number
+          report: Json
+          skipped: number
+          source_filename: string | null
+          total_rows: number
+          updated_count: number
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          ai_fixed_fields?: number
+          created_at?: string
+          duplicates?: number
+          existing_customers?: number
+          id?: string
+          imported?: number
+          invalid_cod?: number
+          invalid_phone?: number
+          missing_mandatory?: number
+          new_customers?: number
+          processing_ms?: number
+          project_id: string
+          repeat_orders?: number
+          report?: Json
+          skipped?: number
+          source_filename?: string | null
+          total_rows?: number
+          updated_count?: number
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          ai_fixed_fields?: number
+          created_at?: string
+          duplicates?: number
+          existing_customers?: number
+          id?: string
+          imported?: number
+          invalid_cod?: number
+          invalid_phone?: number
+          missing_mandatory?: number
+          new_customers?: number
+          processing_ms?: number
+          project_id?: string
+          repeat_orders?: number
+          report?: Json
+          skipped?: number
+          source_filename?: string | null
+          total_rows?: number
+          updated_count?: number
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
@@ -517,8 +685,10 @@ export type Database = {
       orders: {
         Row: {
           address: string
+          approval_status: string | null
           assigned_to: string | null
           assigned_to_name: string
+          cod_charge: number
           created_at: string
           created_by: string | null
           current_status: string
@@ -526,12 +696,16 @@ export type Database = {
           customer_name: string
           delivery_date: string | null
           delivery_method: string
+          delivery_status: string | null
+          delivery_time: string | null
+          external_order_id: string | null
           followup_date: string | null
           followup_step: number
           generated_order_id: string
           health: string
           id: string
           invoice_id: string
+          invoice_no: string | null
           is_deleted: boolean
           is_repeat: boolean
           is_upsell: boolean
@@ -544,17 +718,25 @@ export type Database = {
           order_source: string
           paid_amount: number
           parent_order_id: string | null
+          payment_status: string | null
           price: number
           product_id: string | null
           product_sku: string
           product_title: string
           project_id: string | null
+          recipient_name: string | null
+          rider_name: string | null
+          rider_phone: string | null
+          shipping_charge: number
+          tracking_code: string | null
           updated_at: string
         }
         Insert: {
           address?: string
+          approval_status?: string | null
           assigned_to?: string | null
           assigned_to_name?: string
+          cod_charge?: number
           created_at?: string
           created_by?: string | null
           current_status?: string
@@ -562,12 +744,16 @@ export type Database = {
           customer_name: string
           delivery_date?: string | null
           delivery_method?: string
+          delivery_status?: string | null
+          delivery_time?: string | null
+          external_order_id?: string | null
           followup_date?: string | null
           followup_step?: number
           generated_order_id?: string
           health?: string
           id?: string
           invoice_id?: string
+          invoice_no?: string | null
           is_deleted?: boolean
           is_repeat?: boolean
           is_upsell?: boolean
@@ -580,17 +766,25 @@ export type Database = {
           order_source?: string
           paid_amount?: number
           parent_order_id?: string | null
+          payment_status?: string | null
           price?: number
           product_id?: string | null
           product_sku?: string
           product_title?: string
           project_id?: string | null
+          recipient_name?: string | null
+          rider_name?: string | null
+          rider_phone?: string | null
+          shipping_charge?: number
+          tracking_code?: string | null
           updated_at?: string
         }
         Update: {
           address?: string
+          approval_status?: string | null
           assigned_to?: string | null
           assigned_to_name?: string
+          cod_charge?: number
           created_at?: string
           created_by?: string | null
           current_status?: string
@@ -598,12 +792,16 @@ export type Database = {
           customer_name?: string
           delivery_date?: string | null
           delivery_method?: string
+          delivery_status?: string | null
+          delivery_time?: string | null
+          external_order_id?: string | null
           followup_date?: string | null
           followup_step?: number
           generated_order_id?: string
           health?: string
           id?: string
           invoice_id?: string
+          invoice_no?: string | null
           is_deleted?: boolean
           is_repeat?: boolean
           is_upsell?: boolean
@@ -616,11 +814,17 @@ export type Database = {
           order_source?: string
           paid_amount?: number
           parent_order_id?: string | null
+          payment_status?: string | null
           price?: number
           product_id?: string | null
           product_sku?: string
           product_title?: string
           project_id?: string | null
+          recipient_name?: string | null
+          rider_name?: string | null
+          rider_phone?: string | null
+          shipping_charge?: number
+          tracking_code?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1142,6 +1346,10 @@ export type Database = {
         Returns: boolean
       }
       prune_followup_automation_runs: { Args: never; Returns: undefined }
+      recalc_customer_analytics: {
+        Args: { p_customer_id: string }
+        Returns: undefined
+      }
       run_followup_automation: { Args: never; Returns: Json }
     }
     Enums: {
