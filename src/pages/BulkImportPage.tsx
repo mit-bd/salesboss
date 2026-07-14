@@ -21,6 +21,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { useImportTemplates } from "@/hooks/useImportTemplates";
 import { useActivityLog } from "@/hooks/useActivityLog";
+import WarningCenter, { type ImportWarningLite } from "@/components/import/WarningCenter";
+import HealthScorePanel, { type HealthScore, type Recommendation } from "@/components/import/HealthScorePanel";
 
 // ---------- Canonical fields ----------
 const CANONICAL: { key: string; label: string; required: boolean }[] = [
@@ -123,6 +125,10 @@ export default function BulkImportPage() {
   const [matchedTemplate, setMatchedTemplate] = useState<any>(null);
   const [cleanedRows, setCleanedRows] = useState<CleanedRow[]>([]);
   const [aiReport, setAiReport] = useState<{ autoCorrected: number; needsReview: number; corrections: string[] } | null>(null);
+  const [aiWarnings, setAiWarnings] = useState<ImportWarningLite[]>([]);
+  const [aiHealth, setAiHealth] = useState<HealthScore | null>(null);
+  const [aiRecommendations, setAiRecommendations] = useState<Recommendation[]>([]);
+  const [resumableRuns, setResumableRuns] = useState<any[]>([]);
   const [cleaning, setCleaning] = useState(false);
 
   const [assignToExec, setAssignToExec] = useState("");
