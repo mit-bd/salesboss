@@ -264,6 +264,9 @@ export default function BulkImportPage() {
         needsReview: data?.report?.needsReview ?? 0,
         corrections: data?.report?.corrections ?? [],
       });
+      setAiWarnings((data?.warnings || []) as ImportWarningLite[]);
+      setAiHealth((data?.health || null) as HealthScore | null);
+      setAiRecommendations((data?.recommendations || []) as Recommendation[]);
       setStep("simulate");
     } catch (err: any) {
       toast({ title: "AI cleaning failed", description: err.message || "Try again", variant: "destructive" });
