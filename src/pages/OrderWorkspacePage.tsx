@@ -570,7 +570,7 @@ export default function OrderWorkspacePage() {
         {storeOrder && (
           <>
             <EditOrderDialog order={storeOrder} open={editOpen} onOpenChange={setEditOpen} />
-            <CompleteFollowupDialog order={storeOrder} open={followupOpen} onOpenChange={setFollowupOpen} />
+            <CompleteFollowupDialog order={storeOrder} open={followupOpen} onOpenChange={setFollowupOpen} onComplete={completeFollowup} />
           </>
         )}
       </div>
