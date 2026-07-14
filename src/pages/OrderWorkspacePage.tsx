@@ -17,13 +17,21 @@ import { useCustomerTags } from "@/hooks/useCustomerTags";
 import { useCustomerAIScore } from "@/hooks/useCustomerAIScore";
 import { useCustomerTimeline } from "@/hooks/useCustomerTimeline";
 import { useOrderTimeline } from "@/hooks/useOrderTimeline";
+import { useOrderPosition } from "@/hooks/useOrderPosition";
+import { useOrderActivityLogs } from "@/hooks/useOrderActivityLogs";
+import { useImportRunInfo } from "@/hooks/useImportRunInfo";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { useRole } from "@/contexts/RoleContext";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import EditOrderDialog from "@/components/EditOrderDialog";
 import CompleteFollowupDialog from "@/components/CompleteFollowupDialog";
-import OrderActivityTimeline from "@/components/OrderActivityTimeline";
+import WorkspaceHeaderSummary from "@/components/workspace/WorkspaceHeaderSummary";
+import OrderPositionCard from "@/components/workspace/OrderPositionCard";
+import RelatedOrdersPanel from "@/components/workspace/RelatedOrdersPanel";
+import OrderNavigator from "@/components/workspace/OrderNavigator";
+import ActivityDiffViewer from "@/components/workspace/ActivityDiffViewer";
+import AIRecommendationCard from "@/components/workspace/AIRecommendationCard";
 
 const BST_FMT = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Dhaka", year: "numeric", month: "short", day: "2-digit",
@@ -94,6 +102,8 @@ export default function OrderWorkspacePage() {
   const { data: aiScore, loading: aiLoading, error: aiError, refresh: refreshAI } = useCustomerAIScore(customer?.id);
   const { events: custTimeline, loading: custTimelineLoading } = useCustomerTimeline(customer?.id, customer?.mobile_number);
   const { events: orderTimeline, loading: orderTimelineLoading } = useOrderTimeline(orderId);
+  const { logs: activityLogs, loading: activityLoading, hasMore: activityHasMore, loadMore: activityLoadMore } = useOrderActivityLogs(orderId);
+  const pos = useOrderPosition(customer?.id, orderId);
   const { isAdmin } = useRole();
   const { hasPermission } = usePermissions();
   const { user } = useAuth();
@@ -101,15 +111,7 @@ export default function OrderWorkspacePage() {
   const [editOpen, setEditOpen] = useState(false);
   const [followupOpen, setFollowupOpen] = useState(false);
 
-  const currentPosition = useMemo(() => {
-    if (!customerOrders.length || !orderId) return { index: -1, prev: null as string | null, next: null as string | null };
-    const idx = customerOrders.findIndex((o) => o.id === orderId);
-    return {
-      index: idx,
-      prev: idx > 0 ? customerOrders[idx - 1].id : null,
-      next: idx >= 0 && idx < customerOrders.length - 1 ? customerOrders[idx + 1].id : null,
-    };
-  }, [customerOrders, orderId]);
+  const openOrder = (id: string) => navigate(`/orders/${id}/workspace`, { replace: true });
 
   const storeOrder = storeOrders.find((o) => o.id === orderId);
   const canEdit = isAdmin || hasPermission("orders.edit");
@@ -141,29 +143,30 @@ export default function OrderWorkspacePage() {
   return (
     <AppLayout>
       <div className="animate-fade-in p-4 max-w-[1600px]">
-        {/* Top bar */}
+        {/* Sticky workspace summary */}
+        <WorkspaceHeaderSummary
+          position={pos.position}
+          total={pos.total}
+          isFirstOrder={pos.isFirstOrder}
+          isOnlyOrder={pos.isOnlyOrder}
+          isRepeatCustomer={pos.isRepeatCustomer}
+          lifetimeValue={customer?.lifetime_value || 0}
+          healthScore={aiScore?.scores?.health ?? null}
+          aiScore={aiScore?.scores?.overall ?? null}
+          lastFollowupAt={customer?.last_followup_at}
+          currentExecutive={order.assigned_to_name || customer?.last_executive_name || null}
+          prevOrderId={pos.prevOrderId}
+          nextOrderId={pos.nextOrderId}
+          onPrev={() => pos.prevOrderId && openOrder(pos.prevOrderId)}
+          onNext={() => pos.nextOrderId && openOrder(pos.nextOrderId)}
+        />
+
+        {/* Top action bar */}
         <div className="mb-4 flex items-center justify-between">
           <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-4 w-4" /> Back
           </Button>
           <div className="flex items-center gap-2">
-            <Button
-              size="sm" variant="outline" className="gap-1.5"
-              disabled={!currentPosition.prev}
-              onClick={() => currentPosition.prev && navigate(`/orders/${currentPosition.prev}/workspace`)}
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> Prev order
-            </Button>
-            <span className="text-xs text-muted-foreground px-2">
-              {currentPosition.index >= 0 ? `Order ${currentPosition.index + 1} of ${customerOrders.length}` : ""}
-            </span>
-            <Button
-              size="sm" variant="outline" className="gap-1.5"
-              disabled={!currentPosition.next}
-              onClick={() => currentPosition.next && navigate(`/orders/${currentPosition.next}/workspace`)}
-            >
-              Next order <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
             {canComplete && (
               <Button size="sm" className="gap-1.5" onClick={() => setFollowupOpen(true)}>
                 <CheckCircle className="h-3.5 w-3.5" /> Complete Step {storeOrder!.followupStep}
@@ -176,6 +179,13 @@ export default function OrderWorkspacePage() {
             )}
           </div>
         </div>
+
+        {/* Order navigator strip */}
+        {pos.orders.length > 1 && (
+          <div className="mb-4">
+            <OrderNavigator orders={pos.orders} currentOrderId={orderId!} onOpen={openOrder} />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr_360px] gap-4">
           {/* Left rail */}
@@ -293,41 +303,17 @@ export default function OrderWorkspacePage() {
               )}
             </Section>
 
-            {/* Repeat orders rail */}
-            <Section title="All Orders" icon={Repeat2}>
-              {customerOrders.length === 0 && <p className="text-xs text-muted-foreground">No other orders.</p>}
-              <div className="space-y-1.5 max-h-72 overflow-y-auto">
-                {customerOrders.map((o) => {
-                  const isCurrent = o.id === orderId;
-                  return (
-                    <button
-                      key={o.id}
-                      onClick={() => navigate(`/orders/${o.id}/workspace`)}
-                      className={cn(
-                        "w-full text-left rounded-md border p-2 text-xs transition-colors",
-                        isCurrent
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:bg-muted/50",
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-[11px]">{o.generated_order_id || o.invoice_id || o.id.slice(0, 8)}</span>
-                        <span className="text-[10px] text-muted-foreground">{o.order_date || o.created_at?.split("T")[0]}</span>
-                      </div>
-                      <div className="flex items-center justify-between mt-0.5">
-                        <span className="truncate mr-2 text-foreground">{o.product_title || "—"}</span>
-                        <span className="font-semibold">৳{(o.price || 0).toLocaleString()}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        {o.is_repeat && <Badge variant="outline" className="text-[9px] h-4 border-warning/40 text-warning">REPEAT</Badge>}
-                        {o.is_upsell && <Badge variant="outline" className="text-[9px] h-4 border-info/40 text-info">UPSELL</Badge>}
-                        {o.delivery_status && <span className="text-[10px] text-muted-foreground capitalize">{o.delivery_status}</span>}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </Section>
+            {/* Order position intelligence */}
+            <OrderPositionCard pos={pos} />
+
+            {/* Related orders — full detail panel */}
+            <RelatedOrdersPanel
+              orders={pos.orders}
+              currentOrderId={orderId!}
+              onOpen={openOrder}
+              prevOrderId={pos.prevOrderId}
+              nextOrderId={pos.nextOrderId}
+            />
           </div>
 
           {/* Center */}
@@ -352,7 +338,7 @@ export default function OrderWorkspacePage() {
                     <KV label="First Order" value={customer?.first_order_date || "—"} />
                     <KV label="Latest Order" value={customer?.last_order_date || "—"} />
                     <KV label="Total Orders" value={customer?.total_orders ?? "—"} />
-                    <KV label="Position" value={currentPosition.index >= 0 ? `#${currentPosition.index + 1} of ${customerOrders.length}` : "—"} />
+                    <KV label="Position" value={pos.total ? (pos.isOnlyOrder ? "First Order" : `#${pos.position} of ${pos.total}`) : "—"} />
                   </div>
                 </div>
               </div>
@@ -502,8 +488,8 @@ export default function OrderWorkspacePage() {
               </TabsContent>
 
               <TabsContent value="activity" className="mt-4">
-                <Section title="Activity History">
-                  <OrderActivityTimeline orderId={orderId!} />
+                <Section title="Activity History (with change diffs)">
+                  <ActivityDiffViewer logs={activityLogs} loading={activityLoading} hasMore={activityHasMore} onLoadMore={activityLoadMore} />
                 </Section>
               </TabsContent>
 
@@ -547,12 +533,12 @@ export default function OrderWorkspacePage() {
             <Section title="AI Recommendations" icon={Sparkles}>
               {!aiScore && <p className="text-xs text-muted-foreground">Generate the AI score to see recommendations.</p>}
               {aiScore && (
-                <div className="space-y-3 text-xs">
-                  <RecCard label="Next Best Action" rec={aiScore.recommendations?.next_best_action} field="action" />
-                  <RecCard label="Recommended Product" rec={aiScore.recommendations?.recommended_product} field="product" />
-                  <RecCard label="Recommended Upsell" rec={aiScore.recommendations?.recommended_upsell} field="product" />
-                  <RecCard label="Followup Timing" rec={aiScore.recommendations?.recommended_followup_time} field="when" />
-                  <RecCard label="Customer Risk" rec={aiScore.recommendations?.customer_risk} field="level" tone="destructive" />
+                <div className="space-y-2 text-xs">
+                  <AIRecommendationCard label="Next Best Action" rec={aiScore.recommendations?.next_best_action} field="action" />
+                  <AIRecommendationCard label="Recommended Product" rec={aiScore.recommendations?.recommended_product} field="product" />
+                  <AIRecommendationCard label="Recommended Upsell" rec={aiScore.recommendations?.recommended_upsell} field="product" />
+                  <AIRecommendationCard label="Followup Timing" rec={aiScore.recommendations?.recommended_followup_time} field="when" />
+                  <AIRecommendationCard label="Customer Risk" rec={aiScore.recommendations?.customer_risk} field="level" priority={((aiScore.recommendations?.customer_risk as any)?.level || "medium").toLowerCase() as any} />
                 </div>
               )}
             </Section>
@@ -578,59 +564,37 @@ export default function OrderWorkspacePage() {
   );
 }
 
-function RecCard({ label, rec, field, tone = "primary" }: { label: string; rec?: any; field: string; tone?: string }) {
-  if (!rec || !rec[field]) return (
-    <div className="rounded-md border border-border p-2">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-xs text-muted-foreground mt-0.5">Not enough data.</p>
-    </div>
-  );
-  return (
-    <div className={cn("rounded-md border p-2", tone === "destructive" ? "border-destructive/30 bg-destructive/5" : "border-border")}>
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
-        {typeof rec.confidence === "number" && (
-          <span className="text-[10px] text-muted-foreground">{Math.round(rec.confidence)}% conf.</span>
-        )}
-      </div>
-      <p className="text-xs font-medium text-foreground mt-0.5 capitalize">{String(rec[field])}</p>
-      {rec.why && <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{rec.why}</p>}
-    </div>
-  );
-}
-
 function ImportInfoCard({ order }: { order: any }) {
-  const runId = order?.import_run_id;
-  const [run, setRun] = useState<any>(null);
-  const [loaded, setLoaded] = useState(false);
-  useMemo(() => {
-    if (!runId) { setLoaded(true); return; }
-    (async () => {
-      const mod = await import("@/integrations/supabase/client");
-      const { data } = await mod.supabase.from("import_runs").select("*").eq("id", runId).maybeSingle();
-      setRun(data); setLoaded(true);
-    })();
-  }, [runId]);
+  const { run, loading } = useImportRunInfo(order?.import_run_id);
 
-  if (!runId) {
+  if (!order?.import_run_id) {
     return (
       <Section title="Import Information" icon={ShieldAlert}>
-        <p className="text-xs text-muted-foreground">This order was not created through the bulk import engine.</p>
+        <div className="rounded-md border border-dashed border-border p-3">
+          <p className="text-xs font-medium text-foreground">Created Manually</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            This order was not created through the bulk import engine.
+          </p>
+        </div>
       </Section>
     );
   }
+
   return (
     <Section title="Import Information" icon={ShieldAlert}>
-      {!loaded && <Skeleton className="h-16" />}
-      {loaded && !run && <p className="text-xs text-muted-foreground">Import run no longer available.</p>}
+      {loading && <Skeleton className="h-16" />}
+      {!loading && !run && <p className="text-xs text-muted-foreground">Import run no longer available.</p>}
       {run && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <KV label="Import Source" value={run.source || run.courier_name || "—"} />
           <KV label="Imported By" value={run.created_by_name || run.uploaded_by_name || "—"} />
-          <KV label="Imported At (BST)" value={fmtBST(run.started_at || run.created_at)} />
-          <KV label="Batch" value={`${run.processed_batches || 0} / ${run.total_batches || 0}`} />
+          <KV label="Import Date (BST)" value={fmtBST(run.started_at || run.created_at)} />
+          <KV label="Original File" value={run.original_file_name || run.file_name || "—"} />
+          <KV label="Import Run ID" value={run.id?.slice(0, 8) || "—"} mono />
+          <KV label="Import Batch" value={`${run.processed_batches || 0} / ${run.total_batches || 0}`} />
           <KV label="Health Score" value={(run.health_score?.overall ?? "—") + (run.health_score?.overall != null ? " / 100" : "")} />
           <KV label="AI Corrections" value={run.cleaned_rows ?? "—"} />
+          <KV label="Status" value={<span className="capitalize">{run.status || "—"}</span>} />
         </div>
       )}
     </Section>
