@@ -127,6 +127,102 @@ export type Database = {
           },
         ]
       }
+      customer_ai_profiles: {
+        Row: {
+          ai_confidence: number | null
+          buying_behaviour: string | null
+          created_at: string
+          customer_id: string
+          dirty: boolean
+          evidence: Json
+          id: string
+          last_refreshed_at: string | null
+          lifetime_trend: string | null
+          locked_fields: string[]
+          loyalty_score: number | null
+          model: string | null
+          personality: string | null
+          preferred_call_time: string | null
+          preferred_courier: string | null
+          preferred_executive_id: string | null
+          preferred_language: string | null
+          preferred_payment: string | null
+          price_sensitivity: string | null
+          product_preference: string | null
+          project_id: string
+          purchase_pattern: string | null
+          repeat_pattern: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_confidence?: number | null
+          buying_behaviour?: string | null
+          created_at?: string
+          customer_id: string
+          dirty?: boolean
+          evidence?: Json
+          id?: string
+          last_refreshed_at?: string | null
+          lifetime_trend?: string | null
+          locked_fields?: string[]
+          loyalty_score?: number | null
+          model?: string | null
+          personality?: string | null
+          preferred_call_time?: string | null
+          preferred_courier?: string | null
+          preferred_executive_id?: string | null
+          preferred_language?: string | null
+          preferred_payment?: string | null
+          price_sensitivity?: string | null
+          product_preference?: string | null
+          project_id: string
+          purchase_pattern?: string | null
+          repeat_pattern?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_confidence?: number | null
+          buying_behaviour?: string | null
+          created_at?: string
+          customer_id?: string
+          dirty?: boolean
+          evidence?: Json
+          id?: string
+          last_refreshed_at?: string | null
+          lifetime_trend?: string | null
+          locked_fields?: string[]
+          loyalty_score?: number | null
+          model?: string | null
+          personality?: string | null
+          preferred_call_time?: string | null
+          preferred_courier?: string | null
+          preferred_executive_id?: string | null
+          preferred_language?: string | null
+          preferred_payment?: string | null
+          price_sensitivity?: string | null
+          product_preference?: string | null
+          project_id?: string
+          purchase_pattern?: string | null
+          repeat_pattern?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_ai_profiles_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: true
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_ai_profiles_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_ai_scores: {
         Row: {
           created_at: string
@@ -170,6 +266,86 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: true
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_memory_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          details: Json
+          event_type: string
+          followup_id: string | null
+          id: string
+          importance: number
+          occurred_at: string
+          order_id: string | null
+          project_id: string
+          sentiment: string | null
+          source: string
+          summary: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          details?: Json
+          event_type: string
+          followup_id?: string | null
+          id?: string
+          importance?: number
+          occurred_at?: string
+          order_id?: string | null
+          project_id: string
+          sentiment?: string | null
+          source?: string
+          summary: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          details?: Json
+          event_type?: string
+          followup_id?: string | null
+          id?: string
+          importance?: number
+          occurred_at?: string
+          order_id?: string | null
+          project_id?: string
+          sentiment?: string | null
+          source?: string
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_memory_events_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_memory_events_followup_id_fkey"
+            columns: ["followup_id"]
+            isOneToOne: false
+            referencedRelation: "followup_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_memory_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_memory_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -2017,6 +2193,10 @@ export type Database = {
       import_performance_snapshot: {
         Args: { p_project_id?: string }
         Returns: Json
+      }
+      mark_ai_profile_dirty: {
+        Args: { _customer_id: string }
+        Returns: undefined
       }
       owner_import_analytics: { Args: { p_days?: number }; Returns: Json }
       promote_learning_suggestion: {
