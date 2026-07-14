@@ -148,18 +148,28 @@ export default function CustomerProfilePage() {
           ))}
         </div>
 
+        {/* Lifetime analytics */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <MiniStat label="Lifetime value" value={`৳${(customer.lifetime_value ?? 0).toLocaleString()}`} />
+          <MiniStat label="Avg order value" value={`৳${Math.round(customer.avg_order_value ?? 0).toLocaleString()}`} />
+          <MiniStat label="Lifetime shipping" value={`৳${(customer.lifetime_shipping ?? 0).toLocaleString()}`} />
+          <MiniStat label="Stage" value={customer.stage || "—"} />
+          <MiniStat label="Delivered" value={customer.delivered_orders ?? 0} />
+          <MiniStat label="Pending" value={customer.pending_orders ?? 0} />
+          <MiniStat label="Cancelled" value={customer.cancelled_orders ?? 0} />
+          <MiniStat label="Returned" value={customer.returned_orders ?? 0} />
+        </div>
+
         {/* Extra info row */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="rounded-xl border border-border bg-card p-4 card-shadow">
-            <p className="text-xs text-muted-foreground">Followups Completed</p>
-            <p className="text-sm font-semibold text-foreground mt-1">{stats.historyCount}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-4 card-shadow">
-            <p className="text-xs text-muted-foreground">Last Followup</p>
-            <p className="text-sm font-semibold text-foreground mt-1">
-              {stats.lastFollowup ? new Date(stats.lastFollowup.completedAt).toLocaleDateString() : "None"}
-            </p>
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <MiniStat label="First order" value={customer.first_order_date || "—"} />
+          <MiniStat label="Last order" value={customer.last_order_date || "—"} />
+          <MiniStat label="Last product" value={customer.last_product || "—"} />
+          <MiniStat label="Last delivery status" value={customer.last_delivery_status || "—"} />
+          <MiniStat label="Last followup" value={customer.last_followup_at ? new Date(customer.last_followup_at).toLocaleDateString() : "—"} />
+          <MiniStat label="Last executive" value={customer.last_executive_name || "—"} />
+          <MiniStat label="Repeat customer" value={customer.is_repeat_customer ? "Yes" : "No"} />
+          <MiniStat label="Active" value={customer.is_active ? "Yes" : "No"} />
         </div>
 
         {/* Order Timeline */}
