@@ -19,6 +19,8 @@ function isAllowedOrigin(origin: string | null): boolean {
     if (u.protocol !== "https:" && u.protocol !== "http:") return false;
     if (u.hostname.endsWith(".lovable.app")) return true;
     if (u.hostname.endsWith(".lovable.dev")) return true;
+    if (u.hostname.endsWith(".lovableproject.com")) return true;
+    if (u.hostname.endsWith(".lovable.host")) return true;
   } catch {
     return false;
   }
