@@ -97,7 +97,7 @@ export default function OrderWorkspacePage() {
   const { isAdmin } = useRole();
   const { hasPermission } = usePermissions();
   const { user } = useAuth();
-  const { orders: storeOrders } = useOrderStore();
+  const { orders: storeOrders, completeFollowup } = useOrderStore();
   const [editOpen, setEditOpen] = useState(false);
   const [followupOpen, setFollowupOpen] = useState(false);
 
