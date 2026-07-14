@@ -5,8 +5,10 @@ import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Phone, MapPin, Calendar, RefreshCw, ShoppingBag, TrendingUp } from "lucide-react";
+import { ArrowLeft, Phone, MapPin, Calendar, RefreshCw, ShoppingBag, TrendingUp, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCustomerTags } from "@/hooks/useCustomerTags";
+import CustomerTimeline from "@/components/import/CustomerTimeline";
 
 interface Customer {
   id: string;
