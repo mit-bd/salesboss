@@ -23,6 +23,7 @@ import { useImportTemplates } from "@/hooks/useImportTemplates";
 import { useActivityLog } from "@/hooks/useActivityLog";
 import WarningCenter, { type ImportWarningLite } from "@/components/import/WarningCenter";
 import HealthScorePanel, { type HealthScore, type Recommendation } from "@/components/import/HealthScorePanel";
+import ResumeBanner from "@/components/import/ResumeBanner";
 
 // ---------- Canonical fields ----------
 const CANONICAL: { key: string; label: string; required: boolean }[] = [
@@ -576,6 +577,7 @@ export default function BulkImportPage() {
       <PageHeader title="AI Smart Import" description="Analyze, clean, validate, and import courier/CRM data with AI" />
 
       <div className="max-w-5xl animate-fade-in space-y-4">
+        <ResumeBanner />
         <StepIndicator step={step} />
 
         {/* ---------- UPLOAD ---------- */}

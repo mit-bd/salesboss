@@ -3,6 +3,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import { useDataQuality } from "@/hooks/useDataQuality";
 import { Loader2, TrendingUp, AlertTriangle, Package, Layers, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import ImportPerformancePanel from "@/components/import/ImportPerformancePanel";
 
 function Card({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -38,6 +39,7 @@ export default function DataQualityPage() {
         )}
         {snapshot && (
           <>
+            <ImportPerformancePanel />
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <Card label="Avg import health" value={`${Math.round(Number(snapshot.avg_health_score || 0))}`} sub="Last 30 days" />
               <Card label="Imports this month" value={snapshot.imports_this_month || 0} />

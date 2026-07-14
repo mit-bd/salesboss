@@ -485,6 +485,177 @@ export type Database = {
           },
         ]
       }
+      import_audit_events: {
+        Row: {
+          action: string
+          actor_name: string | null
+          actor_user_id: string | null
+          browser: string | null
+          bst_timestamp: string
+          created_at: string
+          device: string | null
+          id: string
+          import_run_id: string
+          ip: string | null
+          metadata: Json
+          project_id: string
+        }
+        Insert: {
+          action: string
+          actor_name?: string | null
+          actor_user_id?: string | null
+          browser?: string | null
+          bst_timestamp?: string
+          created_at?: string
+          device?: string | null
+          id?: string
+          import_run_id: string
+          ip?: string | null
+          metadata?: Json
+          project_id: string
+        }
+        Update: {
+          action?: string
+          actor_name?: string | null
+          actor_user_id?: string | null
+          browser?: string | null
+          bst_timestamp?: string
+          created_at?: string
+          device?: string | null
+          id?: string
+          import_run_id?: string
+          ip?: string | null
+          metadata?: Json
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_audit_events_import_run_id_fkey"
+            columns: ["import_run_id"]
+            isOneToOne: false
+            referencedRelation: "import_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_batches: {
+        Row: {
+          batch_index: number
+          created_at: string
+          duration_ms: number | null
+          error_category: string | null
+          error_message: string | null
+          id: string
+          import_run_id: string
+          project_id: string
+          retry_count: number
+          row_end: number
+          row_start: number
+          rows_failed: number
+          rows_ok: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          batch_index: number
+          created_at?: string
+          duration_ms?: number | null
+          error_category?: string | null
+          error_message?: string | null
+          id?: string
+          import_run_id: string
+          project_id: string
+          retry_count?: number
+          row_end: number
+          row_start: number
+          rows_failed?: number
+          rows_ok?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          batch_index?: number
+          created_at?: string
+          duration_ms?: number | null
+          error_category?: string | null
+          error_message?: string | null
+          id?: string
+          import_run_id?: string
+          project_id?: string
+          retry_count?: number
+          row_end?: number
+          row_start?: number
+          rows_failed?: number
+          rows_ok?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_batches_import_run_id_fkey"
+            columns: ["import_run_id"]
+            isOneToOne: false
+            referencedRelation: "import_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_errors: {
+        Row: {
+          batch_index: number | null
+          category: string
+          created_at: string
+          id: string
+          import_run_id: string
+          payload: Json | null
+          project_id: string
+          recommended_fix: string | null
+          resolved: boolean
+          retryable: boolean
+          row_index: number | null
+          updated_at: string
+          why: string | null
+        }
+        Insert: {
+          batch_index?: number | null
+          category: string
+          created_at?: string
+          id?: string
+          import_run_id: string
+          payload?: Json | null
+          project_id: string
+          recommended_fix?: string | null
+          resolved?: boolean
+          retryable?: boolean
+          row_index?: number | null
+          updated_at?: string
+          why?: string | null
+        }
+        Update: {
+          batch_index?: number | null
+          category?: string
+          created_at?: string
+          id?: string
+          import_run_id?: string
+          payload?: Json | null
+          project_id?: string
+          recommended_fix?: string | null
+          resolved?: boolean
+          retryable?: boolean
+          row_index?: number | null
+          updated_at?: string
+          why?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_errors_import_run_id_fkey"
+            columns: ["import_run_id"]
+            isOneToOne: false
+            referencedRelation: "import_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       import_learning_events: {
         Row: {
           created_at: string
@@ -540,11 +711,55 @@ export type Database = {
           },
         ]
       }
+      import_learning_suggestions: {
+        Row: {
+          confirmations: number
+          created_at: string
+          id: string
+          input_value: string
+          kind: string
+          last_seen_at: string
+          project_id: string
+          promoted_at: string | null
+          status: string
+          suggested_value: string
+          updated_at: string
+        }
+        Insert: {
+          confirmations?: number
+          created_at?: string
+          id?: string
+          input_value: string
+          kind: string
+          last_seen_at?: string
+          project_id: string
+          promoted_at?: string | null
+          status?: string
+          suggested_value: string
+          updated_at?: string
+        }
+        Update: {
+          confirmations?: number
+          created_at?: string
+          id?: string
+          input_value?: string
+          kind?: string
+          last_seen_at?: string
+          project_id?: string
+          promoted_at?: string | null
+          status?: string
+          suggested_value?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       import_mapping_templates: {
         Row: {
+          avg_health_score: number | null
           created_at: string
           created_by: string | null
           date_format: string | null
+          fail_count: number | null
           header_signature: string[]
           id: string
           last_used_at: string | null
@@ -555,13 +770,16 @@ export type Database = {
           project_id: string
           source_hint: string | null
           status_aliases: Json | null
+          success_count: number | null
           updated_at: string
           usage_count: number
         }
         Insert: {
+          avg_health_score?: number | null
           created_at?: string
           created_by?: string | null
           date_format?: string | null
+          fail_count?: number | null
           header_signature?: string[]
           id?: string
           last_used_at?: string | null
@@ -572,13 +790,16 @@ export type Database = {
           project_id: string
           source_hint?: string | null
           status_aliases?: Json | null
+          success_count?: number | null
           updated_at?: string
           usage_count?: number
         }
         Update: {
+          avg_health_score?: number | null
           created_at?: string
           created_by?: string | null
           date_format?: string | null
+          fail_count?: number | null
           header_signature?: string[]
           id?: string
           last_used_at?: string | null
@@ -589,33 +810,110 @@ export type Database = {
           project_id?: string
           source_hint?: string | null
           status_aliases?: Json | null
+          success_count?: number | null
           updated_at?: string
           usage_count?: number
         }
         Relationships: []
       }
+      import_queue: {
+        Row: {
+          attempts: number
+          batch_index: number
+          created_at: string
+          finished_at: string | null
+          id: string
+          import_run_id: string
+          last_error: string | null
+          payload_ref: string | null
+          project_id: string
+          started_at: string | null
+          status: string
+          total_batches: number
+          updated_at: string
+          worker_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          batch_index: number
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          import_run_id: string
+          last_error?: string | null
+          payload_ref?: string | null
+          project_id: string
+          started_at?: string | null
+          status?: string
+          total_batches: number
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          batch_index?: number
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          import_run_id?: string
+          last_error?: string | null
+          payload_ref?: string | null
+          project_id?: string
+          started_at?: string | null
+          status?: string
+          total_batches?: number
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_queue_import_run_id_fkey"
+            columns: ["import_run_id"]
+            isOneToOne: false
+            referencedRelation: "import_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       import_runs: {
         Row: {
           ai_fixed_fields: number
+          browser: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          courier_name: string | null
           created_at: string
+          device: string | null
           duplicates: number
           existing_customers: number
+          file_hash: string | null
+          file_storage_path: string | null
           health_score: Json | null
           id: string
           imported: number
           invalid_cod: number
           invalid_phone: number
+          ip: string | null
           last_processed_row: number | null
+          memory_peak_kb: number | null
           missing_mandatory: number
           new_customers: number
+          processed_batches: number | null
           processing_ms: number
           project_id: string
+          queue_wait_ms: number | null
           recommendations: Json | null
           repeat_orders: number
           report: Json
           resume_token: string | null
+          resumed_at: string | null
+          resumed_by: string | null
+          resumed_from_row: number | null
           skipped: number
           source_filename: string | null
+          speed_rows_per_sec: number | null
+          template_id: string | null
+          total_batches: number | null
           total_rows: number
           updated_count: number
           user_id: string | null
@@ -623,25 +921,42 @@ export type Database = {
         }
         Insert: {
           ai_fixed_fields?: number
+          browser?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          courier_name?: string | null
           created_at?: string
+          device?: string | null
           duplicates?: number
           existing_customers?: number
+          file_hash?: string | null
+          file_storage_path?: string | null
           health_score?: Json | null
           id?: string
           imported?: number
           invalid_cod?: number
           invalid_phone?: number
+          ip?: string | null
           last_processed_row?: number | null
+          memory_peak_kb?: number | null
           missing_mandatory?: number
           new_customers?: number
+          processed_batches?: number | null
           processing_ms?: number
           project_id: string
+          queue_wait_ms?: number | null
           recommendations?: Json | null
           repeat_orders?: number
           report?: Json
           resume_token?: string | null
+          resumed_at?: string | null
+          resumed_by?: string | null
+          resumed_from_row?: number | null
           skipped?: number
           source_filename?: string | null
+          speed_rows_per_sec?: number | null
+          template_id?: string | null
+          total_batches?: number | null
           total_rows?: number
           updated_count?: number
           user_id?: string | null
@@ -649,25 +964,42 @@ export type Database = {
         }
         Update: {
           ai_fixed_fields?: number
+          browser?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          courier_name?: string | null
           created_at?: string
+          device?: string | null
           duplicates?: number
           existing_customers?: number
+          file_hash?: string | null
+          file_storage_path?: string | null
           health_score?: Json | null
           id?: string
           imported?: number
           invalid_cod?: number
           invalid_phone?: number
+          ip?: string | null
           last_processed_row?: number | null
+          memory_peak_kb?: number | null
           missing_mandatory?: number
           new_customers?: number
+          processed_batches?: number | null
           processing_ms?: number
           project_id?: string
+          queue_wait_ms?: number | null
           recommendations?: Json | null
           repeat_orders?: number
           report?: Json
           resume_token?: string | null
+          resumed_at?: string | null
+          resumed_by?: string | null
+          resumed_from_row?: number | null
           skipped?: number
           source_filename?: string | null
+          speed_rows_per_sec?: number | null
+          template_id?: string | null
+          total_batches?: number | null
           total_rows?: number
           updated_count?: number
           user_id?: string | null
@@ -1568,7 +1900,42 @@ export type Database = {
         Args: { p_order_ids: string[]; p_updates: Json; p_versions: Json }
         Returns: Json
       }
+      cancel_import_run: {
+        Args: { p_run_id: string; p_user_id: string; p_user_name: string }
+        Returns: Json
+      }
+      claim_next_import_batch: {
+        Args: { p_worker_id: string }
+        Returns: {
+          batch_index: number
+          id: string
+          import_run_id: string
+          payload_ref: string
+          project_id: string
+        }[]
+      }
+      complete_import_batch: {
+        Args: {
+          p_duration_ms: number
+          p_queue_id: string
+          p_rows_failed: number
+          p_rows_ok: number
+        }
+        Returns: undefined
+      }
       data_quality_snapshot: { Args: { p_project_id: string }; Returns: Json }
+      enqueue_import_batches: {
+        Args: {
+          p_project_id: string
+          p_run_id: string
+          p_total_batches: number
+        }
+        Returns: number
+      }
+      fail_import_batch: {
+        Args: { p_category: string; p_message: string; p_queue_id: string }
+        Returns: undefined
+      }
       find_or_create_customer:
         | {
             Args: { p_address: string; p_mobile: string; p_name: string }
@@ -1600,11 +1967,38 @@ export type Database = {
         }
         Returns: boolean
       }
+      import_performance_snapshot: {
+        Args: { p_project_id?: string }
+        Returns: Json
+      }
+      owner_import_analytics: { Args: { p_days?: number }; Returns: Json }
+      promote_learning_suggestion: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
       prune_followup_automation_runs: { Args: never; Returns: undefined }
       recalc_customer_analytics: {
         Args: { p_customer_id: string }
         Returns: undefined
       }
+      record_learning_suggestion: {
+        Args: {
+          p_input: string
+          p_kind: string
+          p_project_id: string
+          p_suggested: string
+        }
+        Returns: string
+      }
+      reset_learning: {
+        Args: { p_kind?: string; p_project_id: string }
+        Returns: number
+      }
+      resume_import_run: {
+        Args: { p_run_id: string; p_user_id: string; p_user_name: string }
+        Returns: Json
+      }
+      retry_failed_batches: { Args: { p_run_id: string }; Returns: number }
       run_followup_automation: { Args: never; Returns: Json }
     }
     Enums: {

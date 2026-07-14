@@ -13,6 +13,8 @@ import {
   LineChart, Line, AreaChart, Area,
 } from "recharts";
 import OwnerLayout from "@/components/owner/OwnerLayout";
+import OwnerImportAnalytics from "@/components/import/OwnerImportAnalytics";
+import AIDataQualityCard from "@/components/import/AIDataQualityCard";
 
 interface Stats {
   totalProjects: number;
@@ -258,6 +260,9 @@ export default function OwnerDashboardPage() {
               </CardContent>
             </Card>
           )}
+
+          <OwnerImportAnalytics />
+          <AIDataQualityCard />
         </div>
       )}
     </OwnerLayout>
