@@ -68,6 +68,8 @@ const navCategories: NavCategory[] = [
       { label: "Bulk Import", icon: Upload, path: "/bulk-import", permission: "orders.create" },
       { label: "Product Aliases", icon: Sparkles, path: "/product-aliases", permission: "products.view" },
       { label: "Data Quality", icon: Activity, path: "/data-quality", permission: "orders.create" },
+      { label: "Import Recovery", icon: RefreshCw, path: "/imports/recovery", permission: "orders.create" },
+      { label: "AI Learning", icon: Sparkles, path: "/imports/learning", permission: "orders.create" },
     ],
   },
   {

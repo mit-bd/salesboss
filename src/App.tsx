@@ -47,6 +47,8 @@ import CustomerProfilePage from "./pages/CustomerProfilePage";
 import BillingPage from "./pages/BillingPage";
 import ProductAliasesPage from "./pages/ProductAliasesPage";
 import DataQualityPage from "./pages/DataQualityPage";
+import ImportRecoveryPage from "./pages/ImportRecoveryPage";
+import ImportLearningPage from "./pages/ImportLearningPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -106,6 +108,8 @@ const App = () => (
                         <Route path="/customers/:id" element={<ProtectedRoute><CustomerProfilePage /></ProtectedRoute>} />
                         <Route path="/product-aliases" element={<ProtectedRoute requiredPermission="products.view"><ProductAliasesPage /></ProtectedRoute>} />
                         <Route path="/data-quality" element={<ProtectedRoute requiredPermission="orders.create"><DataQualityPage /></ProtectedRoute>} />
+                        <Route path="/imports/recovery" element={<ProtectedRoute requiredPermission="orders.create"><ImportRecoveryPage /></ProtectedRoute>} />
+                        <Route path="/imports/learning" element={<ProtectedRoute requiredPermission="orders.create"><ImportLearningPage /></ProtectedRoute>} />
 
                         <Route path="*" element={<NotFound />} />
                       </Routes>
