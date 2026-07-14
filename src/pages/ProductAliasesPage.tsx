@@ -42,12 +42,11 @@ export default function ProductAliasesPage() {
       <PageHeader
         title="AI Product Alias Library"
         description="Teach the AI Import Engine to recognize courier abbreviations and short codes for your products."
-        action={
-          <Button className="gap-1.5" onClick={() => setOpen(true)}>
-            <Plus className="h-4 w-4" /> Add alias
-          </Button>
-        }
-      />
+      >
+        <Button className="gap-1.5" onClick={() => setOpen(true)}>
+          <Plus className="h-4 w-4" /> Add alias
+        </Button>
+      </PageHeader>
 
       <div className="max-w-4xl animate-fade-in">
         <div className="rounded-xl border border-border bg-card card-shadow overflow-hidden">

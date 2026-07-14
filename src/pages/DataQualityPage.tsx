@@ -22,8 +22,9 @@ export default function DataQualityPage() {
       <PageHeader
         title="Data Quality Dashboard"
         description="Real-time quality metrics computed from your live imports, customers, and orders."
-        action={<Button variant="outline" size="sm" onClick={refresh} className="gap-1.5"><RefreshCw className="h-3.5 w-3.5" /> Refresh</Button>}
-      />
+      >
+        <Button variant="outline" size="sm" onClick={refresh} className="gap-1.5"><RefreshCw className="h-3.5 w-3.5" /> Refresh</Button>
+      </PageHeader>
       <div className="max-w-5xl animate-fade-in space-y-4">
         {loading && (
           <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">

@@ -21,27 +21,24 @@ export function useCustomerTimeline(customerId: string | undefined, mobile: stri
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const { data: orders } = await supabase
+      const ordersRes: any = await supabase
         .from("orders")
         .select("id,invoice_id,generated_order_id,customer_name,product_title,price,order_date,created_at,delivery_status,assigned_to_name,is_upsell,is_repeat,current_status,followup_step")
         .eq("customer_id", customerId)
         .eq("is_deleted", false);
+      const orders: any[] = ordersRes?.data || [];
+      const orderIds: string[] = orders.map((o: any) => o.id);
 
-      const orderIds = (orders || []).map((o: any) => o.id);
-
+      const fetchIn = async (table: string, cols: string, idCol: string) => {
+        if (!orderIds.length) return { data: [] as any[] };
+        const res: any = await (supabase as any).from(table).select(cols).in(idCol, orderIds);
+        return { data: (res?.data || []) as any[] };
+      };
       const [fh, ur, rr, al] = await Promise.all([
-        orderIds.length
-          ? supabase.from("followup_history").select("id,order_id,step_number,note,completed_at,completed_by_name,next_followup_date").in("order_id", orderIds)
-          : Promise.resolve({ data: [] as any[] } as any),
-        orderIds.length
-          ? supabase.from("upsell_records").select("id,order_id,product_title,amount,created_at,created_by_name").in("order_id", orderIds)
-          : Promise.resolve({ data: [] as any[] } as any),
-        orderIds.length
-          ? supabase.from("repeat_order_records").select("id,parent_order_id,child_order_id,created_at").in("parent_order_id", orderIds)
-          : Promise.resolve({ data: [] as any[] } as any),
-        orderIds.length
-          ? supabase.from("order_activity_logs").select("id,order_id,action,description,performed_by_name,created_at").in("order_id", orderIds).order("created_at", { ascending: false }).limit(500)
-          : Promise.resolve({ data: [] as any[] } as any),
+        fetchIn("followup_history", "id,order_id,step_number,note,completed_at,completed_by_name,next_followup_date", "order_id"),
+        fetchIn("upsell_records", "id,order_id,product_title,amount,created_at,created_by_name", "order_id"),
+        fetchIn("repeat_order_records", "id,parent_order_id,child_order_id,created_at", "parent_order_id"),
+        fetchIn("order_activity_logs", "id,order_id,action,description,performed_by_name,created_at", "order_id"),
       ]);
 
       const list: TimelineEvent[] = [];
