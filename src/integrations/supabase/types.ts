@@ -127,6 +127,53 @@ export type Database = {
           },
         ]
       }
+      customer_ai_scores: {
+        Row: {
+          created_at: string
+          customer_id: string
+          expires_at: string
+          generated_at: string
+          model: string | null
+          project_id: string
+          reasons: Json
+          recommendations: Json
+          scores: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          expires_at?: string
+          generated_at?: string
+          model?: string | null
+          project_id: string
+          reasons?: Json
+          recommendations?: Json
+          scores?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          expires_at?: string
+          generated_at?: string
+          model?: string | null
+          project_id?: string
+          reasons?: Json
+          recommendations?: Json
+          scores?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_ai_scores_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: true
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_tags: {
         Row: {
           assigned_by: string
