@@ -49,6 +49,7 @@ import ProductAliasesPage from "./pages/ProductAliasesPage";
 import DataQualityPage from "./pages/DataQualityPage";
 import ImportRecoveryPage from "./pages/ImportRecoveryPage";
 import ImportLearningPage from "./pages/ImportLearningPage";
+import OrderWorkspacePage from "./pages/OrderWorkspacePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -87,6 +88,7 @@ const App = () => (
                         <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
                         <Route path="/orders" element={<ProtectedRoute requiredPermission="orders.view"><OrdersPage /></ProtectedRoute>} />
                         <Route path="/orders/:id" element={<ProtectedRoute requiredPermission="orders.view"><OrderDetailPage /></ProtectedRoute>} />
+                        <Route path="/orders/:orderId/workspace" element={<ProtectedRoute requiredPermission="orders.view"><OrderWorkspacePage /></ProtectedRoute>} />
                         <Route path="/followups" element={<ProtectedRoute requiredPermission="followups.view"><FollowupsPage /></ProtectedRoute>} />
                         <Route path="/repeat-orders" element={<ProtectedRoute requiredPermission="orders.view"><RepeatOrdersPage /></ProtectedRoute>} />
                         <Route path="/upsell" element={<ProtectedRoute requiredPermission="followups.view"><UpsellPage /></ProtectedRoute>} />

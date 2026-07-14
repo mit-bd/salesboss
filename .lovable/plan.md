@@ -1,96 +1,128 @@
-# Phase 2.5 — Complete the AI Smart Import Engine
+# Phase 3 — SalesBoss Enterprise Customer & Order Workspace
 
-Extends Phase 1 + Phase 2. Nothing existing is removed or redesigned. Every new capability is additive and backward compatible.
+Additive, backward compatible. The existing "Edit Order" modal stays wired for legacy callers; a new full-page workspace becomes the primary surface when opening an order.
 
-## 1. Database (single migration)
+## Route & entry points
 
-New tables (all project-scoped, RLS via `get_user_project_id(auth.uid())`, GRANT to authenticated + service_role):
+- New route `/orders/:orderId/workspace` (lazy-loaded), permission-gated by existing order-view rules; RLS handles data.
+- Row "Open" / order id click in Orders, Repeat Orders, Followups, Notifications, Customer Profile deep-links to the workspace instead of the modal.
+- Keep the current inline edit modal available for bulk-edit / quick contexts; no removal.
 
-- `import_queue` — background job rows: `import_run_id`, `project_id`, `status` (queued/running/paused/failed/completed/cancelled), `batch_index`, `total_batches`, `payload_ref` (storage path), `attempts`, `last_error`, `worker_id`, `started_at`, `finished_at`.
-- `import_batches` — per-batch state: `import_run_id`, `batch_index`, `row_start`, `row_end`, `status`, `rows_ok`, `rows_failed`, `duration_ms`, `error_category`, `error_message`, `retry_count`.
-- `import_audit_events` — permanent audit: `import_run_id`, `project_id`, `actor_user_id`, `actor_name`, `action` (started/resumed/paused/cancelled/completed/failed/retry_batch), `device`, `browser`, `ip`, `bst_timestamp`, `metadata jsonb`.
-- `import_learning_suggestions` — pending → approved pipeline: `project_id`, `kind` (product_alias/status_alias/column_map/date_format/address_format/courier_field), `input_value`, `suggested_value`, `confirmations`, `status` (pending/approved/rejected), `promoted_at`, `last_seen_at`.
-- `import_errors` — categorized errors: `import_run_id`, `batch_index`, `row_index`, `category` (validation/ai/database/permission/duplicate/network/timeout/file_format/unknown), `why`, `recommended_fix`, `retryable bool`, `resolved bool`.
+## Layout
 
-Extend `import_runs`: add `file_storage_path`, `file_hash`, `total_batches`, `processed_batches`, `speed_rows_per_sec`, `memory_peak_kb`, `queue_wait_ms`, `resumed_from_row`, `resumed_by`, `resumed_at`, `cancelled_by`, `cancelled_at`, `device`, `browser`, `ip`, `template_id`, `courier_name`.
+Desktop (>=1280px): 3-column shell inside existing `AppLayout`.
+- Left rail (300px): Customer Header, Tags, Customer Intelligence, AI Score, Repeat Orders list with prev/next nav.
+- Center (fluid): Tabs — Order Info · Courier · Payment · Followup · Timelines · Activity · Import.
+- Right rail (360px, collapsible): AI Sales Assistant + Quick Actions + AI Recommendations.
 
-Extend `import_mapping_templates`: `success_count`, `fail_count`, `avg_health_score`.
+Tablet (768–1279): 2-column (left rail collapsible drawer, center + right rail toggled by button).
+Mobile: single column with sticky tab bar (already supported patterns).
 
-New storage bucket: `import-uploads` (private, RLS: only project members can read/write objects under `project_id/…`).
+```text
++----------------+-----------------------------+-------------+
+| Customer       | Order header + tabs         | AI Panel    |
+| Intelligence   | (Info/Courier/Payment/...)  | Quick Acts  |
+| Repeat Orders  |                             | Recs        |
++----------------+-----------------------------+-------------+
+```
 
-### DB Functions
-- `enqueue_import_batches(p_run_id uuid, p_total_batches int)` — creates queue + batch rows atomically.
-- `claim_next_import_batch(p_worker_id text)` — SKIP LOCKED select, sets status=running, returns batch payload pointer.
-- `complete_import_batch(...)`, `fail_import_batch(...)`, `retry_failed_batches(p_run_id)`.
-- `resume_import_run(p_run_id, p_user_id, p_user_name)` — sets status=resumable, records audit event, returns next batch pointer + `resumed_from_row`.
-- `owner_import_analytics(p_days int)` — today, this month, largest, avg time, avg health, top template, top courier, AI success rate, resume count, failure count.
-- `import_performance_snapshot(p_project_id uuid)` — avg/fastest/slowest/largest, avg AI fixes, duplicate rate, avg processing time, avg queue wait.
-- `promote_learning_suggestion(p_id uuid)` and `reset_learning(p_project_id, p_kind)`.
+## Sections (all backed by real DB — no mocks)
 
-Idempotency: `(project_id, external_order_id)` unique partial index enforced; batch worker uses `INSERT … ON CONFLICT DO NOTHING` for orders and calls `find_or_create_customer` for customers, so replaying a batch never duplicates data.
+1. **Customer Header** — from `customers` + `customer_tags` (VIP/Repeat/High Value/Dormant color-coded chips). Photo placeholder using initials avatar.
+2. **Order Header** — `orders` + computed "Order #N of M" via `customer_id` ordering.
+3. **Customer Intelligence** — reads existing computed fields on `customers` (lifetime_value, aov, delivered/pending/cancelled/returned, repeat_orders, last_product, last_order_date, last_followup_at, last_executive_name, stage).
+4. **AI Customer Score** — new edge function `ai-customer-score` (Lovable AI, `google/gemini-2.5-flash`) returns JSON: {health, repeat_prob, upsell_prob, churn_risk, payment_risk, engagement, overall, reasons{}}. Cached to new `customer_ai_scores` table (24h TTL, per customer). "Why" text stored alongside each score.
+5. **Repeat Order Intelligence** — list all orders for `customer_id`, click to switch workspace context. Prev/Next arrows in order header.
+6. **Order Information** — editable form using existing order-edit hooks + optimistic locking (`updated_at`). Reuses the same field validators as the current modal so activity logs continue to fire.
+7. **Courier Panel** — reads `delivery_method`, `tracking_code`, `shipping_charge`, `cod_charge`, `delivery_status`, history via `order_activity_logs` filtered to courier fields. API integration = placeholder card.
+8. **Payment Panel** — Amount only (per project rule: no Paid/Due/Payment Status invented). Shows COD amount, shipping, total, and payment-related activity log entries. NOTE: project memory forbids Paid/Due/Payment Status — this panel surfaces amounts + status only, no fabricated fields.
+9. **Customer Timeline** — extends existing `useCustomerTimeline` to include: order created, repeat order, followup, upsell, delivery status changes, customer edits, AI suggestions, imports. All timestamps rendered in BST.
+10. **Order Timeline** — new hook `useOrderTimeline` merging: order row create/update, `order_activity_logs`, `followup_history`, assignment changes, status changes.
+11. **Activity History** — existing `order_activity_logs` in old→new diff view (Old ↓ New, editor, BST time).
+12. **Followup Panel** — reuses existing followup components (problem checklist, quick info, AI script). Wires "AI Suggested Next Action" from `ai-customer-score` reasons.
+13. **AI Sales Assistant** — right-rail chat, uses existing `ai-copilot` function extended to accept `{customer_id, order_id}` context. Actions gated by `has_permission`.
+14. **Quick Actions** — buttons hitting existing flows (New Order, Repeat Order, Create Followup, Assign, Change Status, Generate Invoice, Print, Export, Open Customer Profile).
+15. **Import Information** — reads `import_runs` joined by `orders.import_run_id` (add nullable column if missing) → Imported By, Date/Time (BST), Source, Batch, Health Score, AI Corrections count.
+16. **AI Recommendations** — same `ai-customer-score` payload: recommended product/upsell/followup time, risk, next best action; each carries confidence + explanation.
 
-## 2. Edge Functions
+## Mobile number protection
 
-- `import-worker` (new) — invoked by pg_cron every minute AND on-demand. Loops: claim next batch via SKIP LOCKED → stream rows from storage (byte-range) → validate → upsert customers/orders idempotently → write `import_batches`, `import_errors`, update `import_runs.processed_batches` + speed. Exits after N seconds to stay under CPU budget; cron re-invokes until queue empty.
-- `import-resume` (new) — validates ownership, calls `resume_import_run`, ensures queue rows exist for unprocessed batches, triggers `import-worker`.
-- `import-cancel` (new) — marks run + queue cancelled, writes audit.
-- `ai-address-normalizer` (new) — Lovable AI Gateway `google/gemini-2.5-flash`; input: raw BD address; output: structured `{district, upazila, area, road, house, village, flat, postal_code, normalized}` + confidence + why. Skips rows with `address_manually_confirmed=true`.
-- `ai-import-cleaner` (extend) — accepts learning hints, records `import_learning_suggestions` on new user-approved mappings, emits categorized errors into `import_errors`.
+- On phone edit, `find_or_create_customer` semantics check:
+  - Same project + new number belongs to a different customer → open confirm dialog "Merge orders into existing customer / Move this order only / Cancel".
+  - No collision → warn "Changing phone updates customer identity" then proceed.
+- No silent rewrites. Implemented in a new hook `usePhoneChangeGuard`.
 
-pg_cron: schedule `import-worker` every minute (`select cron.schedule('import-worker-tick', '* * * * *', $$ select net.http_post(url:='.../functions/v1/import-worker', headers:='...', body:='{}') $$)`). Uses `FOLLOWUP_AUTOMATION_SECRET`-style shared secret.
+## Database (single migration)
 
-## 3. Streaming Upload & Parsing
+- `customer_ai_scores` (customer_id PK, project_id, scores jsonb, reasons jsonb, model text, generated_at, expires_at). RLS by project_id. GRANTs to authenticated/service_role.
+- `orders.import_run_id uuid null` + index (if column missing) so Import Info panel joins cleanly.
+- No changes to Paid/Due/Payment Status (respect memory rule).
 
-- Client uploads file to `import-uploads/{project_id}/{run_id}.{ext}` via Supabase Storage.
-- CSV: parse via PapaParse `step:` streaming; XLSX: SheetJS stream mode; both chunk into 200-row batches written as JSONL under `import-uploads/{project_id}/{run_id}/batches/{index}.jsonl`.
-- Worker reads one JSONL batch at a time — never loads whole file.
+## Edge functions
 
-## 4. Frontend (no wizard redesign)
+- `ai-customer-score` — accepts `{customer_id}`, pulls customer + orders + followups server-side, calls Lovable AI Gateway (`google/gemini-2.5-flash`) with strict JSON output, upserts cache row, returns scores + reasons.
+- Extend `ai-copilot` (existing) to accept optional `customer_id` / `order_id` for contextual chat.
 
-Additive UI only:
+## New frontend files
 
-- **Resume banner** on `BulkImportPage`: if any `import_runs` with status ∈ (paused, resumable, running, failed_partial) exist, show banner with Last Processed Row, Remaining Rows, ETA, Current Batch, Resume Token, Resume Started By, Resume Time, and `Resume` button → calls `import-resume`.
-- **Realtime Import Insights panel** (added to existing progress step): live counters via Supabase Realtime on `import_runs` + `import_batches`. Rows processed/remaining/cleaned/corrected, dup customers, dup orders, new/repeat customers, ETA, current speed, avg batch time, live health score.
-- **Import Recovery Center** — new page `/imports/recovery` (Admin/Sub-Admin): tabs Running/Completed/Paused/Failed/Cancelled/Resume Available. Row actions: Resume, Retry Failed Batches, Cancel, View Log, Delete History (soft).
-- **Import Error Center** — drawer inside recovery detail view: categorized error list with WHY, Recommended Fix, Retry button (calls `retry_failed_batches`).
-- **Learning Center** — new admin page `/imports/learning`: pending suggestions grouped by kind, Approve/Reject/Reset/Disable per project (`project_settings.learning_enabled`).
-- **Address AI toggle** — checkbox in wizard AI Clean step; per-row preview with confidence + why; respects `address_manually_confirmed`.
-- **Owner Dashboard** — new "Import Analytics" card group calling `owner_import_analytics`: Today, This Month, Largest, Avg Time, Avg Health, Most Used Template, Most Used Courier, AI Success Rate, Resume Imports, Failures.
-- **AI Data Quality widget** — dashboard card (Admin + Owner) showing Overall, Phone, Address, Duplicate Risk, Customer Match, Product Detection, Unknown Status, Invalid Rows; each metric click-through to filtered warning list.
-- **Import Performance Analytics** — section on Data Quality page: avg/fastest/slowest/largest, avg AI fixes, duplicate rate, avg processing time, memory, queue wait.
+Hooks:
+- `useOrderWorkspace(orderId)` — order + customer + tags + siblings prev/next.
+- `useCustomerOrders(customerId)` — paginated list for repeat-orders rail.
+- `useOrderTimeline(orderId)`.
+- `useCustomerAIScore(customerId)` — reads cache, triggers regen if stale.
+- `usePhoneChangeGuard()`.
+- `useImportContext(orderId)` — import_run + health + corrections.
 
-New hooks: `useImportQueue`, `useImportRecovery`, `useImportErrors`, `useImportLearning`, `useOwnerImportAnalytics`, `useImportPerformance`, `useResumeImport`.
+Components (under `src/components/workspace/`):
+- `WorkspaceLayout.tsx`
+- `CustomerHeaderCard.tsx`, `CustomerTagsRow.tsx`
+- `OrderHeaderBar.tsx` (with prev/next + "Order N of M")
+- `CustomerIntelligencePanel.tsx`
+- `AICustomerScoreCard.tsx`
+- `RepeatOrdersRail.tsx`
+- `OrderInfoTab.tsx`
+- `CourierPanel.tsx`
+- `PaymentPanel.tsx`
+- `CustomerTimelineTab.tsx`
+- `OrderTimelineTab.tsx`
+- `ActivityHistoryTab.tsx`
+- `FollowupPanelTab.tsx` (wraps existing followup UI)
+- `ImportInfoCard.tsx`
+- `AIRecommendationsCard.tsx`
+- `AISalesAssistantPanel.tsx`
+- `QuickActionsBar.tsx`
+- `PhoneChangeConfirmDialog.tsx`
 
-## 5. Audit
+Page: `src/pages/OrderWorkspacePage.tsx`, added to `App.tsx` router (lazy).
 
-Every state change writes `import_audit_events` with BST timestamp (`now() AT TIME ZONE 'Asia/Dhaka'`), device/browser (parsed client-side from UA), IP (from edge function `x-forwarded-for`, best-effort).
+Router entry points updated in: `OrdersPage`, `RepeatOrdersPage`, `FollowupsPage`, `CustomerProfilePage`, notification handlers.
 
-## 6. Security
+## Performance
 
-- All new tables RLS-scoped by `project_id` via `get_user_project_id(auth.uid())`.
-- Storage bucket policies restrict path prefix to caller's project.
-- Worker uses service role but always filters by the run's `project_id`; never crosses tenants.
-- Learning suggestions scoped per project — no global leakage.
+- Each panel is its own hook with independent `enabled` flags.
+- Timelines paginated (25 rows, "load more").
+- Repeat orders rail: server-side paginated 25/page.
+- AI score cached 24h in `customer_ai_scores`; recompute on manual refresh only.
+- Realtime subscription scoped to current order id + customer id only.
 
-## 7. Regression Plan
+## Security
 
-After migration + deploy, verify:
-Bulk Import (Phase 1 flow still works), Duplicate Resolution, Customer Matching, Customer Analytics, Import Memory, Product Alias, Warning Center, Health Score, Activity Logs, Orders CRUD, Customer Profiles, Followups, AI Assistant, Owner Dashboard KPIs.
+- All new tables RLS by `project_id` using `get_user_project_id(auth.uid())`.
+- AI edge functions verify caller JWT, resolve `project_id`, and enforce customer belongs to caller's project before returning.
+- Quick Actions call existing permission-checked mutations; AI cannot bypass.
 
-## 8. Out of scope (Phase 3)
+## Regression checklist
 
-Customer Workspace, AI Customer Intelligence, courier API auto-pull, cross-workspace learning.
+Orders list, Repeat Orders, Bulk Import wizard, Followup pipeline + automation, Notifications, AI Copilot legacy chat, Activity Logs, Permissions matrix, multi-tenant isolation — all must remain green. The legacy edit modal stays for bulk contexts.
 
-## Technical Notes
+## Out of scope (next phase)
 
-- Batch size 200 rows; worker budget ~50s/invocation; cron every minute keeps queue draining.
-- Idempotency keys: `(import_run_id, batch_index)` for batches, `(project_id, external_order_id)` for orders.
-- ETA = remaining_rows / rolling avg speed (last 5 batches).
-- Realtime channel: `import_run:{id}` publishing batch + run updates.
-- No changes to `client.ts`, `types.ts` regenerated post-migration.
+- AI Customer Intelligence dashboard (cohorts, cross-customer trends).
+- Courier API live integration.
+- Full "Paid/Due" ledger (would require reversing existing product rule — needs explicit user decision).
 
-## Files
+## Technical notes
 
-New: migration SQL; `supabase/functions/import-worker/index.ts`, `import-resume/index.ts`, `import-cancel/index.ts`, `ai-address-normalizer/index.ts`; `src/pages/ImportRecoveryPage.tsx`, `ImportLearningPage.tsx`; `src/components/import/ResumeBanner.tsx`, `RealtimeInsightsPanel.tsx`, `ImportErrorCenter.tsx`, `OwnerImportAnalytics.tsx`, `AIDataQualityCard.tsx`, `ImportPerformancePanel.tsx`; hooks listed above.
-
-Edited: `ai-import-cleaner/index.ts` (learning + error categorization), `BulkImportPage.tsx` (resume banner + insights + address AI toggle + storage upload), `OwnerDashboardPage.tsx` (analytics cards), `DataQualityPage.tsx` (performance panel), `AppSidebar.tsx` (Recovery + Learning entries), `App.tsx` (routes), `types.ts` (auto).
+- BST rendering via existing time util; no new tz code.
+- Reuses existing shadcn tokens, Sidebar, Popover/Calendar patterns. No design-system changes.
+- Uses `React.lazy` + `Suspense` for the workspace route to keep initial bundle unchanged.
