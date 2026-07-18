@@ -244,13 +244,16 @@ export default function OrderWorkspacePage() {
                 </div>
               )}
               {customer && (
-                <Link
-                  to={`/customers/${customer.id}`}
-                  className="mt-3 inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                >
-                  Open full customer profile <ExternalLink className="h-3 w-3" />
-                </Link>
+                <div className="mt-3 flex items-center gap-3 text-xs">
+                  <Link to={`/customers/${customer.id}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+                    Customer profile <ExternalLink className="h-3 w-3" />
+                  </Link>
+                  <Link to={`/customers/${customer.id}#orders`} className="inline-flex items-center gap-1 text-primary hover:underline">
+                    View all orders ({pos.total || customer.total_orders}) <ExternalLink className="h-3 w-3" />
+                  </Link>
+                </div>
               )}
+
             </div>
 
             {/* Customer intelligence */}
