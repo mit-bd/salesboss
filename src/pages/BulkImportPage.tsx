@@ -673,6 +673,7 @@ export default function BulkImportPage() {
     setCleanedRows([]); setAiReport(null);
     setExistingByExtId({}); setDupDecisions({});
     setFinalReport(null);
+    setLiveRunId(null);
   };
 
   const downloadFailures = () => {
