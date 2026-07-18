@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
@@ -11,11 +11,13 @@ import EditOrderDialog from "@/components/EditOrderDialog";
 import BulkActionBar from "@/components/BulkActionBar";
 import BulkEditDialog from "@/components/BulkEditDialog";
 import BulkSingleFieldDialog, { BulkFieldType } from "@/components/BulkSingleFieldDialog";
+import BulkDeleteRestoreDialog, { BulkPhase } from "@/components/BulkDeleteRestoreDialog";
 import OrderTable from "@/components/OrderTable";
 import { useRole } from "@/contexts/RoleContext";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useServerPaginatedOrders } from "@/hooks/useServerPaginatedOrders";
+import { supabase } from "@/integrations/supabase/client";
 import { Order } from "@/types/data";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -28,16 +30,22 @@ export default function OrdersPage() {
   const [editOrder, setEditOrder] = useState<Order | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [conflictIds, setConflictIds] = useState<Set<string>>(new Set());
+  const [allMatchingSelected, setAllMatchingSelected] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [singleFieldOpen, setSingleFieldOpen] = useState(false);
   const [singleFieldType, setSingleFieldType] = useState<BulkFieldType>("assignExecutive");
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkPhase, setBulkPhase] = useState<BulkPhase>("idle");
+  const [bulkProgress, setBulkProgress] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   const { isAdmin } = useRole();
   const { hasPermission } = usePermissions();
   const { user } = useAuth();
   const { toast } = useToast();
   const canEditOrder = isAdmin || hasPermission("orders.edit");
-  const { updateOrder } = useOrderStore();
+  const canDeleteOrder = isAdmin || hasPermission("orders.delete");
+  const { updateOrder, refreshFromDB } = useOrderStore();
+
 
   // Debounce search input
   useEffect(() => {
