@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2, Loader2, AlertCircle, Clock, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import ImportErrorCenter from "./ImportErrorCenter";
+import { useToast } from "@/hooks/use-toast";
 
 interface Props { runId: string }
 
 export default function ImportLiveDashboard({ runId }: Props) {
-  const { run, batches, refresh, kickWorker } = useImportLive(runId);
+  const { toast } = useToast();
+  const { run, batches, refresh, kickWorker, error } = useImportLive(runId);
 
   const stats = useMemo(() => {
     const done = batches.filter((b) => b.status === "completed").length;
@@ -32,6 +34,23 @@ export default function ImportLiveDashboard({ runId }: Props) {
     refresh();
   };
 
+  const handleKickWorker = async () => {
+    try {
+      const result = await kickWorker();
+      await refresh();
+      toast({
+        title: "Worker invoked",
+        description: `Processed ${result?.processed_batches ?? 0} batch(es). Remaining: ${result?.remaining ? "yes" : "no"}.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Worker failed",
+        description: err?.message || "The import worker could not be invoked.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-card p-5 card-shadow space-y-4">
@@ -46,11 +65,17 @@ export default function ImportLiveDashboard({ runId }: Props) {
             <Badge variant={run?.status === "completed" ? "default" : "secondary"} className="uppercase text-[10px]">
               {run?.status ?? "…"}
             </Badge>
-            <Button variant="outline" size="sm" onClick={() => { kickWorker(); refresh(); }}>
+            <Button variant="outline" size="sm" onClick={handleKickWorker}>
               <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Kick worker
             </Button>
           </div>
         </div>
+
+        {error && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+            {error}
+          </div>
+        )}
 
         <div className="space-y-1.5">
           <Progress value={stats.pct} className="h-2" />

@@ -21,19 +21,42 @@ serve(async (req) => {
   const corsHeaders = buildCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  const log = (step: string, details: Record<string, unknown> = {}) => {
+    console.log(`[ImportWorker] ${step}`, JSON.stringify(details));
+  };
+
   try {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
     const workerId = `w_${crypto.randomUUID().slice(0, 8)}`;
     const started = Date.now();
     const deadlineMs = 40_000;
 
+    log("Worker Started", { workerId });
+
     let processed = 0;
     let anyRemaining = false;
 
     while (Date.now() - started < deadlineMs) {
-      const { data: claim } = await admin.rpc("claim_next_import_batch", { p_worker_id: workerId });
+      log("Claim Started", { workerId });
+      const { data: claim, error: claimErr } = await admin.rpc("claim_next_import_batch", { p_worker_id: workerId });
+      if (claimErr) {
+        log("Claim Failed", { workerId, error: claimErr.message });
+        throw new Error(`claim_next_import_batch failed: ${claimErr.message}`);
+      }
       const job = Array.isArray(claim) ? claim[0] : claim;
-      if (!job?.id) break;
+      if (!job?.id) {
+        log("Queue Completed", { workerId, processed });
+        break;
+      }
+
+      log("Batch Claimed", {
+        workerId,
+        queueId: job.id,
+        runId: job.import_run_id,
+        batchIndex: job.batch_index,
+        projectId: job.project_id,
+        mode: job.import_mode,
+      });
 
       const batchStart = Date.now();
       let rowsOk = 0;
@@ -47,6 +70,11 @@ serve(async (req) => {
           .eq("id", job.import_run_id)
           .maybeSingle();
 
+        if (!run) throw new Error(`Import run not found: ${job.import_run_id}`);
+        if (run.project_id !== job.project_id) {
+          throw new Error(`Project mismatch for run ${job.import_run_id}: queue=${job.project_id}, run=${run.project_id}`);
+        }
+
         const mode = job.import_mode ?? run?.import_mode ?? "quick";
         const assignments = (run?.assignments ?? {}) as Record<string, unknown>;
         const dupDecisions = (run?.duplicate_decisions ?? {}) as Record<string, "update" | "skip" | "create">;
@@ -56,14 +84,23 @@ serve(async (req) => {
         if (dlErr || !file) throw new Error(`Storage download failed: ${dlErr?.message ?? "unknown"}`);
         const text = await file.text();
         const rows = text.trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
+        log("Rows Loaded", { workerId, queueId: job.id, rows: rows.length, payloadRef: job.payload_ref });
 
         for (const raw of rows) {
           try {
+            if (mode === "ai") log("AI Started", { workerId, queueId: job.id, batchIndex: job.batch_index });
             const row = mode === "ai" ? await aiEnhanceRow(admin, job.project_id, raw) : normalizeRow(raw);
 
             if (!row.recipientPhone) throw new Error("missing_phone");
             const phone = normalizePhone(row.recipientPhone);
             if (!/^01\d{9}$/.test(phone)) throw new Error("invalid_phone");
+
+            log("Insert Started", {
+              workerId,
+              queueId: job.id,
+              batchIndex: job.batch_index,
+              externalOrderId: row.externalOrderId ?? null,
+            });
 
             const { data: customerId, error: cErr } = await admin.rpc("find_or_create_customer", {
               p_name: row.recipientName ?? "Unknown",
@@ -106,7 +143,7 @@ serve(async (req) => {
               shipping_charge: toNum(row.shippingCharge),
               cod_charge: toNum(row.codCharge),
               delivery_status: row.deliveryStatus ?? "pending",
-              delivery_method: (assignments.delivery_method as string) || row.deliveryMethod || null,
+              delivery_method: (assignments.delivery_method as string) || row.deliveryMethod || "",
               order_source: row.orderSource ?? "Import",
               order_date: safeDate(row.orderDate) ?? new Date().toISOString().slice(0, 10),
               delivery_date: safeDate(row.deliveryDate),
@@ -122,7 +159,7 @@ serve(async (req) => {
               item_description: row.itemDescription ?? null,
               note: row.note ?? "",
               assigned_to: (assignments.assigned_to as string) || null,
-              assigned_to_name: (assignments.assigned_to_name as string) || null,
+              assigned_to_name: (assignments.assigned_to_name as string) || "",
               created_by: run?.user_id ?? null,
               current_status: "pending",
               followup_step: 1,
@@ -138,8 +175,15 @@ serve(async (req) => {
               if (iErr && !/duplicate key|unique constraint/i.test(iErr.message)) throw iErr;
             }
             rowsOk++;
+            log("Insert Completed", { workerId, queueId: job.id, rowsOk, rowsFailed });
           } catch (rowErr) {
             rowsFailed++;
+            log("Row Failed", {
+              workerId,
+              queueId: job.id,
+              batchIndex: job.batch_index,
+              error: (rowErr as Error).message,
+            });
             await admin.from("import_errors").insert({
               import_run_id: job.import_run_id,
               project_id: job.project_id,
@@ -157,8 +201,16 @@ serve(async (req) => {
         await admin.rpc("complete_import_batch", {
           p_queue_id: job.id, p_rows_ok: rowsOk, p_rows_failed: rowsFailed, p_duration_ms: dur,
         });
+        log("Progress Updated", { workerId, queueId: job.id, rowsOk, rowsFailed, durationMs: dur });
+        log("Batch Completed", { workerId, queueId: job.id, batchIndex: job.batch_index });
         processed++;
       } catch (batchErr) {
+        log("Batch Failed", {
+          workerId,
+          queueId: job.id,
+          batchIndex: job.batch_index,
+          error: (batchErr as Error).message,
+        });
         await admin.rpc("fail_import_batch", {
           p_queue_id: job.id, p_category: "database", p_message: (batchErr as Error).message,
         });
@@ -172,9 +224,11 @@ serve(async (req) => {
       .eq("status", "queued")
       .lte("next_attempt_at", new Date().toISOString());
     anyRemaining = (count ?? 0) > 0;
+    log("Queue Remaining Check", { workerId, remaining: anyRemaining, queuedCount: count ?? 0 });
 
     if (anyRemaining) {
       // Fire-and-forget; do not await
+      log("Self Invocation Started", { workerId });
       fetch(`${SUPABASE_URL}/functions/v1/import-worker`, {
         method: "POST",
         headers: {
@@ -189,6 +243,7 @@ serve(async (req) => {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    console.error("[ImportWorker] Worker Failed", JSON.stringify({ error: (e as Error).message }));
     return new Response(JSON.stringify({ error: (e as Error).message }), {
       status: 500, headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" },
     });
