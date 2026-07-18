@@ -13,9 +13,10 @@ interface OrderStoreContextType {
   upsellRecords: UpsellRecord[];
   repeatOrderRecords: RepeatOrderRecord[];
   loading: boolean;
-  softDelete: (orderId: string) => Promise<void>;
+  softDelete: (orderId: string, reason?: string) => Promise<void>;
   restoreOrder: (orderId: string) => Promise<void>;
   hardDelete: (orderId: string) => Promise<void>;
+
   updateOrder: (updated: Order) => Promise<void>;
   addOrder: (order: Omit<Order, "id">) => Promise<void>;
   completeFollowup: (data: {
