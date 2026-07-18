@@ -246,28 +246,46 @@ export default function BulkImportPage() {
         for (const [k, h] of Object.entries(mapping)) o[k] = r[h] || "";
         return o;
       });
-      const { data, error } = await supabase.functions.invoke("ai-import-cleaner", {
-        body: { headers: rawHeaders, rows: rowsForAi, mode: "clean" },
-      });
-      if (error) throw error;
-      const cleaned: CleanedRow[] = (data?.cleanedRows || []).map((r: any) => {
-        // Extra local phone normalization safety
+
+      // Chunk client-side to keep each edge function call well under the 150s idle timeout.
+      const CHUNK = 200;
+      const cleanedAgg: any[] = [];
+      const warningsAgg: any[] = [];
+      let autoCorrected = 0;
+      let needsReview = 0;
+      const correctionsAgg: string[] = [];
+      let lastHealth: HealthScore | null = null;
+      let lastRecs: Recommendation[] = [];
+
+      for (let i = 0; i < rowsForAi.length; i += CHUNK) {
+        const slice = rowsForAi.slice(i, i + CHUNK);
+        const { data, error } = await supabase.functions.invoke("ai-import-cleaner", {
+          body: { headers: rawHeaders, rows: slice, mode: "clean" },
+        });
+        if (error) throw error;
+        cleanedAgg.push(...(data?.cleanedRows || []));
+        warningsAgg.push(...(data?.warnings || []));
+        autoCorrected += data?.report?.autoCorrected ?? 0;
+        needsReview += data?.report?.needsReview ?? 0;
+        if (Array.isArray(data?.report?.corrections)) correctionsAgg.push(...data.report.corrections);
+        if (data?.health) lastHealth = data.health as HealthScore;
+        if (Array.isArray(data?.recommendations)) lastRecs = data.recommendations as Recommendation[];
+      }
+
+      const cleaned: CleanedRow[] = cleanedAgg.map((r: any) => {
         if (r.recipientPhone) r.recipientPhone = normalizePhone(r.recipientPhone);
         const missing = REQUIRED_KEYS.filter((k) => !String(r[k] || "").trim());
-        return {
-          ...r,
-          needsReview: r.needsReview || missing.length > 0,
-        };
+        return { ...r, needsReview: r.needsReview || missing.length > 0 };
       });
       setCleanedRows(cleaned);
       setAiReport({
-        autoCorrected: data?.report?.autoCorrected ?? 0,
-        needsReview: data?.report?.needsReview ?? 0,
-        corrections: data?.report?.corrections ?? [],
+        autoCorrected,
+        needsReview,
+        corrections: Array.from(new Set(correctionsAgg)).slice(0, 30),
       });
-      setAiWarnings((data?.warnings || []) as ImportWarningLite[]);
-      setAiHealth((data?.health || null) as HealthScore | null);
-      setAiRecommendations((data?.recommendations || []) as Recommendation[]);
+      setAiWarnings(warningsAgg as ImportWarningLite[]);
+      setAiHealth(lastHealth);
+      setAiRecommendations(lastRecs);
       setStep("simulate");
     } catch (err: any) {
       toast({ title: "AI cleaning failed", description: err.message || "Try again", variant: "destructive" });
@@ -275,6 +293,7 @@ export default function BulkImportPage() {
       setCleaning(false);
     }
   };
+
 
   // ---------------- Simulation ----------------
   const simulation = useMemo(() => {
