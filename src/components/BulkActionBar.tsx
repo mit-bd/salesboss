@@ -1,18 +1,22 @@
 import { Button } from "@/components/ui/button";
 import {
-  Edit2, UserPlus, ArrowRightLeft, Truck, Globe, Calendar,
-  DollarSign, X, CheckCircle,
+  Edit2, UserPlus, Truck, Globe, Calendar,
+  X, CheckCircle, Trash2, ListChecks,
 } from "lucide-react";
 
 interface BulkActionBarProps {
   selectedCount: number;
   onClear: () => void;
-  onBulkEdit: () => void;
-  onAssignExecutive: () => void;
-  onChangeDeliveryMethod: () => void;
-  onChangeOrderSource: () => void;
+  onBulkEdit?: () => void;
+  onAssignExecutive?: () => void;
+  onChangeDeliveryMethod?: () => void;
+  onChangeOrderSource?: () => void;
   onUpdateFollowupDate?: () => void;
   onCompleteFollowup?: () => void;
+  onBulkDelete?: () => void;
+  matchingTotal?: number;
+  allMatchingSelected?: boolean;
+  onSelectAllMatching?: () => void;
 }
 
 export default function BulkActionBar({
@@ -24,34 +28,61 @@ export default function BulkActionBar({
   onChangeOrderSource,
   onUpdateFollowupDate,
   onCompleteFollowup,
+  onBulkDelete,
+  matchingTotal,
+  allMatchingSelected,
+  onSelectAllMatching,
 }: BulkActionBarProps) {
   if (selectedCount === 0) return null;
+
+  const showSelectAllMatching =
+    !!onSelectAllMatching &&
+    !allMatchingSelected &&
+    typeof matchingTotal === "number" &&
+    matchingTotal > selectedCount;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-sm shadow-lg animate-fade-in">
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center gap-3 overflow-x-auto">
         <div className="flex items-center gap-2 shrink-0">
           <span className="inline-flex items-center justify-center rounded-full bg-primary px-2.5 py-0.5 text-xs font-bold text-primary-foreground">
-            {selectedCount}
+            {selectedCount.toLocaleString()}
           </span>
           <span className="text-sm font-medium text-foreground">Selected</span>
+          {allMatchingSelected && typeof matchingTotal === "number" && (
+            <span className="text-xs text-muted-foreground">(all {matchingTotal.toLocaleString()} matching)</span>
+          )}
+          {showSelectAllMatching && (
+            <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={onSelectAllMatching}>
+              <ListChecks className="h-3 w-3 mr-1" />
+              Select all {matchingTotal!.toLocaleString()} matching
+            </Button>
+          )}
         </div>
 
         <div className="h-6 w-px bg-border shrink-0" />
 
         <div className="flex items-center gap-1.5 flex-wrap">
-          <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={onBulkEdit}>
-            <Edit2 className="h-3 w-3" /> Edit Selected
-          </Button>
-          <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={onAssignExecutive}>
-            <UserPlus className="h-3 w-3" /> Assign Executive
-          </Button>
-          <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={onChangeDeliveryMethod}>
-            <Truck className="h-3 w-3" /> Delivery Method
-          </Button>
-          <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={onChangeOrderSource}>
-            <Globe className="h-3 w-3" /> Order Source
-          </Button>
+          {onBulkEdit && (
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={onBulkEdit}>
+              <Edit2 className="h-3 w-3" /> Edit Selected
+            </Button>
+          )}
+          {onAssignExecutive && (
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={onAssignExecutive}>
+              <UserPlus className="h-3 w-3" /> Assign Executive
+            </Button>
+          )}
+          {onChangeDeliveryMethod && (
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={onChangeDeliveryMethod}>
+              <Truck className="h-3 w-3" /> Delivery Method
+            </Button>
+          )}
+          {onChangeOrderSource && (
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={onChangeOrderSource}>
+              <Globe className="h-3 w-3" /> Order Source
+            </Button>
+          )}
           {onUpdateFollowupDate && (
             <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={onUpdateFollowupDate}>
               <Calendar className="h-3 w-3" /> Followup Date
@@ -60,6 +91,11 @@ export default function BulkActionBar({
           {onCompleteFollowup && (
             <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8 border-success/30 text-success hover:bg-success/10" onClick={onCompleteFollowup}>
               <CheckCircle className="h-3 w-3" /> Complete Followup
+            </Button>
+          )}
+          {onBulkDelete && (
+            <Button size="sm" variant="destructive" className="gap-1.5 text-xs h-8" onClick={onBulkDelete}>
+              <Trash2 className="h-3 w-3" /> Bulk Delete
             </Button>
           )}
         </div>
