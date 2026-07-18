@@ -51,13 +51,17 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
   const navigate = useNavigate();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
+  const { isAdmin: isAdminRole } = useRole();
   const canEditOrder = hasPermission("orders.edit");
-  const { updateOrder, activeOrders } = useOrderStore();
+  const canDeleteOrder = isAdminRole || hasPermission("orders.delete");
+  const { updateOrder, activeOrders, softDelete } = useOrderStore();
   const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
   const [noteOrderId, setNoteOrderId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+  const [deleteOrder, setDeleteOrder] = useState<Order | null>(null);
+
 
   // Calculate total confirmed orders per mobile number and map mobile to customer_id
   const { orderCountByMobile, customerIdByMobile } = useMemo(() => {
