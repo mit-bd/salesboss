@@ -10,11 +10,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useToast } from "@/hooks/use-toast";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
 import { usePermissions } from "@/contexts/PermissionContext";
+import { useRole } from "@/contexts/RoleContext";
+import DeleteOrderDialog from "@/components/DeleteOrderDialog";
 import { cn } from "@/lib/utils";
 import {
-  Copy, Phone, MessageCircle, Plus, RefreshCw, Edit2,
+  Copy, Phone, MessageCircle, Plus, RefreshCw, Edit2, Trash2,
   ChevronLeft, ChevronRight, Truck, Loader2, CheckCircle, User, ShoppingBag,
 } from "lucide-react";
+
 
 const stepLabels = ["1st Followup", "2nd Followup", "3rd Followup", "4th Followup", "5th Followup"];
 const stepColors = [
