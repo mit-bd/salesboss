@@ -2302,6 +2302,7 @@ export type Database = {
         Args: { p_project_id?: string }
         Returns: Json
       }
+      kick_import_worker_if_needed: { Args: never; Returns: undefined }
       mark_ai_profile_dirty: {
         Args: { _customer_id: string }
         Returns: undefined
@@ -2325,6 +2326,7 @@ export type Database = {
         }
         Returns: string
       }
+      requeue_orphaned_import_batches: { Args: never; Returns: number }
       reset_learning: {
         Args: { p_kind?: string; p_project_id: string }
         Returns: number
