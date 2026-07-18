@@ -27,6 +27,8 @@ import { usePermissions } from "@/contexts/PermissionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import EditOrderDialog from "@/components/EditOrderDialog";
 import CompleteFollowupDialog from "@/components/CompleteFollowupDialog";
+import DeleteOrderDialog from "@/components/DeleteOrderDialog";
+
 import WorkspaceHeaderSummary from "@/components/workspace/WorkspaceHeaderSummary";
 import OrderPositionCard from "@/components/workspace/OrderPositionCard";
 import RelatedOrdersPanel from "@/components/workspace/RelatedOrdersPanel";
