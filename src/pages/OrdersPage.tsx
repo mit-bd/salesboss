@@ -239,34 +239,54 @@ export default function OrdersPage() {
         <EditOrderDialog order={editOrder} open={!!editOrder} onOpenChange={(open) => !open && setEditOrder(null)} onSave={async (updated) => { await updateOrder(updated); setEditOrder(null); refresh(); }} />
       )}
 
-      {isAdmin && (
+      {(isAdmin || canDeleteOrder) && (
         <>
           <BulkActionBar
             selectedCount={selectedIds.size}
+            matchingTotal={totalCount}
+            allMatchingSelected={allMatchingSelected}
+            onSelectAllMatching={handleSelectAllMatching}
             onClear={clearSelection}
-            onBulkEdit={() => setBulkEditOpen(true)}
-            onAssignExecutive={() => openSingleField("assignExecutive")}
-            onChangeDeliveryMethod={() => openSingleField("deliveryMethod")}
-            onChangeOrderSource={() => openSingleField("orderSource")}
-            onUpdateFollowupDate={() => openSingleField("followupDate")}
+            onBulkEdit={isAdmin ? () => setBulkEditOpen(true) : undefined}
+            onAssignExecutive={isAdmin ? () => openSingleField("assignExecutive") : undefined}
+            onChangeDeliveryMethod={isAdmin ? () => openSingleField("deliveryMethod") : undefined}
+            onChangeOrderSource={isAdmin ? () => openSingleField("orderSource") : undefined}
+            onUpdateFollowupDate={isAdmin ? () => openSingleField("followupDate") : undefined}
+            onBulkDelete={canDeleteOrder ? () => setBulkDeleteOpen(true) : undefined}
           />
-          <BulkEditDialog
-            open={bulkEditOpen}
-            onOpenChange={setBulkEditOpen}
-            selectedIds={selectedIds}
-            onComplete={clearSelection}
-            onConflict={setConflictIds}
-          />
-          <BulkSingleFieldDialog
-            open={singleFieldOpen}
-            onOpenChange={setSingleFieldOpen}
-            fieldType={singleFieldType}
-            selectedIds={selectedIds}
-            onComplete={clearSelection}
-            onConflict={setConflictIds}
-          />
+          {isAdmin && (
+            <>
+              <BulkEditDialog
+                open={bulkEditOpen}
+                onOpenChange={setBulkEditOpen}
+                selectedIds={selectedIds}
+                onComplete={clearSelectionAndRefresh}
+                onConflict={setConflictIds}
+              />
+              <BulkSingleFieldDialog
+                open={singleFieldOpen}
+                onOpenChange={setSingleFieldOpen}
+                fieldType={singleFieldType}
+                selectedIds={selectedIds}
+                onComplete={clearSelectionAndRefresh}
+                onConflict={setConflictIds}
+              />
+            </>
+          )}
+          {canDeleteOrder && (
+            <BulkDeleteRestoreDialog
+              open={bulkDeleteOpen}
+              onOpenChange={(o) => { if (bulkPhase === "idle" || bulkPhase === "done") setBulkDeleteOpen(o); }}
+              mode="delete"
+              count={selectedIds.size}
+              phase={bulkPhase}
+              progress={bulkProgress}
+              onConfirm={runBulkDelete}
+            />
+          )}
         </>
       )}
+
     </AppLayout>
   );
 }
