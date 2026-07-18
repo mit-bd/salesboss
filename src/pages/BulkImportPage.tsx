@@ -975,13 +975,26 @@ export default function BulkImportPage() {
             </div>
             <div className="mt-4 flex items-center justify-between">
               <Button variant="ghost" onClick={() => setStep("simulate")}><ArrowLeft className="h-4 w-4 mr-1.5" /> Back</Button>
-              <Button onClick={runImport}>Start import <ArrowRight className="h-4 w-4 ml-1.5" /></Button>
+              <Button onClick={runQueuedImport} disabled={queuing}>
+                {queuing ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Queuing…</> : <>Start background import <ArrowRight className="h-4 w-4 ml-1.5" /></>}
+              </Button>
             </div>
           </div>
         )}
 
-        {/* ---------- EXECUTE ---------- */}
-        {step === "execute" && executing && (
+        {/* ---------- EXECUTE (background live dashboard) ---------- */}
+        {step === "execute" && liveRunId && (
+          <div className="space-y-4">
+            <ImportLiveDashboard runId={liveRunId} />
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" onClick={resetAll}>Import another file</Button>
+              <Button variant="outline" onClick={() => window.location.assign("/imports/recovery")}>Open Recovery Center</Button>
+            </div>
+          </div>
+        )}
+
+        {/* ---------- EXECUTE (legacy inline path, kept for AI simulate flow if used) ---------- */}
+        {step === "execute" && !liveRunId && executing && (
           <div className="rounded-xl border border-border bg-card p-8 card-shadow text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
             <p className="text-sm font-medium">{execStage}</p>
@@ -994,12 +1007,14 @@ export default function BulkImportPage() {
           </div>
         )}
 
-        {step === "execute" && !executing && Object.keys(existingByExtId).length === 0 && (
+        {step === "execute" && !liveRunId && !executing && Object.keys(existingByExtId).length === 0 && (
           <div className="rounded-xl border border-border bg-card p-5 card-shadow">
             <p className="text-sm mb-3">No duplicate Order IDs found. Ready to import.</p>
             <div className="flex items-center justify-between">
               <Button variant="ghost" onClick={() => setStep("simulate")}><ArrowLeft className="h-4 w-4 mr-1.5" /> Back</Button>
-              <Button onClick={runImport}>Start import <ArrowRight className="h-4 w-4 ml-1.5" /></Button>
+              <Button onClick={runQueuedImport} disabled={queuing}>
+                {queuing ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Queuing…</> : <>Start background import <ArrowRight className="h-4 w-4 ml-1.5" /></>}
+              </Button>
             </div>
           </div>
         )}
