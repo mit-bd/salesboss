@@ -314,7 +314,7 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                   </td>
 
                   {/* Actions */}
-                  {(isAdmin || canEditOrder || onCompleteFollowup) && (
+                  {(isAdmin || canEditOrder || canDeleteOrder || onCompleteFollowup) && (
                     <td className="px-3 py-3" data-action="true">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-fast">
                         {onCompleteFollowup && (
@@ -323,8 +323,13 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
                           </Button>
                         )}
                         {(isAdmin || canEditOrder) && onEdit && (
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" data-action="true" onClick={(e) => { e.stopPropagation(); onEdit(order); }}>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" data-action="true" title="Edit order" onClick={(e) => { e.stopPropagation(); onEdit(order); }}>
                             <Edit2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                        {canDeleteOrder && (
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10" data-action="true" title="Delete order" onClick={(e) => { e.stopPropagation(); setDeleteOrder(order); }}>
+                            <Trash2 className="h-3 w-3" />
                           </Button>
                         )}
                       </div>
@@ -336,6 +341,16 @@ export default function OrderTable({ orders, isAdmin, onEdit, onCompleteFollowup
           </tbody>
         </table>
       </div>
+
+      {deleteOrder && (
+        <DeleteOrderDialog
+          order={deleteOrder}
+          open={!!deleteOrder}
+          onOpenChange={(o) => !o && setDeleteOrder(null)}
+          onConfirm={async (reason) => { await softDelete(deleteOrder.id, reason); setDeleteOrder(null); }}
+        />
+      )}
+
 
       {/* Pagination (only when not using external/server-side pagination) */}
       {!disableInternalPagination && totalPages > 1 && (
