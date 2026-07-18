@@ -24,6 +24,7 @@ import { useActivityLog } from "@/hooks/useActivityLog";
 import WarningCenter, { type ImportWarningLite } from "@/components/import/WarningCenter";
 import HealthScorePanel, { type HealthScore, type Recommendation } from "@/components/import/HealthScorePanel";
 import ResumeBanner from "@/components/import/ResumeBanner";
+import ImportLiveDashboard from "@/components/import/ImportLiveDashboard";
 
 // ---------- Canonical fields ----------
 const CANONICAL: { key: string; label: string; required: boolean }[] = [
@@ -119,6 +120,9 @@ export default function BulkImportPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("upload");
   const [fileName, setFileName] = useState<string>("");
+  const [importMode, setImportMode] = useState<"quick" | "ai">("quick");
+  const [liveRunId, setLiveRunId] = useState<string | null>(null);
+  const [queuing, setQueuing] = useState(false);
   const [rawHeaders, setRawHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<RawRow[]>([]);
   const [mapping, setMapping] = useState<Mapping>({});
@@ -343,7 +347,98 @@ export default function BulkImportPage() {
     setDupDecisions(next);
   };
 
-  // ---------------- Execute ----------------
+  // ---------------- Queued (background) import ----------------
+  const runQueuedImport = async () => {
+    if (!profile?.project_id || !user) return;
+    setQueuing(true);
+    try {
+      // Build mapped, phone-normalized rows
+      const mapped = rawRows.map((r, i) => {
+        const o: any = { rowNumber: i + 2 };
+        for (const [k, h] of Object.entries(mapping)) o[k] = r[h] || "";
+        if (o.recipientPhone) o.recipientPhone = normalizePhone(o.recipientPhone);
+        return o;
+      });
+
+      const execName = assignToExec && assignToExec !== "__none__"
+        ? allExecutives.find((e) => e.id === assignToExec)?.name || ""
+        : "";
+      const dmName = (assignDeliveryMethod && assignDeliveryMethod !== "__none__")
+        ? activeDeliveryMethods.find((dm) => dm.id === assignDeliveryMethod)?.name || ""
+        : "";
+
+      const CHUNK = 300;
+      const total = mapped.length;
+      const batchCount = Math.max(1, Math.ceil(total / CHUNK));
+
+      // 1) Create import_run first (so we have an id for file paths)
+      const { data: runRow, error: rErr } = await supabase.from("import_runs").insert({
+        project_id: profile.project_id,
+        user_id: user.id,
+        user_name: profile.full_name || user.email || "",
+        source_filename: fileName,
+        total_rows: total,
+        import_mode: importMode,
+        chunk_size: CHUNK,
+        mapping,
+        duplicate_decisions: dupDecisions,
+        assignments: {
+          assigned_to: (assignToExec && assignToExec !== "__none__") ? assignToExec : null,
+          assigned_to_name: execName,
+          delivery_method: dmName,
+        },
+        status: "processing",
+      }).select("id").single();
+      if (rErr) throw rErr;
+      const runId = runRow!.id as string;
+
+      // 2) Upload each chunk as JSONL to storage
+      for (let i = 0; i < batchCount; i++) {
+        const slice = mapped.slice(i * CHUNK, (i + 1) * CHUNK);
+        const jsonl = slice.map((r) => JSON.stringify(r)).join("\n");
+        const path = `${profile.project_id}/${runId}/batch-${String(i).padStart(5, "0")}.jsonl`;
+        const { error: upErr } = await supabase.storage
+          .from("import-uploads")
+          .upload(path, new Blob([jsonl], { type: "application/x-ndjson" }), { upsert: true });
+        if (upErr) throw upErr;
+        // Insert queue row with payload_ref pointing at this file
+        const { error: qErr } = await supabase.from("import_queue").insert({
+          import_run_id: runId,
+          project_id: profile.project_id,
+          batch_index: i,
+          total_batches: batchCount,
+          payload_ref: path,
+          status: "queued",
+          import_mode: importMode,
+        });
+        if (qErr) throw qErr;
+        // Mirror batches metadata
+        await supabase.from("import_batches").insert({
+          import_run_id: runId,
+          project_id: profile.project_id,
+          batch_index: i,
+          row_start: i * CHUNK,
+          row_end: Math.min((i + 1) * CHUNK, total),
+          status: "pending",
+        }).then(() => {}, () => {});
+      }
+
+      await supabase.from("import_runs").update({ total_batches: batchCount }).eq("id", runId);
+
+      // 3) Kick worker
+      supabase.functions.invoke("import-worker", { body: {} }).catch(() => {});
+
+      setLiveRunId(runId);
+      setStep("execute");
+      toast({ title: "Import queued", description: `${total} rows split into ${batchCount} background chunks.` });
+    } catch (err: any) {
+      toast({ title: "Failed to queue import", description: err.message || "Unknown error", variant: "destructive" });
+    } finally {
+      setQueuing(false);
+    }
+  };
+
+  // ---------------- Execute (legacy inline path) ----------------
   const runImport = async () => {
     if (!profile?.project_id || !user) return;
     setExecuting(true);
@@ -578,6 +673,7 @@ export default function BulkImportPage() {
     setCleanedRows([]); setAiReport(null);
     setExistingByExtId({}); setDupDecisions({});
     setFinalReport(null);
+    setLiveRunId(null);
   };
 
   const downloadFailures = () => {
@@ -602,13 +698,33 @@ export default function BulkImportPage() {
         {/* ---------- UPLOAD ---------- */}
         {step === "upload" && (
           <>
+            <div className="rounded-xl border border-border bg-card p-5 card-shadow">
+              <h3 className="text-sm font-semibold mb-3">Import mode</h3>
+              <RadioGroup value={importMode} onValueChange={(v) => setImportMode(v as "quick" | "ai")} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className={cn("flex items-start gap-3 rounded-lg border p-4 cursor-pointer", importMode === "quick" ? "border-primary bg-primary/5" : "border-border")}>
+                  <RadioGroupItem value="quick" className="mt-1" />
+                  <div>
+                    <p className="text-sm font-medium">Quick Import</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Fast background import. Deterministic normalization only, no AI cleaning. Best for clean exports and very large files.</p>
+                  </div>
+                </label>
+                <label className={cn("flex items-start gap-3 rounded-lg border p-4 cursor-pointer", importMode === "ai" ? "border-primary bg-primary/5" : "border-border")}>
+                  <RadioGroupItem value="ai" className="mt-1" />
+                  <div>
+                    <p className="text-sm font-medium flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-primary" /> AI Enhanced</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Background worker fixes phones/addresses per row using a cached AI normalizer. Fails soft — original values are kept when AI is unavailable.</p>
+                  </div>
+                </label>
+              </RadioGroup>
+            </div>
+
             <div className="rounded-xl border-2 border-dashed border-border bg-card p-12 text-center card-shadow">
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
                 <Upload className="h-7 w-7 text-primary" />
               </div>
               <h3 className="text-lg font-semibold mb-2">Upload CSV or XLSX</h3>
               <p className="text-xs text-muted-foreground mb-6 flex items-center justify-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-primary" /> AI will detect columns, clean data, and detect duplicates
+                <Sparkles className="h-3.5 w-3.5 text-primary" /> Columns are auto-detected. Rows process in the background with automatic retry.
               </p>
               <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileUpload} />
               <Button className="gap-2" onClick={() => fileRef.current?.click()}>
@@ -700,12 +816,21 @@ export default function BulkImportPage() {
                 <Button variant="outline" onClick={() => runDetect(rawHeaders)} disabled={detecting}>
                   <Sparkles className="h-4 w-4 mr-1.5" /> Re-detect
                 </Button>
-                <Button
-                  disabled={REQUIRED_KEYS.some((k) => !mapping[k])}
-                  onClick={() => setStep("clean")}
-                >
-                  Next: AI clean <ArrowRight className="h-4 w-4 ml-1.5" />
-                </Button>
+                {importMode === "quick" ? (
+                  <Button
+                    disabled={REQUIRED_KEYS.some((k) => !mapping[k]) || queuing}
+                    onClick={runQueuedImport}
+                  >
+                    {queuing ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Queuing…</> : <>Start background import <ArrowRight className="h-4 w-4 ml-1.5" /></>}
+                  </Button>
+                ) : (
+                  <Button
+                    disabled={REQUIRED_KEYS.some((k) => !mapping[k])}
+                    onClick={() => setStep("clean")}
+                  >
+                    Next: Review with AI <ArrowRight className="h-4 w-4 ml-1.5" />
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -851,13 +976,26 @@ export default function BulkImportPage() {
             </div>
             <div className="mt-4 flex items-center justify-between">
               <Button variant="ghost" onClick={() => setStep("simulate")}><ArrowLeft className="h-4 w-4 mr-1.5" /> Back</Button>
-              <Button onClick={runImport}>Start import <ArrowRight className="h-4 w-4 ml-1.5" /></Button>
+              <Button onClick={runQueuedImport} disabled={queuing}>
+                {queuing ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Queuing…</> : <>Start background import <ArrowRight className="h-4 w-4 ml-1.5" /></>}
+              </Button>
             </div>
           </div>
         )}
 
-        {/* ---------- EXECUTE ---------- */}
-        {step === "execute" && executing && (
+        {/* ---------- EXECUTE (background live dashboard) ---------- */}
+        {step === "execute" && liveRunId && (
+          <div className="space-y-4">
+            <ImportLiveDashboard runId={liveRunId} />
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" onClick={resetAll}>Import another file</Button>
+              <Button variant="outline" onClick={() => window.location.assign("/imports/recovery")}>Open Recovery Center</Button>
+            </div>
+          </div>
+        )}
+
+        {/* ---------- EXECUTE (legacy inline path, kept for AI simulate flow if used) ---------- */}
+        {step === "execute" && !liveRunId && executing && (
           <div className="rounded-xl border border-border bg-card p-8 card-shadow text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-primary" />
             <p className="text-sm font-medium">{execStage}</p>
@@ -870,12 +1008,14 @@ export default function BulkImportPage() {
           </div>
         )}
 
-        {step === "execute" && !executing && Object.keys(existingByExtId).length === 0 && (
+        {step === "execute" && !liveRunId && !executing && Object.keys(existingByExtId).length === 0 && (
           <div className="rounded-xl border border-border bg-card p-5 card-shadow">
             <p className="text-sm mb-3">No duplicate Order IDs found. Ready to import.</p>
             <div className="flex items-center justify-between">
               <Button variant="ghost" onClick={() => setStep("simulate")}><ArrowLeft className="h-4 w-4 mr-1.5" /> Back</Button>
-              <Button onClick={runImport}>Start import <ArrowRight className="h-4 w-4 ml-1.5" /></Button>
+              <Button onClick={runQueuedImport} disabled={queuing}>
+                {queuing ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Queuing…</> : <>Start background import <ArrowRight className="h-4 w-4 ml-1.5" /></>}
+              </Button>
             </div>
           </div>
         )}

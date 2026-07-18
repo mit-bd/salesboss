@@ -1,67 +1,96 @@
+## SalesBoss Smart Import v2 — Enterprise Refactor
 
-# Epic 01 — AI Customer Intelligence Platform
+Refactor (not rewrite) the existing import engine into a fully background, resumable, chunked pipeline. Preserve all existing tables, edge functions, templates, warnings, health scores, learning, recovery center, and audit trail.
 
-This is a very large epic (Sections A–S). To ship it safely on top of the existing SalesBoss architecture (Phases 1–3.1 already live), I'll deliver it in **6 milestones**, each production-ready, regression-tested, and backward compatible. I'll confirm scope with you before starting, then execute milestones one at a time so you can review after each.
+---
 
-## Discovery (already scanned)
+### 1. New architecture (queue-first)
 
-**Existing AI surface I will extend, not duplicate:**
-- Edge fns: `ai-assistant`, `ai-customer-score`, `ai-followup-insight`, `ai-import-cleaner`, `ai-address-normalizer`
-- Tables: `customer_ai_scores`, `customer_tags`, `customers` (27 cols incl. stage, LTV, repeat metrics), `orders`, `followup_history`, `upsell_records`, `repeat_order_records`, `order_activity_logs`, `import_learning_suggestions`, `product_aliases`
-- Hooks: `useCustomerAIScore`, `useCustomerTags`, `useOrderMetrics`, `useCustomerTimeline`, `useOrderActivityLogs`, etc.
-- Workspace: Phase 3.1 components (`WorkspaceHeaderSummary`, `AIRecommendationCard`, `RelatedOrdersPanel`, etc.)
-- Automation: `run_followup_automation` pg_cron, `recalc_customer_analytics`, `apply_customer_tags` triggers
-- Multi-tenant RLS by `project_id` via `get_user_project_id` + `has_role`
+```text
+Upload  →  Column Mapping  →  Review (optional)  →  Import
+                                                       ↓
+                                        enqueue run + upload chunk files
+                                                       ↓
+                                    import-worker (background, cron + kick)
+                                                       ↓
+                                    live progress dashboard (polling + realtime)
+```
 
-**No duplication rule:** I will extend `customer_ai_scores` (add columns) and reuse existing triggers rather than create parallel tables.
+- **Mode selection on step 1**:
+  - **Quick Import** — no AI. Local phone/date/status normalization only.
+  - **AI Enhanced Import** — AI runs asynchronously per chunk inside the worker (not blocking the wizard).
 
-## Milestones
+### 2. Wizard collapse: 7 steps → 4
 
-### M1 — Customer AI Profile schema + Memory Engine (Sections A, B, L, M, P, Q)
-- **Schema extension** (single migration):
-  - `customer_ai_profiles` — one row per customer (personality, buying_behaviour, purchase_pattern, price_sensitivity, product_preference, preferred_language, preferred_call_time, preferred_executive_id, preferred_payment, preferred_courier, loyalty_score, lifetime_trend, ai_confidence, evidence jsonb, locked_fields text[], updated_at). Extending, not replacing, `customer_ai_scores`.
-  - `customer_memory_events` — normalized memory log (conversations, objections, promises, complaints, rejections) sourced from `followup_history` + `order_activity_logs` via view + incremental job.
-  - GRANTs + RLS scoped by `project_id`; `locked_fields` prevents overwrite of manually confirmed data.
-- **Edge fn** `ai-customer-profile` — computes/refreshes profile from real data (orders, followups, upsells, repeats). Caches 24h. Explains WHY (evidence jsonb).
-- **Triggers**: extend existing `trg_orders_recalc_customer` + `trg_followup_touch_customer` to enqueue profile refresh (dirty flag column), processed by edge fn — no synchronous AI in triggers.
+| Old | New |
+|-----|-----|
+| upload | **1. Upload** (+ mode picker) |
+| mapping | **2. Column Mapping** (with AI detect) |
+| clean + simulate + duplicates | **3. Review** (optional — health, warnings, dup decisions, sample fixes) |
+| execute + report | **4. Import** (live dashboard) |
 
-### M2 — Prediction engines (Sections C, D, E, F, G)
-- Extend `customer_ai_scores.recommendations` shape (already jsonb) to include: `buying_stage`, `repeat_prediction`, `upsell_prediction`, `churn_prediction`, `best_call_time`. No new table.
-- Edge fn `ai-customer-score` upgraded to compute all five in one pass with confidence + reason + evidence + suggested action + priority.
-- Frontend: reuse `AIRecommendationCard` — add new panels in workspace (RepeatPredictionCard, UpsellPredictionCard, ChurnRiskCard, BestCallTimeCard, BuyingStageCard). All derive from real DB history.
+Blocking full-file AI clean is removed. Review can be skipped entirely for Quick Import.
 
-### M3 — Dashboards (Sections I, J, N)
-- New page `AIOwnerDashboardPage` (route `/ai/owner`) — top customers, at-risk, forecast, expected repeats/upsells/churn, team perf, insights. Data comes from aggregations of existing tables + `customer_ai_scores`.
-- New page `AIExecutiveDashboardPage` (route `/ai/today`) — today's priorities, hot customers, missed followups, suggested scripts, daily goal — scoped to `auth.uid()` executive.
-- Edge fn `ai-business-insights` — daily/weekly/monthly insight generator, cached in new `ai_insights` table (project_id, period, kind, payload, generated_at).
+### 3. Background processing
 
-### M4 — Sales Coach + Segmentation (Sections H, K)
-- Edge fn `ai-sales-coach` — per-executive: conversion, repeat rate, upsell rate, avg revenue, avg response time, missed followups, improvement suggestions. Cached in `ai_coach_reports` (executive_id, period, payload).
-- Segmentation runs inside existing `apply_customer_tags` — extend with AI-driven tags (High Repeat, High Upsell, High Risk, Wholesale/Retail heuristics) added by profile edge fn as `assigned_by='ai'`.
+- `BulkImportPage` writes rows to `import-uploads` as JSONL chunks (**300 rows / chunk**, tunable 200–500).
+- `enqueue_import_batches` RPC already exists — extend the run row with `import_mode` (`quick` | `ai`), `mapping`, `duplicate_decisions`, `assignments`.
+- `import-worker` refactor:
+  - Per-chunk AI cleaning when `mode = 'ai'`, using a new `ai_normalization_cache` table keyed by `(project_id, kind, input_hash)`.
+  - Skip AI for values already matching clean patterns (phone `^01\d{9}$`, ISO date, canonical status).
+  - **Fail-soft AI**: if AI call fails or times out, keep original value, insert an `import_warnings` row (severity `warning`, category `ai_fallback`), continue.
+  - Per-row failures never abort the chunk; per-chunk failures re-enqueue with exponential backoff (`attempts` column already exists; add `next_attempt_at`, cap at 5).
+  - Batch DB writes: `customers` upsert + `orders` upsert in single-statement chunks.
+  - Renew worker deadline; kick a follow-up invocation before exit if queue non-empty.
 
-### M5 — AI Assistant commands + Automation hooks (Sections O, P)
-- Extend `ai-assistant` edge fn with structured command parser: "who should I call today", "show risky customers", "generate today's work plan", "generate executive report", etc. Each command runs a scoped SQL query and returns structured results the assistant renders.
-- Ensure every relevant DB change enqueues profile refresh (orders, followups, upsells, repeats, delivery, import, manual edit).
+### 4. Resume & recovery
 
-### M6 — Performance, Security, Regression, Final QA (Sections Q, R, S)
-- **Perf**: indexes on `customer_memory_events(customer_id, occurred_at)`, `customer_ai_scores(expires_at, project_id)`; response caching in edge fns; batch profile refresh; incremental updates only for dirty customers.
-- **Security**: every new edge fn validates JWT, resolves `project_id` from profile, uses service role only for writes to profile tables. No RLS bypass in queries returned to client.
-- **Regression pass**: Orders, Workspace, Customers, Import, Followup, AI Assistant, Owner/Exec Dashboards, Permissions, Realtime, Notifications, Billing. Fix issues found.
-- **Cleanup**: remove any dead hooks superseded by new ones; consolidate duplicate AI fetch logic into shared `useAiProfile` / `useAiPredictions` hooks.
+- Existing `resume_import_run` + `import-resume` already handle this. Surface a **Resume** action in the new dashboard and detect in-progress runs on wizard mount → jump straight to the dashboard for that run.
+- Browser close is already safe (cron drains queue).
 
-## Deliverables per milestone
-Each milestone ends with: files list, migration summary, regression checklist, and readiness note. Final report after M6 covers everything requested in "FINAL REPORT".
+### 5. Live progress dashboard (replaces "execute" screen)
 
-## Out of scope (called out explicitly)
-- No new AI model providers — continues on Lovable AI Gateway (`openai/gpt-5.5` default, cheaper models for high-volume classification).
-- No live courier API integration (Phase 3.1 already stubbed).
-- No changes to overall UI design system, sidebar structure, or existing pages beyond additive panels.
+Component `ImportLiveDashboard` polling `import_runs` + `import_queue` + `import_errors` every 2s (plus realtime channel):
 
-## Confirm before I start
+- Overall progress bar + processed/total rows
+- Current chunk index, rows/sec, ETA
+- Current task label (`Cleaning`, `Upserting customers`, `Writing orders`)
+- Warnings count (link → Warning Center)
+- Errors count + retry queue length (link → Recovery Center)
+- Buttons: Pause, Cancel, Resume
 
-Two things I need before executing M1:
+### 6. AI cache & clean-value skip
 
-1. **Scope confirmation** — proceed with all 6 milestones in order, pausing after each for review? Or condense into fewer/larger deliveries?
-2. **AI cost posture** — profile refresh is expensive at scale. Default plan: refresh a customer's profile at most once every 24h, and only when there's new activity (dirty flag). OK, or do you want manual-only refresh with a "Refresh AI" button?
+New table `ai_normalization_cache` (project-scoped, RLS): `kind` (`phone` | `address` | `product` | `status`), `input`, `input_hash`, `output`, `confidence`, `hits`. Worker checks cache before invoking AI; writes back on success.
 
-Once you confirm, I start M1 immediately with the schema migration.
+### 7. Retry with exponential backoff
+
+Extend `import_queue`: add `next_attempt_at timestamptz`, `max_attempts smallint default 5`. Worker `claim_next_import_batch` becomes time-aware. Failed batch retry delay = `min(60 * 2^attempts, 900)` seconds.
+
+### 8. Files touched
+
+**New**
+- `src/components/import/ImportLiveDashboard.tsx`
+- `src/components/import/ImportModePicker.tsx`
+- `supabase/migrations/*_import_v2.sql` (ai cache table, queue backoff columns, import_runs.import_mode)
+
+**Refactored (surgical, preserve APIs)**
+- `src/pages/BulkImportPage.tsx` — 4-step wizard, mode picker, chunked upload → enqueue, redirect to dashboard
+- `supabase/functions/import-worker/index.ts` — AI-in-worker, cache lookup, fail-soft, backoff, self-kick
+- `supabase/functions/ai-import-cleaner/index.ts` — keep `mode: 'detect'` for mapping; remove synchronous full-file `clean`
+
+**Unchanged**
+- Templates, warnings, health score, learning, recovery center, product aliases, address normalizer, customer analytics triggers, all Phase 3 workspace features.
+
+### 9. Regression test pass
+
+After implementation, exercise: Quick Import 500 rows, AI Import 2000 rows, resume after cancel, duplicate decisions (update/skip/create), template save+apply, error retry, warning surfacing. Fix any breakages found before closing.
+
+### Technical details
+
+- Chunk size default 300, configurable via constant `IMPORT_CHUNK_SIZE`.
+- Worker deadline stays 40s; self-invokes via `fetch` to its own URL when queue non-empty at exit (already partially done by cron every minute; add immediate kick for responsiveness).
+- AI cache TTL: soft — entries never expire but `hits` increments to prove value; manual reset via existing Learning page pattern.
+- Idempotency guaranteed by existing partial unique index `(project_id, external_order_id)`.
+- BST timestamps everywhere (existing `src/lib/bst.ts`).
+- No changes to auth, RLS scope by `project_id` on every new table/column.
