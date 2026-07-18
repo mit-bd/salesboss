@@ -569,8 +569,17 @@ export default function OrderWorkspacePage() {
           <>
             <EditOrderDialog order={storeOrder} open={editOpen} onOpenChange={setEditOpen} />
             <CompleteFollowupDialog order={storeOrder} open={followupOpen} onOpenChange={setFollowupOpen} onComplete={completeFollowup} />
+            {canDelete && (
+              <DeleteOrderDialog
+                order={storeOrder}
+                open={deleteOpen}
+                onOpenChange={setDeleteOpen}
+                onConfirm={async (reason) => { await softDelete(storeOrder.id, reason); navigate("/orders"); }}
+              />
+            )}
           </>
         )}
+
       </div>
     </AppLayout>
   );
