@@ -697,13 +697,33 @@ export default function BulkImportPage() {
         {/* ---------- UPLOAD ---------- */}
         {step === "upload" && (
           <>
+            <div className="rounded-xl border border-border bg-card p-5 card-shadow">
+              <h3 className="text-sm font-semibold mb-3">Import mode</h3>
+              <RadioGroup value={importMode} onValueChange={(v) => setImportMode(v as "quick" | "ai")} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className={cn("flex items-start gap-3 rounded-lg border p-4 cursor-pointer", importMode === "quick" ? "border-primary bg-primary/5" : "border-border")}>
+                  <RadioGroupItem value="quick" className="mt-1" />
+                  <div>
+                    <p className="text-sm font-medium">Quick Import</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Fast background import. Deterministic normalization only, no AI cleaning. Best for clean exports and very large files.</p>
+                  </div>
+                </label>
+                <label className={cn("flex items-start gap-3 rounded-lg border p-4 cursor-pointer", importMode === "ai" ? "border-primary bg-primary/5" : "border-border")}>
+                  <RadioGroupItem value="ai" className="mt-1" />
+                  <div>
+                    <p className="text-sm font-medium flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-primary" /> AI Enhanced</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Background worker fixes phones/addresses per row using a cached AI normalizer. Fails soft — original values are kept when AI is unavailable.</p>
+                  </div>
+                </label>
+              </RadioGroup>
+            </div>
+
             <div className="rounded-xl border-2 border-dashed border-border bg-card p-12 text-center card-shadow">
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
                 <Upload className="h-7 w-7 text-primary" />
               </div>
               <h3 className="text-lg font-semibold mb-2">Upload CSV or XLSX</h3>
               <p className="text-xs text-muted-foreground mb-6 flex items-center justify-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-primary" /> AI will detect columns, clean data, and detect duplicates
+                <Sparkles className="h-3.5 w-3.5 text-primary" /> Columns are auto-detected. Rows process in the background with automatic retry.
               </p>
               <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileUpload} />
               <Button className="gap-2" onClick={() => fileRef.current?.click()}>
