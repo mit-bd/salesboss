@@ -2312,6 +2312,10 @@ export type Database = {
       }
       retry_failed_batches: { Args: { p_run_id: string }; Returns: number }
       run_followup_automation: { Args: never; Returns: Json }
+      set_import_run_total_batches: {
+        Args: { p_run_id: string; p_total_batches: number }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "sub_admin" | "sales_executive" | "owner"

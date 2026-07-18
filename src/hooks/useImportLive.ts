@@ -29,10 +29,11 @@ export interface RunLive {
 export function useImportLive(runId?: string) {
   const [run, setRun] = useState<RunLive | null>(null);
   const [batches, setBatches] = useState<QueueBatch[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!runId) return;
-    const [{ data: r }, { data: q }] = await Promise.all([
+    const [{ data: r, error: runError }, { data: q, error: queueError }] = await Promise.all([
       supabase.from("import_runs")
         .select("id,status,total_rows,total_batches,processed_batches,speed_rows_per_sec,import_mode,source_filename,started_at,finished_at")
         .eq("id", runId).maybeSingle(),
@@ -41,6 +42,8 @@ export function useImportLive(runId?: string) {
         .eq("import_run_id", runId)
         .order("batch_index", { ascending: true }),
     ]);
+    const nextError = runError?.message || queueError?.message || null;
+    setError(nextError);
     setRun((r as any) ?? null);
     setBatches(((q as any) ?? []) as QueueBatch[]);
   }, [runId]);
@@ -58,8 +61,14 @@ export function useImportLive(runId?: string) {
   }, [runId, refresh]);
 
   const kickWorker = useCallback(async () => {
-    await supabase.functions.invoke("import-worker", { body: {} }).catch(() => {});
+    const { data, error: invokeError } = await supabase.functions.invoke("import-worker", { body: {} });
+    if (invokeError) {
+      setError(invokeError.message);
+      throw invokeError;
+    }
+    setError(null);
+    return data;
   }, []);
 
-  return { run, batches, refresh, kickWorker };
+  return { run, batches, refresh, kickWorker, error };
 }

@@ -378,6 +378,8 @@ export default function BulkImportPage() {
         user_name: profile.full_name || user.email || "",
         source_filename: fileName,
         total_rows: total,
+        total_batches: batchCount,
+        processed_batches: 0,
         import_mode: importMode,
         chunk_size: CHUNK,
         mapping,
@@ -423,10 +425,9 @@ export default function BulkImportPage() {
         }).then(() => {}, () => {});
       }
 
-      await supabase.from("import_runs").update({ total_batches: batchCount }).eq("id", runId);
-
       // 3) Kick worker
-      supabase.functions.invoke("import-worker", { body: {} }).catch(() => {});
+      const { error: kickErr } = await supabase.functions.invoke("import-worker", { body: {} });
+      if (kickErr) throw kickErr;
 
       setLiveRunId(runId);
       setStep("execute");
