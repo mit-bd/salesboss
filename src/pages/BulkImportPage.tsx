@@ -347,7 +347,98 @@ export default function BulkImportPage() {
     setDupDecisions(next);
   };
 
-  // ---------------- Execute ----------------
+  // ---------------- Queued (background) import ----------------
+  const runQueuedImport = async () => {
+    if (!profile?.project_id || !user) return;
+    setQueuing(true);
+    try {
+      // Build mapped, phone-normalized rows
+      const mapped = rawRows.map((r, i) => {
+        const o: any = { rowNumber: i + 2 };
+        for (const [k, h] of Object.entries(mapping)) o[k] = r[h] || "";
+        if (o.recipientPhone) o.recipientPhone = normalizePhone(o.recipientPhone);
+        return o;
+      });
+
+      const execName = assignToExec && assignToExec !== "__none__"
+        ? allExecutives.find((e) => e.id === assignToExec)?.name || ""
+        : "";
+      const dmName = (assignDeliveryMethod && assignDeliveryMethod !== "__none__")
+        ? activeDeliveryMethods.find((dm) => dm.id === assignDeliveryMethod)?.name || ""
+        : "";
+
+      const CHUNK = 300;
+      const total = mapped.length;
+      const batchCount = Math.max(1, Math.ceil(total / CHUNK));
+
+      // 1) Create import_run first (so we have an id for file paths)
+      const { data: runRow, error: rErr } = await supabase.from("import_runs").insert({
+        project_id: profile.project_id,
+        user_id: user.id,
+        user_name: profile.full_name || user.email || "",
+        source_filename: fileName,
+        total_rows: total,
+        import_mode: importMode,
+        chunk_size: CHUNK,
+        mapping,
+        duplicate_decisions: dupDecisions,
+        assignments: {
+          assigned_to: (assignToExec && assignToExec !== "__none__") ? assignToExec : null,
+          assigned_to_name: execName,
+          delivery_method: dmName,
+        },
+        status: "processing",
+      }).select("id").single();
+      if (rErr) throw rErr;
+      const runId = runRow!.id as string;
+
+      // 2) Upload each chunk as JSONL to storage
+      for (let i = 0; i < batchCount; i++) {
+        const slice = mapped.slice(i * CHUNK, (i + 1) * CHUNK);
+        const jsonl = slice.map((r) => JSON.stringify(r)).join("\n");
+        const path = `${profile.project_id}/${runId}/batch-${String(i).padStart(5, "0")}.jsonl`;
+        const { error: upErr } = await supabase.storage
+          .from("import-uploads")
+          .upload(path, new Blob([jsonl], { type: "application/x-ndjson" }), { upsert: true });
+        if (upErr) throw upErr;
+        // Insert queue row with payload_ref pointing at this file
+        const { error: qErr } = await supabase.from("import_queue").insert({
+          import_run_id: runId,
+          project_id: profile.project_id,
+          batch_index: i,
+          total_batches: batchCount,
+          payload_ref: path,
+          status: "queued",
+          import_mode: importMode,
+        });
+        if (qErr) throw qErr;
+        // Mirror batches metadata
+        await supabase.from("import_batches").insert({
+          import_run_id: runId,
+          project_id: profile.project_id,
+          batch_index: i,
+          row_start: i * CHUNK,
+          row_end: Math.min((i + 1) * CHUNK, total),
+          status: "pending",
+        }).then(() => {}, () => {});
+      }
+
+      await supabase.from("import_runs").update({ total_batches: batchCount }).eq("id", runId);
+
+      // 3) Kick worker
+      supabase.functions.invoke("import-worker", { body: {} }).catch(() => {});
+
+      setLiveRunId(runId);
+      setStep("execute");
+      toast({ title: "Import queued", description: `${total} rows split into ${batchCount} background chunks.` });
+    } catch (err: any) {
+      toast({ title: "Failed to queue import", description: err.message || "Unknown error", variant: "destructive" });
+    } finally {
+      setQueuing(false);
+    }
+  };
+
+  // ---------------- Execute (legacy inline path) ----------------
   const runImport = async () => {
     if (!profile?.project_id || !user) return;
     setExecuting(true);
