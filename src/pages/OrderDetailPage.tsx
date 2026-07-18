@@ -223,9 +223,10 @@ export default function OrderDetailPage() {
                   {pos.isOnlyOrder ? "First Order" : `#${pos.position} of ${pos.total}`}
                 </span>
               </div>
-              <MetaDot label="Total Orders" value={pos.total} />
-              <MetaDot label="First" value={pos.firstOrderDate || "—"} />
-              <MetaDot label="Latest" value={pos.latestOrderDate || "—"} />
+              <div className="text-xs"><span className="text-muted-foreground">Total Orders: </span><span className="font-semibold text-foreground">{pos.total}</span></div>
+              <div className="text-xs"><span className="text-muted-foreground">First: </span><span className="font-medium text-foreground">{pos.firstOrderDate || "—"}</span></div>
+              <div className="text-xs"><span className="text-muted-foreground">Latest: </span><span className="font-medium text-foreground">{pos.latestOrderDate || "—"}</span></div>
+
               <div className="ml-auto flex items-center gap-1.5">
                 <Button
                   size="sm"
