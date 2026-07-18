@@ -425,9 +425,11 @@ export default function BulkImportPage() {
         }).then(() => {}, () => {});
       }
 
-      // 3) Kick worker
-      const { error: kickErr } = await supabase.functions.invoke("import-worker", { body: {} });
-      if (kickErr) throw kickErr;
+      // 3) Kick worker (fire-and-forget: worker runs up to 40s and self-invokes to drain the queue).
+      // Awaiting here would block the UI and can surface as "Failed to send a request to the Edge Function"
+      // when the response exceeds the browser fetch window. Queueing is already complete at this point.
+      supabase.functions.invoke("import-worker", { body: {} }).catch(() => {});
+
 
       setLiveRunId(runId);
       setStep("execute");
