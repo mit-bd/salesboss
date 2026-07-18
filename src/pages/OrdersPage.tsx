@@ -44,7 +44,7 @@ export default function OrdersPage() {
   const { toast } = useToast();
   const canEditOrder = isAdmin || hasPermission("orders.edit");
   const canDeleteOrder = isAdmin || hasPermission("orders.delete");
-  const { updateOrder, refreshFromDB } = useOrderStore();
+  const { updateOrder, refreshOrders } = useOrderStore();
 
 
   // Debounce search input
