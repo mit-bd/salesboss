@@ -2217,6 +2217,11 @@ export type Database = {
         }
         Returns: Json
       }
+      bulk_restore_orders: { Args: { p_order_ids: string[] }; Returns: Json }
+      bulk_soft_delete_orders: {
+        Args: { p_order_ids: string[]; p_reason?: string }
+        Returns: Json
+      }
       bulk_update_orders: {
         Args: { p_order_ids: string[]; p_updates: Json }
         Returns: number
