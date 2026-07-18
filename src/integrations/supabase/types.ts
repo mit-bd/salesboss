@@ -1154,14 +1154,18 @@ export type Database = {
           cancelled_at: string | null
           cancelled_by: string | null
           chunk_size: number
+          cleaned_rows: number
           courier_name: string | null
           created_at: string
           device: string | null
           duplicate_decisions: Json
+          duplicate_rows: number
           duplicates: number
+          error_message: string | null
           existing_customers: number
           file_hash: string | null
           file_storage_path: string | null
+          finished_at: string | null
           health_score: Json | null
           id: string
           import_mode: string
@@ -1188,9 +1192,12 @@ export type Database = {
           skipped: number
           source_filename: string | null
           speed_rows_per_sec: number | null
+          started_at: string
+          status: string
           template_id: string | null
           total_batches: number | null
           total_rows: number
+          updated_at: string
           updated_count: number
           user_id: string | null
           user_name: string | null
@@ -1202,14 +1209,18 @@ export type Database = {
           cancelled_at?: string | null
           cancelled_by?: string | null
           chunk_size?: number
+          cleaned_rows?: number
           courier_name?: string | null
           created_at?: string
           device?: string | null
           duplicate_decisions?: Json
+          duplicate_rows?: number
           duplicates?: number
+          error_message?: string | null
           existing_customers?: number
           file_hash?: string | null
           file_storage_path?: string | null
+          finished_at?: string | null
           health_score?: Json | null
           id?: string
           import_mode?: string
@@ -1236,9 +1247,12 @@ export type Database = {
           skipped?: number
           source_filename?: string | null
           speed_rows_per_sec?: number | null
+          started_at?: string
+          status?: string
           template_id?: string | null
           total_batches?: number | null
           total_rows?: number
+          updated_at?: string
           updated_count?: number
           user_id?: string | null
           user_name?: string | null
@@ -1250,14 +1264,18 @@ export type Database = {
           cancelled_at?: string | null
           cancelled_by?: string | null
           chunk_size?: number
+          cleaned_rows?: number
           courier_name?: string | null
           created_at?: string
           device?: string | null
           duplicate_decisions?: Json
+          duplicate_rows?: number
           duplicates?: number
+          error_message?: string | null
           existing_customers?: number
           file_hash?: string | null
           file_storage_path?: string | null
+          finished_at?: string | null
           health_score?: Json | null
           id?: string
           import_mode?: string
@@ -1284,9 +1302,12 @@ export type Database = {
           skipped?: number
           source_filename?: string | null
           speed_rows_per_sec?: number | null
+          started_at?: string
+          status?: string
           template_id?: string | null
           total_batches?: number | null
           total_rows?: number
+          updated_at?: string
           updated_count?: number
           user_id?: string | null
           user_name?: string | null
