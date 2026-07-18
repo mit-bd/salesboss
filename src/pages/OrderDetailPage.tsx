@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { createAssignmentNotifications } from "@/hooks/useNotifications";
 import { useActivityLog } from "@/hooks/useActivityLog";
 import OrderActivityTimeline from "@/components/OrderActivityTimeline";
@@ -9,7 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Phone, MapPin, Package, Calendar, RefreshCw, ShoppingCart, Zap, Truck, Edit2, Trash2, CheckCircle, Clock, MessageSquare, User, UserX } from "lucide-react";
+import { ArrowLeft, ArrowRight, Phone, MapPin, Package, Calendar, RefreshCw, ShoppingCart, Zap, Truck, Edit2, Trash2, CheckCircle, Clock, MessageSquare, User, UserX, Hash, ExternalLink } from "lucide-react";
+import { useOrderPosition } from "@/hooks/useOrderPosition";
+
 import { cn } from "@/lib/utils";
 import { useRole } from "@/contexts/RoleContext";
 import { usePermissions } from "@/contexts/PermissionContext";
@@ -111,6 +114,8 @@ export default function OrderDetailPage() {
     }
   };
 
+  const pos = useOrderPosition(order?.customerId, order?.id);
+
   if (!order) {
     return (
       <AppLayout>
@@ -127,6 +132,8 @@ export default function OrderDetailPage() {
   const history = getOrderHistory(order.id);
   const currentStatus = order.currentStatus || "pending";
   const canComplete = currentStatus === "pending" && !order.isDeleted;
+
+
 
   // Collect all upsells and repeats across all followups for this order
   const allUpsells = history.flatMap((h) => getUpsellsForFollowup(h.id));
@@ -205,7 +212,51 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
-        {/* Tabbed Content */}
+        {/* Customer position & navigation strip */}
+        {order.customerId && pos.total > 0 && (
+          <div className="rounded-xl border border-border bg-card p-4 card-shadow mb-4">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <div className="flex items-center gap-1.5 text-xs">
+                <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground">Order Position:</span>
+                <span className="font-semibold text-foreground">
+                  {pos.isOnlyOrder ? "First Order" : `#${pos.position} of ${pos.total}`}
+                </span>
+              </div>
+              <div className="text-xs"><span className="text-muted-foreground">Total Orders: </span><span className="font-semibold text-foreground">{pos.total}</span></div>
+              <div className="text-xs"><span className="text-muted-foreground">First: </span><span className="font-medium text-foreground">{pos.firstOrderDate || "—"}</span></div>
+              <div className="text-xs"><span className="text-muted-foreground">Latest: </span><span className="font-medium text-foreground">{pos.latestOrderDate || "—"}</span></div>
+
+              <div className="ml-auto flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1"
+                  disabled={!pos.prevOrderId}
+                  onClick={() => pos.prevOrderId && navigate(`/orders/${pos.prevOrderId}`)}
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Prev Order
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1"
+                  disabled={!pos.nextOrderId}
+                  onClick={() => pos.nextOrderId && navigate(`/orders/${pos.nextOrderId}`)}
+                >
+                  Next Order <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+                <Link
+                  to={`/customers/${order.customerId}`}
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline ml-2"
+                >
+                  View all orders <ExternalLink className="h-3 w-3" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         <Tabs defaultValue="info" className="w-full">
           <TabsList className="w-full justify-start bg-muted/50 mb-4">
             <TabsTrigger value="info">Order Info</TabsTrigger>
