@@ -24,6 +24,7 @@ import { useActivityLog } from "@/hooks/useActivityLog";
 import WarningCenter, { type ImportWarningLite } from "@/components/import/WarningCenter";
 import HealthScorePanel, { type HealthScore, type Recommendation } from "@/components/import/HealthScorePanel";
 import ResumeBanner from "@/components/import/ResumeBanner";
+import ImportLiveDashboard from "@/components/import/ImportLiveDashboard";
 
 // ---------- Canonical fields ----------
 const CANONICAL: { key: string; label: string; required: boolean }[] = [
@@ -119,6 +120,9 @@ export default function BulkImportPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("upload");
   const [fileName, setFileName] = useState<string>("");
+  const [importMode, setImportMode] = useState<"quick" | "ai">("quick");
+  const [liveRunId, setLiveRunId] = useState<string | null>(null);
+  const [queuing, setQueuing] = useState(false);
   const [rawHeaders, setRawHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<RawRow[]>([]);
   const [mapping, setMapping] = useState<Mapping>({});
