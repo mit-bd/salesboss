@@ -114,6 +114,8 @@ export default function OrderDetailPage() {
     }
   };
 
+  const pos = useOrderPosition(order?.customerId, order?.id);
+
   if (!order) {
     return (
       <AppLayout>
@@ -130,7 +132,7 @@ export default function OrderDetailPage() {
   const history = getOrderHistory(order.id);
   const currentStatus = order.currentStatus || "pending";
   const canComplete = currentStatus === "pending" && !order.isDeleted;
-  const pos = useOrderPosition(order.customerId, order.id);
+
 
 
   // Collect all upsells and repeats across all followups for this order
