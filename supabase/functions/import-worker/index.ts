@@ -156,7 +156,7 @@ serve(async (req) => {
               rider_name: row.riderName ?? null,
               rider_phone: row.riderPhone ?? null,
               payment_status: row.paymentStatus ?? null,
-              item_description: row.itemDescription ?? null,
+              item_description: row.itemDescription ?? "",
               note: row.note ?? "",
               assigned_to: (assignments.assigned_to as string) || null,
               assigned_to_name: (assignments.assigned_to_name as string) || "",
