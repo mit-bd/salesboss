@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import PageHeader from "@/components/layout/PageHeader";
 import { useOrderStore } from "@/contexts/OrderStoreContext";
@@ -11,11 +11,13 @@ import EditOrderDialog from "@/components/EditOrderDialog";
 import BulkActionBar from "@/components/BulkActionBar";
 import BulkEditDialog from "@/components/BulkEditDialog";
 import BulkSingleFieldDialog, { BulkFieldType } from "@/components/BulkSingleFieldDialog";
+import BulkDeleteRestoreDialog, { BulkPhase } from "@/components/BulkDeleteRestoreDialog";
 import OrderTable from "@/components/OrderTable";
 import { useRole } from "@/contexts/RoleContext";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useServerPaginatedOrders } from "@/hooks/useServerPaginatedOrders";
+import { supabase } from "@/integrations/supabase/client";
 import { Order } from "@/types/data";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -28,16 +30,22 @@ export default function OrdersPage() {
   const [editOrder, setEditOrder] = useState<Order | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [conflictIds, setConflictIds] = useState<Set<string>>(new Set());
+  const [allMatchingSelected, setAllMatchingSelected] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [singleFieldOpen, setSingleFieldOpen] = useState(false);
   const [singleFieldType, setSingleFieldType] = useState<BulkFieldType>("assignExecutive");
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkPhase, setBulkPhase] = useState<BulkPhase>("idle");
+  const [bulkProgress, setBulkProgress] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   const { isAdmin } = useRole();
   const { hasPermission } = usePermissions();
   const { user } = useAuth();
   const { toast } = useToast();
   const canEditOrder = isAdmin || hasPermission("orders.edit");
-  const { updateOrder } = useOrderStore();
+  const canDeleteOrder = isAdmin || hasPermission("orders.delete");
+  const { updateOrder, refreshOrders } = useOrderStore();
+
 
   // Debounce search input
   useEffect(() => {
@@ -66,11 +74,13 @@ export default function OrdersPage() {
     loading,
     updateFilters,
     refresh,
+    fetchAllMatchingIds,
   } = useServerPaginatedOrders(pageSize);
 
   // Update server filters when they change
   useEffect(() => {
     updateFilters(serverFilters);
+    setAllMatchingSelected(false);
   }, [serverFilters, updateFilters]);
 
   const openSingleField = (type: BulkFieldType) => {
@@ -78,16 +88,77 @@ export default function OrdersPage() {
     setSingleFieldOpen(true);
   };
 
-  const clearSelection = () => {
+  const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
     setConflictIds(new Set());
+    setAllMatchingSelected(false);
+  }, []);
+
+  const clearSelectionAndRefresh = useCallback(() => {
+    clearSelection();
     refresh();
-  };
+  }, [clearSelection, refresh]);
+
+  const handleSelectAllMatching = useCallback(async () => {
+    try {
+      const ids = await fetchAllMatchingIds(20000);
+      setSelectedIds(new Set(ids));
+      setAllMatchingSelected(true);
+      if (ids.length >= 20000) {
+        toast({ title: "Selection capped", description: "Selected the first 20,000 matching orders." });
+      }
+    } catch (e: any) {
+      toast({ title: "Could not select all", description: e?.message, variant: "destructive" });
+    }
+  }, [fetchAllMatchingIds, toast]);
+
+  const runBulkDelete = useCallback(async (reason: string) => {
+    const idsAll = Array.from(selectedIds);
+    if (idsAll.length === 0) return;
+    setBulkPhase("preparing");
+    setBulkProgress(5);
+    try {
+      const CHUNK = 1000;
+      let done = 0;
+      let totalAffected = 0;
+      for (let i = 0; i < idsAll.length; i += CHUNK) {
+        setBulkPhase("processing");
+        const chunk = idsAll.slice(i, i + CHUNK);
+        const { data, error } = await supabase.rpc("bulk_soft_delete_orders", {
+          p_order_ids: chunk,
+          p_reason: reason || "Bulk Delete",
+        });
+        if (error) throw error;
+        totalAffected += Number((data as any)?.affected || 0);
+        done += chunk.length;
+        setBulkProgress(Math.min(90, Math.round((done / idsAll.length) * 90)));
+      }
+      setBulkPhase("recalculating");
+      setBulkProgress(94);
+      setBulkPhase("refreshing");
+      setBulkProgress(97);
+      await Promise.all([refresh(), refreshOrders()]);
+      setBulkPhase("done");
+      setBulkProgress(100);
+      toast({ title: "Bulk delete complete", description: `${totalAffected.toLocaleString()} orders deleted.` });
+      setTimeout(() => {
+        setBulkDeleteOpen(false);
+        setBulkPhase("idle");
+        setBulkProgress(0);
+        clearSelection();
+      }, 800);
+    } catch (e: any) {
+      setBulkPhase("idle");
+      setBulkProgress(0);
+      toast({ title: "Bulk delete failed", description: e?.message, variant: "destructive" });
+    }
+  }, [selectedIds, refresh, refreshOrders, clearSelection, toast]);
 
   const handlePageSizeChange = (val: string) => {
     setPageSize(Number(val));
     setPage(0);
   };
+
 
   return (
     <AppLayout>
@@ -168,34 +239,54 @@ export default function OrdersPage() {
         <EditOrderDialog order={editOrder} open={!!editOrder} onOpenChange={(open) => !open && setEditOrder(null)} onSave={async (updated) => { await updateOrder(updated); setEditOrder(null); refresh(); }} />
       )}
 
-      {isAdmin && (
+      {(isAdmin || canDeleteOrder) && (
         <>
           <BulkActionBar
             selectedCount={selectedIds.size}
+            matchingTotal={totalCount}
+            allMatchingSelected={allMatchingSelected}
+            onSelectAllMatching={handleSelectAllMatching}
             onClear={clearSelection}
-            onBulkEdit={() => setBulkEditOpen(true)}
-            onAssignExecutive={() => openSingleField("assignExecutive")}
-            onChangeDeliveryMethod={() => openSingleField("deliveryMethod")}
-            onChangeOrderSource={() => openSingleField("orderSource")}
-            onUpdateFollowupDate={() => openSingleField("followupDate")}
+            onBulkEdit={isAdmin ? () => setBulkEditOpen(true) : undefined}
+            onAssignExecutive={isAdmin ? () => openSingleField("assignExecutive") : undefined}
+            onChangeDeliveryMethod={isAdmin ? () => openSingleField("deliveryMethod") : undefined}
+            onChangeOrderSource={isAdmin ? () => openSingleField("orderSource") : undefined}
+            onUpdateFollowupDate={isAdmin ? () => openSingleField("followupDate") : undefined}
+            onBulkDelete={canDeleteOrder ? () => setBulkDeleteOpen(true) : undefined}
           />
-          <BulkEditDialog
-            open={bulkEditOpen}
-            onOpenChange={setBulkEditOpen}
-            selectedIds={selectedIds}
-            onComplete={clearSelection}
-            onConflict={setConflictIds}
-          />
-          <BulkSingleFieldDialog
-            open={singleFieldOpen}
-            onOpenChange={setSingleFieldOpen}
-            fieldType={singleFieldType}
-            selectedIds={selectedIds}
-            onComplete={clearSelection}
-            onConflict={setConflictIds}
-          />
+          {isAdmin && (
+            <>
+              <BulkEditDialog
+                open={bulkEditOpen}
+                onOpenChange={setBulkEditOpen}
+                selectedIds={selectedIds}
+                onComplete={clearSelectionAndRefresh}
+                onConflict={setConflictIds}
+              />
+              <BulkSingleFieldDialog
+                open={singleFieldOpen}
+                onOpenChange={setSingleFieldOpen}
+                fieldType={singleFieldType}
+                selectedIds={selectedIds}
+                onComplete={clearSelectionAndRefresh}
+                onConflict={setConflictIds}
+              />
+            </>
+          )}
+          {canDeleteOrder && (
+            <BulkDeleteRestoreDialog
+              open={bulkDeleteOpen}
+              onOpenChange={(o) => { if (bulkPhase === "idle" || bulkPhase === "done") setBulkDeleteOpen(o); }}
+              mode="delete"
+              count={selectedIds.size}
+              phase={bulkPhase}
+              progress={bulkProgress}
+              onConfirm={runBulkDelete}
+            />
+          )}
         </>
       )}
+
     </AppLayout>
   );
 }
