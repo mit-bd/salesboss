@@ -815,12 +815,21 @@ export default function BulkImportPage() {
                 <Button variant="outline" onClick={() => runDetect(rawHeaders)} disabled={detecting}>
                   <Sparkles className="h-4 w-4 mr-1.5" /> Re-detect
                 </Button>
-                <Button
-                  disabled={REQUIRED_KEYS.some((k) => !mapping[k])}
-                  onClick={() => setStep("clean")}
-                >
-                  Next: AI clean <ArrowRight className="h-4 w-4 ml-1.5" />
-                </Button>
+                {importMode === "quick" ? (
+                  <Button
+                    disabled={REQUIRED_KEYS.some((k) => !mapping[k]) || queuing}
+                    onClick={runQueuedImport}
+                  >
+                    {queuing ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Queuing…</> : <>Start background import <ArrowRight className="h-4 w-4 ml-1.5" /></>}
+                  </Button>
+                ) : (
+                  <Button
+                    disabled={REQUIRED_KEYS.some((k) => !mapping[k])}
+                    onClick={() => setStep("clean")}
+                  >
+                    Next: Review with AI <ArrowRight className="h-4 w-4 ml-1.5" />
+                  </Button>
+                )}
               </div>
             </div>
           </div>
