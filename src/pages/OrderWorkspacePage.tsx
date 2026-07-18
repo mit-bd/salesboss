@@ -110,15 +110,18 @@ export default function OrderWorkspacePage() {
   const { isAdmin } = useRole();
   const { hasPermission } = usePermissions();
   const { user } = useAuth();
-  const { orders: storeOrders, completeFollowup } = useOrderStore();
+  const { orders: storeOrders, completeFollowup, softDelete } = useOrderStore();
   const [editOpen, setEditOpen] = useState(false);
   const [followupOpen, setFollowupOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const openOrder = (id: string) => navigate(`/orders/${id}/workspace`, { replace: true });
 
   const storeOrder = storeOrders.find((o) => o.id === orderId);
   const canEdit = isAdmin || hasPermission("orders.edit");
+  const canDelete = isAdmin || hasPermission("orders.delete");
   const canComplete = storeOrder && (storeOrder.currentStatus || "pending") === "pending" && !storeOrder.isDeleted;
+
 
   if (loading) {
     return (
