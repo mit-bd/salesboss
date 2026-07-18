@@ -7,8 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, ArrowRight, Phone, MapPin, User, Package, Truck, Calendar,
-  Sparkles, RefreshCw, Edit2, ExternalLink, Printer, FileDown,
+  Sparkles, RefreshCw, Edit2, ExternalLink, Printer, FileDown, Trash2,
   Repeat2, CheckCircle, ShieldAlert, TrendingUp, Wallet, MessageSquare,
+
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOrderWorkspace } from "@/hooks/useOrderWorkspace";
