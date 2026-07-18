@@ -74,11 +74,13 @@ export default function OrdersPage() {
     loading,
     updateFilters,
     refresh,
+    fetchAllMatchingIds,
   } = useServerPaginatedOrders(pageSize);
 
   // Update server filters when they change
   useEffect(() => {
     updateFilters(serverFilters);
+    setAllMatchingSelected(false);
   }, [serverFilters, updateFilters]);
 
   const openSingleField = (type: BulkFieldType) => {
@@ -86,16 +88,77 @@ export default function OrdersPage() {
     setSingleFieldOpen(true);
   };
 
-  const clearSelection = () => {
+  const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
     setConflictIds(new Set());
+    setAllMatchingSelected(false);
+  }, []);
+
+  const clearSelectionAndRefresh = useCallback(() => {
+    clearSelection();
     refresh();
-  };
+  }, [clearSelection, refresh]);
+
+  const handleSelectAllMatching = useCallback(async () => {
+    try {
+      const ids = await fetchAllMatchingIds(20000);
+      setSelectedIds(new Set(ids));
+      setAllMatchingSelected(true);
+      if (ids.length >= 20000) {
+        toast({ title: "Selection capped", description: "Selected the first 20,000 matching orders." });
+      }
+    } catch (e: any) {
+      toast({ title: "Could not select all", description: e?.message, variant: "destructive" });
+    }
+  }, [fetchAllMatchingIds, toast]);
+
+  const runBulkDelete = useCallback(async (reason: string) => {
+    const idsAll = Array.from(selectedIds);
+    if (idsAll.length === 0) return;
+    setBulkPhase("preparing");
+    setBulkProgress(5);
+    try {
+      const CHUNK = 1000;
+      let done = 0;
+      let totalAffected = 0;
+      for (let i = 0; i < idsAll.length; i += CHUNK) {
+        setBulkPhase("processing");
+        const chunk = idsAll.slice(i, i + CHUNK);
+        const { data, error } = await supabase.rpc("bulk_soft_delete_orders", {
+          p_order_ids: chunk,
+          p_reason: reason || "Bulk Delete",
+        });
+        if (error) throw error;
+        totalAffected += Number((data as any)?.affected || 0);
+        done += chunk.length;
+        setBulkProgress(Math.min(90, Math.round((done / idsAll.length) * 90)));
+      }
+      setBulkPhase("recalculating");
+      setBulkProgress(94);
+      setBulkPhase("refreshing");
+      setBulkProgress(97);
+      await Promise.all([refresh(), refreshOrders()]);
+      setBulkPhase("done");
+      setBulkProgress(100);
+      toast({ title: "Bulk delete complete", description: `${totalAffected.toLocaleString()} orders deleted.` });
+      setTimeout(() => {
+        setBulkDeleteOpen(false);
+        setBulkPhase("idle");
+        setBulkProgress(0);
+        clearSelection();
+      }, 800);
+    } catch (e: any) {
+      setBulkPhase("idle");
+      setBulkProgress(0);
+      toast({ title: "Bulk delete failed", description: e?.message, variant: "destructive" });
+    }
+  }, [selectedIds, refresh, refreshOrders, clearSelection, toast]);
 
   const handlePageSizeChange = (val: string) => {
     setPageSize(Number(val));
     setPage(0);
   };
+
 
   return (
     <AppLayout>
