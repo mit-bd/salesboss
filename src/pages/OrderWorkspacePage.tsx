@@ -533,8 +533,14 @@ export default function OrderWorkspacePage() {
                 <Button size="sm" variant="outline" className="justify-start gap-1.5" asChild>
                   <Link to="/repeat-orders"><Repeat2 className="h-3.5 w-3.5" /> Repeats</Link>
                 </Button>
+                {canDelete && (
+                  <Button size="sm" variant="destructive" className="justify-start gap-1.5 col-span-2" onClick={() => setDeleteOpen(true)}>
+                    <Trash2 className="h-3.5 w-3.5" /> Delete Order
+                  </Button>
+                )}
               </div>
             </Section>
+
 
             <Section title="AI Recommendations" icon={Sparkles}>
               {!aiScore && <p className="text-xs text-muted-foreground">Generate the AI score to see recommendations.</p>}
