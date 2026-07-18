@@ -212,7 +212,50 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
-        {/* Tabbed Content */}
+        {/* Customer position & navigation strip */}
+        {order.customerId && pos.total > 0 && (
+          <div className="rounded-xl border border-border bg-card p-4 card-shadow mb-4">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <div className="flex items-center gap-1.5 text-xs">
+                <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground">Order Position:</span>
+                <span className="font-semibold text-foreground">
+                  {pos.isOnlyOrder ? "First Order" : `#${pos.position} of ${pos.total}`}
+                </span>
+              </div>
+              <MetaDot label="Total Orders" value={pos.total} />
+              <MetaDot label="First" value={pos.firstOrderDate || "—"} />
+              <MetaDot label="Latest" value={pos.latestOrderDate || "—"} />
+              <div className="ml-auto flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1"
+                  disabled={!pos.prevOrderId}
+                  onClick={() => pos.prevOrderId && navigate(`/orders/${pos.prevOrderId}`)}
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Prev Order
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1"
+                  disabled={!pos.nextOrderId}
+                  onClick={() => pos.nextOrderId && navigate(`/orders/${pos.nextOrderId}`)}
+                >
+                  Next Order <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+                <Link
+                  to={`/customers/${order.customerId}`}
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline ml-2"
+                >
+                  View all orders <ExternalLink className="h-3 w-3" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         <Tabs defaultValue="info" className="w-full">
           <TabsList className="w-full justify-start bg-muted/50 mb-4">
             <TabsTrigger value="info">Order Info</TabsTrigger>
