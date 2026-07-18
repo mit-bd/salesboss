@@ -257,19 +257,21 @@ export default function OrderWorkspacePage() {
             {customer && (
               <Section title="Customer Intelligence" icon={TrendingUp}>
                 <div className="grid grid-cols-2 gap-3">
+                  <KV label="Customer Since" value={customer.first_order_date || customer.created_at?.split("T")[0] || "—"} />
                   <KV label="Lifetime Value" value={`৳${(customer.lifetime_value || 0).toLocaleString()}`} />
-                  <KV label="Avg Order" value={`৳${Math.round(customer.avg_order_value || 0).toLocaleString()}`} />
                   <KV label="Total Orders" value={customer.total_orders} />
+                  <KV label="Active Orders" value={customer.pending_orders} />
                   <KV label="Delivered" value={customer.delivered_orders} />
-                  <KV label="Pending" value={customer.pending_orders} />
                   <KV label="Cancelled" value={customer.cancelled_orders} />
                   <KV label="Returned" value={customer.returned_orders} />
                   <KV label="Repeat" value={customer.repeat_orders} />
+                  <KV label="Avg Order" value={`৳${Math.round(customer.avg_order_value || 0).toLocaleString()}`} />
                   <KV label="Last Product" value={customer.last_product || "—"} />
                   <KV label="Last Purchase" value={customer.last_order_date || "—"} />
                   <KV label="Last Followup" value={customer.last_followup_at ? fmtBST(customer.last_followup_at) : "—"} />
                   <KV label="Sales Exec" value={customer.last_executive_name || "—"} />
                 </div>
+
               </Section>
             )}
 
