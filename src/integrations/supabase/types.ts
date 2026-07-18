@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_normalization_cache: {
+        Row: {
+          confidence: number
+          created_at: string
+          hits: number
+          id: string
+          input: string
+          input_hash: string
+          kind: string
+          output: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          hits?: number
+          id?: string
+          input: string
+          input_hash: string
+          kind: string
+          output: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          hits?: number
+          id?: string
+          input?: string
+          input_hash?: string
+          kind?: string
+          output?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       commission_configs: {
         Row: {
           apply_on: string
@@ -1046,8 +1085,11 @@ export type Database = {
           created_at: string
           finished_at: string | null
           id: string
+          import_mode: string
           import_run_id: string
           last_error: string | null
+          max_attempts: number
+          next_attempt_at: string
           payload_ref: string | null
           project_id: string
           started_at: string | null
@@ -1062,8 +1104,11 @@ export type Database = {
           created_at?: string
           finished_at?: string | null
           id?: string
+          import_mode?: string
           import_run_id: string
           last_error?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
           payload_ref?: string | null
           project_id: string
           started_at?: string | null
@@ -1078,8 +1123,11 @@ export type Database = {
           created_at?: string
           finished_at?: string | null
           id?: string
+          import_mode?: string
           import_run_id?: string
           last_error?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
           payload_ref?: string | null
           project_id?: string
           started_at?: string | null
@@ -1101,23 +1149,28 @@ export type Database = {
       import_runs: {
         Row: {
           ai_fixed_fields: number
+          assignments: Json
           browser: string | null
           cancelled_at: string | null
           cancelled_by: string | null
+          chunk_size: number
           courier_name: string | null
           created_at: string
           device: string | null
+          duplicate_decisions: Json
           duplicates: number
           existing_customers: number
           file_hash: string | null
           file_storage_path: string | null
           health_score: Json | null
           id: string
+          import_mode: string
           imported: number
           invalid_cod: number
           invalid_phone: number
           ip: string | null
           last_processed_row: number | null
+          mapping: Json
           memory_peak_kb: number | null
           missing_mandatory: number
           new_customers: number
@@ -1144,23 +1197,28 @@ export type Database = {
         }
         Insert: {
           ai_fixed_fields?: number
+          assignments?: Json
           browser?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
+          chunk_size?: number
           courier_name?: string | null
           created_at?: string
           device?: string | null
+          duplicate_decisions?: Json
           duplicates?: number
           existing_customers?: number
           file_hash?: string | null
           file_storage_path?: string | null
           health_score?: Json | null
           id?: string
+          import_mode?: string
           imported?: number
           invalid_cod?: number
           invalid_phone?: number
           ip?: string | null
           last_processed_row?: number | null
+          mapping?: Json
           memory_peak_kb?: number | null
           missing_mandatory?: number
           new_customers?: number
@@ -1187,23 +1245,28 @@ export type Database = {
         }
         Update: {
           ai_fixed_fields?: number
+          assignments?: Json
           browser?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
+          chunk_size?: number
           courier_name?: string | null
           created_at?: string
           device?: string | null
+          duplicate_decisions?: Json
           duplicates?: number
           existing_customers?: number
           file_hash?: string | null
           file_storage_path?: string | null
           health_score?: Json | null
           id?: string
+          import_mode?: string
           imported?: number
           invalid_cod?: number
           invalid_phone?: number
           ip?: string | null
           last_processed_row?: number | null
+          mapping?: Json
           memory_peak_kb?: number | null
           missing_mandatory?: number
           new_customers?: number
@@ -2132,6 +2195,7 @@ export type Database = {
         Returns: {
           batch_index: number
           id: string
+          import_mode: string
           import_run_id: string
           payload_ref: string
           project_id: string
