@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { createAssignmentNotifications } from "@/hooks/useNotifications";
 import { useActivityLog } from "@/hooks/useActivityLog";
 import OrderActivityTimeline from "@/components/OrderActivityTimeline";
@@ -9,7 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Phone, MapPin, Package, Calendar, RefreshCw, ShoppingCart, Zap, Truck, Edit2, Trash2, CheckCircle, Clock, MessageSquare, User, UserX } from "lucide-react";
+import { ArrowLeft, ArrowRight, Phone, MapPin, Package, Calendar, RefreshCw, ShoppingCart, Zap, Truck, Edit2, Trash2, CheckCircle, Clock, MessageSquare, User, UserX, Hash, ExternalLink } from "lucide-react";
+import { useOrderPosition } from "@/hooks/useOrderPosition";
+
 import { cn } from "@/lib/utils";
 import { useRole } from "@/contexts/RoleContext";
 import { usePermissions } from "@/contexts/PermissionContext";
