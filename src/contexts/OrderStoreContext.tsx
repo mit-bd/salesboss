@@ -13,9 +13,10 @@ interface OrderStoreContextType {
   upsellRecords: UpsellRecord[];
   repeatOrderRecords: RepeatOrderRecord[];
   loading: boolean;
-  softDelete: (orderId: string) => Promise<void>;
+  softDelete: (orderId: string, reason?: string) => Promise<void>;
   restoreOrder: (orderId: string) => Promise<void>;
   hardDelete: (orderId: string) => Promise<void>;
+
   updateOrder: (updated: Order) => Promise<void>;
   addOrder: (order: Omit<Order, "id">) => Promise<void>;
   completeFollowup: (data: {
@@ -545,19 +546,25 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
   );
 
   const softDelete = useCallback(
-    async (orderId: string) => {
-      const childIds = orders.filter((o) => o.parentOrderId === orderId).map((o) => o.id);
-      const idsToDelete = [orderId, ...childIds];
-      const { error } = await supabase.from("orders").update({ is_deleted: true }).in("id", idsToDelete);
+    async (orderId: string, reason?: string) => {
+      const { error } = await supabase.rpc("soft_delete_order", {
+        p_order_id: orderId,
+        p_reason: reason ?? null,
+      });
       if (error) {
         console.error("[OrderStore] Soft delete error:", error);
-        toast({ title: "Error deleting order", description: error.message, variant: "destructive" });
+        toast({ title: "Cannot delete order", description: error.message, variant: "destructive" });
         return;
       }
-      setOrders((prev) => prev.map((o) => idsToDelete.includes(o.id) ? { ...o, isDeleted: true } : o));
+      // Cascade soft-delete for child orders (repeat/upsell child rows)
+      const childIds = orders.filter((o) => o.parentOrderId === orderId).map((o) => o.id);
+      for (const cid of childIds) {
+        await supabase.rpc("soft_delete_order", { p_order_id: cid, p_reason: reason ?? null });
+      }
+      const idsMarked = [orderId, ...childIds];
+      setOrders((prev) => prev.map((o) => idsMarked.includes(o.id) ? { ...o, isDeleted: true } : o));
       toast({ title: "Order deleted" });
-      addLog({ actionType: "Order Soft Deleted", userName, role: role || "unknown", entity: `Order #${orderId}` });
-      await logOrderActivity(orderId, "Order Deleted", `${userName} deleted the order`);
+      addLog({ actionType: "Order Soft Deleted", userName, role: role || "unknown", entity: `Order #${orderId}`, details: reason || undefined });
     },
     [orders, addLog, userName, role, toast]
   );
@@ -568,11 +575,13 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       const childIds = orders.filter((o) => o.parentOrderId === orderId).map((o) => o.id);
       const idsToRestore = [orderId, ...childIds];
       if (order?.parentOrderId) idsToRestore.push(order.parentOrderId);
-      const { error } = await supabase.from("orders").update({ is_deleted: false }).in("id", idsToRestore);
-      if (error) {
-        console.error("[OrderStore] Restore error:", error);
-        toast({ title: "Error restoring order", description: error.message, variant: "destructive" });
-        return;
+      for (const rid of idsToRestore) {
+        const { error } = await supabase.rpc("restore_deleted_order", { p_order_id: rid });
+        if (error) {
+          console.error("[OrderStore] Restore error:", error);
+          toast({ title: "Cannot restore order", description: error.message, variant: "destructive" });
+          return;
+        }
       }
       setOrders((prev) => prev.map((o) => idsToRestore.includes(o.id) ? { ...o, isDeleted: false } : o));
       toast({ title: "Order restored" });
@@ -580,6 +589,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
     },
     [orders, addLog, userName, role, toast]
   );
+
 
   const hardDelete = useCallback(
     async (orderId: string) => {

@@ -7,8 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, ArrowRight, Phone, MapPin, User, Package, Truck, Calendar,
-  Sparkles, RefreshCw, Edit2, ExternalLink, Printer, FileDown,
+  Sparkles, RefreshCw, Edit2, ExternalLink, Printer, FileDown, Trash2,
   Repeat2, CheckCircle, ShieldAlert, TrendingUp, Wallet, MessageSquare,
+
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useOrderWorkspace } from "@/hooks/useOrderWorkspace";
@@ -26,6 +27,8 @@ import { usePermissions } from "@/contexts/PermissionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import EditOrderDialog from "@/components/EditOrderDialog";
 import CompleteFollowupDialog from "@/components/CompleteFollowupDialog";
+import DeleteOrderDialog from "@/components/DeleteOrderDialog";
+
 import WorkspaceHeaderSummary from "@/components/workspace/WorkspaceHeaderSummary";
 import OrderPositionCard from "@/components/workspace/OrderPositionCard";
 import RelatedOrdersPanel from "@/components/workspace/RelatedOrdersPanel";
@@ -107,15 +110,18 @@ export default function OrderWorkspacePage() {
   const { isAdmin } = useRole();
   const { hasPermission } = usePermissions();
   const { user } = useAuth();
-  const { orders: storeOrders, completeFollowup } = useOrderStore();
+  const { orders: storeOrders, completeFollowup, softDelete } = useOrderStore();
   const [editOpen, setEditOpen] = useState(false);
   const [followupOpen, setFollowupOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const openOrder = (id: string) => navigate(`/orders/${id}/workspace`, { replace: true });
 
   const storeOrder = storeOrders.find((o) => o.id === orderId);
   const canEdit = isAdmin || hasPermission("orders.edit");
+  const canDelete = isAdmin || hasPermission("orders.delete");
   const canComplete = storeOrder && (storeOrder.currentStatus || "pending") === "pending" && !storeOrder.isDeleted;
+
 
   if (loading) {
     return (
@@ -527,8 +533,14 @@ export default function OrderWorkspacePage() {
                 <Button size="sm" variant="outline" className="justify-start gap-1.5" asChild>
                   <Link to="/repeat-orders"><Repeat2 className="h-3.5 w-3.5" /> Repeats</Link>
                 </Button>
+                {canDelete && (
+                  <Button size="sm" variant="destructive" className="justify-start gap-1.5 col-span-2" onClick={() => setDeleteOpen(true)}>
+                    <Trash2 className="h-3.5 w-3.5" /> Delete Order
+                  </Button>
+                )}
               </div>
             </Section>
+
 
             <Section title="AI Recommendations" icon={Sparkles}>
               {!aiScore && <p className="text-xs text-muted-foreground">Generate the AI score to see recommendations.</p>}
@@ -557,8 +569,17 @@ export default function OrderWorkspacePage() {
           <>
             <EditOrderDialog order={storeOrder} open={editOpen} onOpenChange={setEditOpen} />
             <CompleteFollowupDialog order={storeOrder} open={followupOpen} onOpenChange={setFollowupOpen} onComplete={completeFollowup} />
+            {canDelete && (
+              <DeleteOrderDialog
+                order={storeOrder}
+                open={deleteOpen}
+                onOpenChange={setDeleteOpen}
+                onConfirm={async (reason) => { await softDelete(storeOrder.id, reason); navigate("/orders"); }}
+              />
+            )}
           </>
         )}
+
       </div>
     </AppLayout>
   );

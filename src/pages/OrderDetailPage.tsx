@@ -592,7 +592,8 @@ export default function OrderDetailPage() {
         <EditOrderDialog order={order} open={editOpen} onOpenChange={setEditOpen} onSave={async (updated) => { await updateOrder(updated); setEditOpen(false); }} />
       )}
       {canDeleteOrder && (
-        <DeleteOrderDialog order={order} open={deleteOpen} onOpenChange={setDeleteOpen} childCount={childOrders.length} onConfirm={async () => { await softDelete(order.id); toast({ title: "Order Deleted" }); navigate("/orders"); }} />
+        <DeleteOrderDialog order={order} open={deleteOpen} onOpenChange={setDeleteOpen} childCount={childOrders.length} onConfirm={async (reason) => { await softDelete(order.id, reason); navigate("/orders"); }} />
+
       )}
 
       <CompleteFollowupDialog order={order} open={followupOpen} onOpenChange={setFollowupOpen} onComplete={completeFollowup} />

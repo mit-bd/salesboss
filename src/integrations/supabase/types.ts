@@ -1526,6 +1526,9 @@ export type Database = {
           current_status: string
           customer_id: string | null
           customer_name: string
+          deleted_at: string | null
+          deleted_by: string | null
+          deletion_reason: string | null
           delivery_date: string | null
           delivery_method: string
           delivery_status: string | null
@@ -1551,12 +1554,15 @@ export type Database = {
           paid_amount: number
           parent_order_id: string | null
           payment_status: string | null
+          previous_status: string | null
           price: number
           product_id: string | null
           product_sku: string
           product_title: string
           project_id: string | null
           recipient_name: string | null
+          restored_at: string | null
+          restored_by: string | null
           rider_name: string | null
           rider_phone: string | null
           shipping_charge: number
@@ -1574,6 +1580,9 @@ export type Database = {
           current_status?: string
           customer_id?: string | null
           customer_name: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deletion_reason?: string | null
           delivery_date?: string | null
           delivery_method?: string
           delivery_status?: string | null
@@ -1599,12 +1608,15 @@ export type Database = {
           paid_amount?: number
           parent_order_id?: string | null
           payment_status?: string | null
+          previous_status?: string | null
           price?: number
           product_id?: string | null
           product_sku?: string
           product_title?: string
           project_id?: string | null
           recipient_name?: string | null
+          restored_at?: string | null
+          restored_by?: string | null
           rider_name?: string | null
           rider_phone?: string | null
           shipping_charge?: number
@@ -1622,6 +1634,9 @@ export type Database = {
           current_status?: string
           customer_id?: string | null
           customer_name?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deletion_reason?: string | null
           delivery_date?: string | null
           delivery_method?: string
           delivery_status?: string | null
@@ -1647,12 +1662,15 @@ export type Database = {
           paid_amount?: number
           parent_order_id?: string | null
           payment_status?: string | null
+          previous_status?: string | null
           price?: number
           product_id?: string | null
           product_sku?: string
           product_title?: string
           project_id?: string | null
           recipient_name?: string | null
+          restored_at?: string | null
+          restored_by?: string | null
           rider_name?: string | null
           rider_phone?: string | null
           shipping_charge?: number
@@ -2306,6 +2324,7 @@ export type Database = {
         Args: { p_kind?: string; p_project_id: string }
         Returns: number
       }
+      restore_deleted_order: { Args: { p_order_id: string }; Returns: Json }
       resume_import_run: {
         Args: { p_run_id: string; p_user_id: string; p_user_name: string }
         Returns: Json
@@ -2315,6 +2334,10 @@ export type Database = {
       set_import_run_total_batches: {
         Args: { p_run_id: string; p_total_batches: number }
         Returns: undefined
+      }
+      soft_delete_order: {
+        Args: { p_order_id: string; p_reason?: string }
+        Returns: Json
       }
     }
     Enums: {
