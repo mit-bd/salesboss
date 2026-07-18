@@ -131,6 +131,39 @@ export function useServerPaginatedOrders(pageSize: number = 50) {
     setFilters(newFilters);
   }, []);
 
+  // Fetch ALL matching order IDs for the current filters (bulk actions).
+  // Chunked to 1000 rows per request; capped at hardMax to prevent runaway loops.
+  const fetchAllMatchingIds = useCallback(async (hardMax = 20000): Promise<string[]> => {
+    if (role === "owner" || !projectId) return [];
+    const CHUNK = 1000;
+    const ids: string[] = [];
+    let from = 0;
+    while (from < hardMax) {
+      let q: any = supabase.from("orders").select("id").order("updated_at", { ascending: false }).range(from, from + CHUNK - 1);
+      q = q.eq("project_id", projectId).eq("is_deleted", false);
+      if (filters.dateFrom) q = q.gte("order_date", filters.dateFrom);
+      if (filters.dateTo) q = q.lte("order_date", filters.dateTo);
+      if (filters.salesExecutive === "__unassigned__") q = q.is("assigned_to", null);
+      else if (filters.salesExecutive) q = q.eq("assigned_to", filters.salesExecutive);
+      if (filters.product) q = q.eq("product_id", filters.product);
+      if (filters.orderSource) q = q.eq("order_source", filters.orderSource);
+      if (filters.followupStep) q = q.eq("followup_step", Number(filters.followupStep));
+      if (filters.deliveryMethod) q = q.eq("delivery_method", filters.deliveryMethod);
+      if (filters.search) {
+        q = q.or(
+          `customer_name.ilike.%${filters.search}%,mobile.ilike.%${filters.search}%,generated_order_id.ilike.%${filters.search}%,invoice_id.ilike.%${filters.search}%`
+        );
+      }
+      const { data, error } = await q;
+      if (error) throw error;
+      const rows = (data as any[]) || [];
+      for (const r of rows) ids.push(r.id);
+      if (rows.length < CHUNK) break;
+      from += CHUNK;
+    }
+    return ids;
+  }, [projectId, role, filters]);
+
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   return {
@@ -143,6 +176,8 @@ export function useServerPaginatedOrders(pageSize: number = 50) {
     filters,
     updateFilters,
     refresh: fetchPage,
+    fetchAllMatchingIds,
     pageSize,
   };
 }
+
