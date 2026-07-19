@@ -15,21 +15,30 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import BulkDeleteRestoreDialog, { BulkPhase } from "@/components/BulkDeleteRestoreDialog";
+import BulkHardDeleteDialog, { HardDeletePhase } from "@/components/BulkHardDeleteDialog";
 import { RotateCcw, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function DeletedOrdersPage() {
   const { deletedOrders, restoreOrder, hardDelete, refreshOrders } = useOrderStore();
-  const { isAdmin } = useRole();
+  const { isAdmin, role } = useRole();
+  const isOwner = role === "owner";
   const { hasPermission } = usePermissions();
+
+
   const { toast } = useToast();
   const [hardDeleteId, setHardDeleteId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkRestoreOpen, setBulkRestoreOpen] = useState(false);
   const [bulkPhase, setBulkPhase] = useState<BulkPhase>("idle");
   const [bulkProgress, setBulkProgress] = useState(0);
+  const [bulkHardOpen, setBulkHardOpen] = useState(false);
+  const [hardPhase, setHardPhase] = useState<HardDeletePhase>("idle");
+  const [hardProgress, setHardProgress] = useState(0);
 
   const canRestore = isAdmin || hasPermission("orders.delete");
+  const canHardDelete = isOwner || isAdmin || hasPermission("orders.hard_delete");
+
 
   const allChecked = deletedOrders.length > 0 && selected.size === deletedOrders.length;
   const someChecked = selected.size > 0 && selected.size < deletedOrders.length;
@@ -102,26 +111,78 @@ export default function DeletedOrdersPage() {
     }
   };
 
+  const runBulkHardDelete = async (reason: string) => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setHardPhase("preparing"); setHardProgress(4);
+    try {
+      setHardPhase("checking"); setHardProgress(12);
+      // Dependency check already done in dialog on open; skip re-check here.
+      setHardPhase("deleting"); setHardProgress(20);
+      const CHUNK = 500;
+      let done = 0;
+      let totalDeleted = 0;
+      const ua = typeof navigator !== "undefined" ? navigator.userAgent : null;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const chunk = ids.slice(i, i + CHUNK);
+        const { data, error } = await supabase.rpc("bulk_hard_delete_orders", {
+          p_order_ids: chunk,
+          p_reason: reason || null,
+          p_ip: null,
+          p_user_agent: ua,
+        });
+        if (error) throw error;
+        totalDeleted += Number((data as any)?.deleted || 0);
+        done += chunk.length;
+        setHardProgress(20 + Math.min(70, Math.round((done / ids.length) * 70)));
+      }
+      setHardPhase("recalculating"); setHardProgress(94);
+      await refreshOrders();
+      setHardPhase("done"); setHardProgress(100);
+      toast({
+        title: "Permanent delete complete",
+        description: `${totalDeleted.toLocaleString()} orders permanently deleted.`,
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        setBulkHardOpen(false); setHardPhase("idle"); setHardProgress(0); clearSelection();
+      }, 900);
+    } catch (e: any) {
+      setHardPhase("idle"); setHardProgress(0);
+      toast({ title: "Permanent delete failed", description: e?.message, variant: "destructive" });
+    }
+  };
+
+  const selectedOrderRows = deletedOrders.filter((o) => selected.has(o.id));
+
   return (
     <AppLayout>
       <PageHeader title="Deleted Orders" description="Soft-deleted orders — restore or permanently remove" />
 
-      {selected.size > 0 && canRestore && (
+      {selected.size > 0 && (canRestore || canHardDelete) && (
         <div className="mb-3 flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 animate-fade-in">
           <span className="inline-flex items-center justify-center rounded-full bg-primary px-2.5 py-0.5 text-xs font-bold text-primary-foreground">
             {selected.size.toLocaleString()}
           </span>
           <span className="text-sm font-medium">Selected</span>
           <div className="ml-auto flex items-center gap-2">
-            <Button size="sm" className="gap-1.5" onClick={() => setBulkRestoreOpen(true)}>
-              <RotateCcw className="h-3.5 w-3.5" /> Bulk Restore
-            </Button>
+            {canRestore && (
+              <Button size="sm" className="gap-1.5" onClick={() => setBulkRestoreOpen(true)}>
+                <RotateCcw className="h-3.5 w-3.5" /> Bulk Restore
+              </Button>
+            )}
+            {canHardDelete && (
+              <Button size="sm" variant="destructive" className="gap-1.5" onClick={() => setBulkHardOpen(true)}>
+                <Trash2 className="h-3.5 w-3.5" /> Bulk Permanent Delete
+              </Button>
+            )}
             <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={clearSelection}>
-              <X className="h-3.5 w-3.5" /> Clear
+              <X className="h-3.5 w-3.5" /> Clear Selection
             </Button>
           </div>
         </div>
       )}
+
 
       <div className="rounded-xl border border-border bg-card card-shadow overflow-hidden animate-fade-in">
         <Table>
@@ -207,6 +268,27 @@ export default function DeletedOrdersPage() {
           onConfirm={runBulkRestore}
         />
       )}
+
+      {canHardDelete && (
+        <BulkHardDeleteDialog
+          open={bulkHardOpen}
+          onOpenChange={(o) => { if (hardPhase === "idle" || hardPhase === "done") setBulkHardOpen(o); }}
+          selectedOrders={selectedOrderRows.map((o) => ({
+            id: o.id,
+            generatedOrderId: o.generatedOrderId,
+            invoiceId: o.invoiceId,
+            customerName: o.customerName,
+            mobile: o.mobile,
+            price: Number(o.price || 0),
+            orderDate: o.orderDate,
+            currentStatus: o.currentStatus,
+          }))}
+          phase={hardPhase}
+          progress={hardProgress}
+          onConfirm={runBulkHardDelete}
+        />
+      )}
+
     </AppLayout>
   );
 }
