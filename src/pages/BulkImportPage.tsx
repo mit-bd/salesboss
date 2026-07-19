@@ -560,6 +560,53 @@ export default function BulkImportPage() {
         }).then(() => {}, () => {});
       }
 
+      // 2b) Audit each duplicate-group decision + upsert learning suggestions
+      if (dupGroups.length) {
+        const auditRows: any[] = [];
+        const learnRows: any[] = [];
+        for (const g of dupGroups) {
+          const action = dupState.customers[g.mobile] || g.suggestedAction || dupState.global || "update";
+          const caseType =
+            g.matchedOrderIds.length > 0 ? "same_order_id" :
+            g.matchedTrackingCodes.length > 0 ? "same_tracking" :
+            g.matchedInvoices.length > 0 ? "same_invoice" : "same_mobile";
+          auditRows.push({
+            project_id: profile.project_id,
+            action,
+            case_type: caseType,
+            existing_order_id: g.existingOrders[0]?.id ?? null,
+            canonical_customer_id: g.customerId,
+            actor_user_id: user.id,
+            actor_name: profile.full_name || user.email || "",
+            reason: `Bulk import decision (${g.incomingCount} incoming vs ${g.existingCount} existing)`,
+            details: {
+              import_run_id: runId,
+              mobile: g.mobile,
+              matched_order_ids: g.matchedOrderIds,
+              matched_tracking: g.matchedTrackingCodes,
+              matched_invoices: g.matchedInvoices,
+            },
+          });
+          learnRows.push({
+            project_id: profile.project_id,
+            kind: "dup_action_by_mobile",
+            input_value: g.mobile,
+            suggested_value: action,
+            confirmations: 1,
+            status: "active",
+            last_seen_at: new Date().toISOString(),
+          });
+        }
+        // Fire-and-forget: audit + learning should not block the queue kickoff.
+        if (auditRows.length) supabase.from("duplicate_audit_log").insert(auditRows).then(() => {}, () => {});
+        for (const l of learnRows) {
+          supabase.from("import_learning_suggestions")
+            .upsert(l, { onConflict: "project_id,kind,input_value" })
+            .then(() => {}, () => {});
+        }
+      }
+
+
       // 3) Kick worker (fire-and-forget: worker runs up to 40s and self-invokes to drain the queue).
       // Awaiting here would block the UI and can surface as "Failed to send a request to the Edge Function"
       // when the response exceeds the browser fetch window. Queueing is already complete at this point.
