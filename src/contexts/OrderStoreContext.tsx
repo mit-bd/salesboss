@@ -792,7 +792,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
       value={{
         orders, deletedOrders, activeOrders, followupHistory,
         upsellRecords, repeatOrderRecords, loading,
-        softDelete, restoreOrder, hardDelete, updateOrder, addOrder,
+        softDelete, restoreOrder, hardDelete, bulkHardDelete, updateOrder, addOrder,
         completeFollowup, editFollowup, getOrderHistory,
         getUpsellsForFollowup, getRepeatOrdersForFollowup,
         updateUpsellRecord, deleteUpsellRecord, addUpsellRecord,
