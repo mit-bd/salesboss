@@ -803,6 +803,57 @@ export type Database = {
           },
         ]
       }
+      hard_delete_audit_log: {
+        Row: {
+          bd_date: string | null
+          bd_time: string | null
+          created_at: string
+          dependencies: Json
+          id: string
+          ip_address: string | null
+          order_count: number
+          order_ids: string[]
+          order_summaries: Json
+          project_id: string | null
+          reason: string | null
+          user_agent: string | null
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          bd_date?: string | null
+          bd_time?: string | null
+          created_at?: string
+          dependencies?: Json
+          id?: string
+          ip_address?: string | null
+          order_count?: number
+          order_ids?: string[]
+          order_summaries?: Json
+          project_id?: string | null
+          reason?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          bd_date?: string | null
+          bd_time?: string | null
+          created_at?: string
+          dependencies?: Json
+          id?: string
+          ip_address?: string | null
+          order_count?: number
+          order_ids?: string[]
+          order_summaries?: Json
+          project_id?: string | null
+          reason?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: []
+      }
       hierarchy_audit_log: {
         Row: {
           actor_name: string | null
@@ -2333,6 +2384,15 @@ export type Database = {
         }
         Returns: Json
       }
+      bulk_hard_delete_orders: {
+        Args: {
+          p_ip?: string
+          p_order_ids: string[]
+          p_reason?: string
+          p_user_agent?: string
+        }
+        Returns: Json
+      }
       bulk_restore_orders: { Args: { p_order_ids: string[] }; Returns: Json }
       bulk_soft_delete_orders: {
         Args: { p_order_ids: string[]; p_reason?: string }
@@ -2348,6 +2408,10 @@ export type Database = {
       }
       cancel_import_run: {
         Args: { p_run_id: string; p_user_id: string; p_user_name: string }
+        Returns: Json
+      }
+      check_hard_delete_dependencies: {
+        Args: { p_order_ids: string[] }
         Returns: Json
       }
       claim_next_import_batch: {
