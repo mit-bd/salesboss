@@ -2356,6 +2356,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _team_admin_guard: { Args: { _target_user_id: string }; Returns: string }
       advance_followup_steps: { Args: never; Returns: number }
       apply_customer_tags: {
         Args: { p_customer_id: string }
@@ -2394,6 +2395,30 @@ export type Database = {
         Returns: Json
       }
       bulk_restore_orders: { Args: { p_order_ids: string[] }; Returns: Json }
+      bulk_set_employee_status: {
+        Args: {
+          p_reason?: string
+          p_status: Database["public"]["Enums"]["employee_status"]
+          p_user_ids: string[]
+        }
+        Returns: number
+      }
+      bulk_set_employee_supervisor: {
+        Args: {
+          p_reason?: string
+          p_supervisor_id: string
+          p_user_ids: string[]
+        }
+        Returns: number
+      }
+      bulk_set_user_role: {
+        Args: {
+          p_reason?: string
+          p_role: Database["public"]["Enums"]["app_role"]
+          p_user_ids: string[]
+        }
+        Returns: number
+      }
       bulk_soft_delete_orders: {
         Args: { p_order_ids: string[]; p_reason?: string }
         Returns: Json
@@ -2492,6 +2517,24 @@ export type Database = {
         Returns: boolean
       }
       kick_import_worker_if_needed: { Args: never; Returns: undefined }
+      list_team_directory: {
+        Args: { p_project_id?: string }
+        Returns: {
+          avatar_url: string
+          created_at: string
+          department: string
+          employee_id: string
+          full_name: string
+          last_login_at: string
+          phone: string
+          project_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          status: Database["public"]["Enums"]["employee_status"]
+          supervisor_id: string
+          supervisor_name: string
+          user_id: string
+        }[]
+      }
       mark_ai_profile_dirty: {
         Args: { _customer_id: string }
         Returns: undefined
@@ -2532,6 +2575,18 @@ export type Database = {
       }
       retry_failed_batches: { Args: { p_run_id: string }; Returns: number }
       run_followup_automation: { Args: never; Returns: Json }
+      set_employee_status: {
+        Args: {
+          p_reason?: string
+          p_status: Database["public"]["Enums"]["employee_status"]
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      set_employee_supervisor: {
+        Args: { p_reason?: string; p_supervisor_id: string; p_user_id: string }
+        Returns: Json
+      }
       set_import_run_total_batches: {
         Args: { p_run_id: string; p_total_batches: number }
         Returns: undefined
