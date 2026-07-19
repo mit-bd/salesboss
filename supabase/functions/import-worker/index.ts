@@ -77,7 +77,13 @@ serve(async (req) => {
 
         const mode = job.import_mode ?? run?.import_mode ?? "quick";
         const assignments = (run?.assignments ?? {}) as Record<string, unknown>;
-        const dupDecisions = (run?.duplicate_decisions ?? {}) as Record<string, "update" | "skip" | "create">;
+        const rawDec = (run?.duplicate_decisions ?? {}) as Record<string, unknown>;
+        // v2 shape: { version:2, global, customers:{mobile:action}, orders:{extId:action} }
+        // v1 shape (legacy): { [extId]: "skip"|"update"|"create" }
+        const isV2 = rawDec && (rawDec as any).version === 2;
+        const decOrders = (isV2 ? (rawDec as any).orders : rawDec) as Record<string, string>;
+        const decCustomers = (isV2 ? (rawDec as any).customers : {}) as Record<string, string>;
+        const decGlobal = (isV2 ? (rawDec as any).global : null) as string | null;
 
         if (!job.payload_ref) throw new Error("Missing payload_ref");
         const { data: file, error: dlErr } = await admin.storage.from("import-uploads").download(job.payload_ref);
@@ -111,9 +117,15 @@ serve(async (req) => {
             if (cErr) throw cErr;
 
             const externalId = row.externalOrderId?.trim() || null;
-            const decision = externalId ? dupDecisions[externalId] : undefined;
+            // Resolve decision: order-level > customer-level > global. "merge" == "update".
+            let decision: string | undefined =
+              (externalId ? decOrders[externalId] : undefined) ||
+              decCustomers[phone] ||
+              decGlobal ||
+              undefined;
+            if (decision === "merge") decision = "update";
 
-            if (externalId && decision === "skip") {
+            if (decision === "skip") {
               rowsOk++;
               continue;
             }
@@ -130,6 +142,7 @@ serve(async (req) => {
                 .maybeSingle();
               existingOrderId = existing?.id ?? null;
             }
+
 
             const orderPayload: Record<string, unknown> = {
               project_id: job.project_id,

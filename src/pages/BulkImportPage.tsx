@@ -25,6 +25,9 @@ import WarningCenter, { type ImportWarningLite } from "@/components/import/Warni
 import HealthScorePanel, { type HealthScore, type Recommendation } from "@/components/import/HealthScorePanel";
 import ResumeBanner from "@/components/import/ResumeBanner";
 import ImportLiveDashboard from "@/components/import/ImportLiveDashboard";
+import CustomerPreviewPanel from "@/components/import/CustomerPreviewPanel";
+import DuplicateGroupsReview, { type DupAction, type DupDecisionState, type DuplicateGroup } from "@/components/import/DuplicateGroupsReview";
+
 
 // ---------- Canonical fields ----------
 const CANONICAL: { key: string; label: string; required: boolean }[] = [
@@ -87,6 +90,9 @@ type DupDecision = "update" | "skip" | "create";
 
 type Step = "upload" | "mapping" | "clean" | "simulate" | "duplicates" | "execute" | "report";
 
+const EMPTY_DUP_STATE: DupDecisionState = { version: 2, global: null, customers: {}, orders: {} };
+
+
 // ---------- Helpers ----------
 function normalizePhone(v: string): string {
   const d = (v || "").replace(/[^\d]/g, "");
@@ -143,6 +149,12 @@ export default function BulkImportPage() {
   const [existingByExtId, setExistingByExtId] = useState<Record<string, any>>({});
   const [dupDecisions, setDupDecisions] = useState<Record<string, DupDecision>>({});
   const [confirmCreateFor, setConfirmCreateFor] = useState<string | null>(null);
+  const [dupGroups, setDupGroups] = useState<DuplicateGroup[]>([]);
+  const [dupState, setDupState] = useState<DupDecisionState>(EMPTY_DUP_STATE);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewMobile, setPreviewMobile] = useState<string | null>(null);
+  const [previewCustomerId, setPreviewCustomerId] = useState<string | null>(null);
+
 
   // execute
   const [executing, setExecuting] = useState(false);
@@ -321,31 +333,154 @@ export default function BulkImportPage() {
 
   const goToDuplicates = async () => {
     if (!profile?.project_id) return;
-    // find DB duplicates for external_order_id
-    const ids = Array.from(new Set(cleanedRows.map((r) => (r.externalOrderId || "").trim()).filter(Boolean)));
-    if (!ids.length) { setExistingByExtId({}); setStep("execute"); return; }
-    const { data } = await supabase
-      .from("orders")
-      .select("id, external_order_id, customer_name, mobile, product_title, price, order_date, delivery_status")
-      .eq("project_id", profile.project_id)
-      .eq("is_deleted", false)
-      .in("external_order_id", ids as any);
-    const map: Record<string, any> = {};
-    (data || []).forEach((row: any) => { map[row.external_order_id] = row; });
-    setExistingByExtId(map);
-    if (Object.keys(map).length === 0) { setStep("execute"); return; }
-    // default all duplicates to "update"
-    const decisions: Record<string, DupDecision> = {};
-    Object.keys(map).forEach((id) => { decisions[id] = "update"; });
-    setDupDecisions(decisions);
+    const projectId = profile.project_id;
+
+    // Collect keys from incoming
+    const rowsByMobile = new Map<string, CleanedRow[]>();
+    const rowsByExtId = new Map<string, CleanedRow>();
+    const rowsByTracking = new Map<string, CleanedRow>();
+    const rowsByInvoice = new Map<string, CleanedRow>();
+    for (const r of cleanedRows) {
+      const p = normalizePhone(r.recipientPhone || "");
+      if (p) {
+        const arr = rowsByMobile.get(p) || [];
+        arr.push(r);
+        rowsByMobile.set(p, arr);
+      }
+      const eid = (r.externalOrderId || "").trim();
+      if (eid) rowsByExtId.set(eid, r);
+      const tc = (r.trackingCode || "").trim();
+      if (tc) rowsByTracking.set(tc, r);
+      const inv = (r.invoiceNo || "").trim();
+      if (inv) rowsByInvoice.set(inv, r);
+    }
+
+    const mobiles = Array.from(rowsByMobile.keys());
+    const extIds = Array.from(rowsByExtId.keys());
+    const trackings = Array.from(rowsByTracking.keys());
+    const invoices = Array.from(rowsByInvoice.keys());
+
+    // 1) Existing orders that match on any of the 4 keys (batched IN queries)
+    const chunk = <T,>(arr: T[], n = 500): T[][] => {
+      const out: T[][] = [];
+      for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+      return out;
+    };
+    const orderCols = "id, external_order_id, customer_id, customer_name, mobile, product_title, price, order_date, delivery_status, tracking_code, invoice_no";
+    const collect: any[] = [];
+    for (const c of chunk(mobiles)) {
+      const { data } = await supabase.from("orders").select(orderCols)
+        .eq("project_id", projectId).eq("is_deleted", false).in("mobile", c);
+      collect.push(...(data || []));
+    }
+    for (const c of chunk(extIds)) {
+      const { data } = await supabase.from("orders").select(orderCols)
+        .eq("project_id", projectId).eq("is_deleted", false).in("external_order_id", c);
+      collect.push(...(data || []));
+    }
+    for (const c of chunk(trackings)) {
+      const { data } = await supabase.from("orders").select(orderCols)
+        .eq("project_id", projectId).eq("is_deleted", false).in("tracking_code", c);
+      collect.push(...(data || []));
+    }
+    for (const c of chunk(invoices)) {
+      const { data } = await supabase.from("orders").select(orderCols)
+        .eq("project_id", projectId).eq("is_deleted", false).in("invoice_no", c);
+      collect.push(...(data || []));
+    }
+
+    // dedupe by id
+    const uniqueOrders = new Map<string, any>();
+    for (const o of collect) uniqueOrders.set(o.id, o);
+
+    // Group by mobile (normalized)
+    const groupsMap = new Map<string, {
+      customerId: string | null;
+      customerName: string;
+      existingOrders: any[];
+      matchedOrderIds: Set<string>;
+      matchedTrackingCodes: Set<string>;
+      matchedInvoices: Set<string>;
+    }>();
+
+    for (const o of uniqueOrders.values()) {
+      const m = normalizePhone(o.mobile || "");
+      if (!m) continue;
+      if (!rowsByMobile.has(m) && !rowsByExtId.has(o.external_order_id || "") &&
+          !rowsByTracking.has(o.tracking_code || "") && !rowsByInvoice.has(o.invoice_no || "")) {
+        continue;
+      }
+      let g = groupsMap.get(m);
+      if (!g) {
+        g = {
+          customerId: o.customer_id || null,
+          customerName: o.customer_name || "",
+          existingOrders: [],
+          matchedOrderIds: new Set(),
+          matchedTrackingCodes: new Set(),
+          matchedInvoices: new Set(),
+        };
+        groupsMap.set(m, g);
+      }
+      g.existingOrders.push(o);
+      if (o.external_order_id && rowsByExtId.has(o.external_order_id)) g.matchedOrderIds.add(o.external_order_id);
+      if (o.tracking_code && rowsByTracking.has(o.tracking_code)) g.matchedTrackingCodes.add(o.tracking_code);
+      if (o.invoice_no && rowsByInvoice.has(o.invoice_no)) g.matchedInvoices.add(o.invoice_no);
+    }
+
+    // Fetch learning suggestions for these mobiles
+    const suggestionByMobile = new Map<string, DupAction>();
+    if (mobiles.length) {
+      for (const c of chunk(mobiles)) {
+        const { data } = await supabase
+          .from("import_learning_suggestions")
+          .select("input_value, suggested_value, confirmations")
+          .eq("project_id", projectId)
+          .eq("kind", "dup_action_by_mobile")
+          .in("input_value", c);
+        (data || []).forEach((s: any) => {
+          if ((s.confirmations ?? 0) >= 1 && ["skip","update","create","merge"].includes(s.suggested_value)) {
+            suggestionByMobile.set(s.input_value, s.suggested_value as DupAction);
+          }
+        });
+      }
+    }
+
+    const groups: DuplicateGroup[] = Array.from(groupsMap.entries()).map(([mobile, g]) => {
+      const incomingRows = rowsByMobile.get(mobile) || [];
+      return {
+        mobile,
+        customerId: g.customerId,
+        customerName: g.customerName,
+        existingOrders: g.existingOrders.slice(0, 20),
+        existingCount: g.existingOrders.length,
+        incomingCount: incomingRows.length || 1,
+        incomingRowNumbers: incomingRows.map((r) => r.rowNumber),
+        matchedOrderIds: Array.from(g.matchedOrderIds),
+        matchedTrackingCodes: Array.from(g.matchedTrackingCodes),
+        matchedInvoices: Array.from(g.matchedInvoices),
+        suggestedAction: suggestionByMobile.get(mobile),
+      };
+    }).sort((a, b) => b.incomingCount - a.incomingCount);
+
+    // Legacy map: extId -> existing (still used by the AI/simulate inline path)
+    const legacyMap: Record<string, any> = {};
+    const legacyDec: Record<string, DupDecision> = {};
+    for (const o of uniqueOrders.values()) {
+      if (o.external_order_id) {
+        legacyMap[o.external_order_id] = o;
+        legacyDec[o.external_order_id] = "update";
+      }
+    }
+    setExistingByExtId(legacyMap);
+    setDupDecisions(legacyDec);
+    setDupGroups(groups);
+    setDupState(EMPTY_DUP_STATE);
+
+    if (groups.length === 0) { setStep("execute"); return; }
     setStep("duplicates");
   };
 
-  const applyToAll = (decision: DupDecision) => {
-    const next: Record<string, DupDecision> = {};
-    Object.keys(existingByExtId).forEach((id) => { next[id] = decision; });
-    setDupDecisions(next);
-  };
 
   // ---------------- Queued (background) import ----------------
   const runQueuedImport = async () => {
@@ -383,7 +518,7 @@ export default function BulkImportPage() {
         import_mode: importMode,
         chunk_size: CHUNK,
         mapping,
-        duplicate_decisions: dupDecisions,
+        duplicate_decisions: dupGroups.length ? (dupState as any) : dupDecisions,
         assignments: {
           assigned_to: (assignToExec && assignToExec !== "__none__") ? assignToExec : null,
           assigned_to_name: execName,
@@ -424,6 +559,54 @@ export default function BulkImportPage() {
           status: "pending",
         }).then(() => {}, () => {});
       }
+
+      // 2b) Audit each duplicate-group decision + upsert learning suggestions
+      if (dupGroups.length) {
+        const auditRows: any[] = [];
+        const learnRows: any[] = [];
+        for (const g of dupGroups) {
+          const action = dupState.customers[g.mobile] || g.suggestedAction || dupState.global || "update";
+          const caseType =
+            g.matchedOrderIds.length > 0 ? "same_order_id" :
+            g.matchedTrackingCodes.length > 0 ? "same_tracking" :
+            g.matchedInvoices.length > 0 ? "same_invoice" : "same_mobile";
+          auditRows.push({
+            project_id: profile.project_id,
+            action,
+            case_type: caseType,
+            existing_order_id: g.existingOrders[0]?.id ?? null,
+            canonical_customer_id: g.customerId,
+            actor_user_id: user.id,
+            actor_name: profile.full_name || user.email || "",
+            reason: `Bulk import decision (${g.incomingCount} incoming vs ${g.existingCount} existing)`,
+            details: {
+              import_run_id: runId,
+              mobile: g.mobile,
+              matched_order_ids: g.matchedOrderIds,
+              matched_tracking: g.matchedTrackingCodes,
+              matched_invoices: g.matchedInvoices,
+            },
+          });
+          learnRows.push({
+            project_id: profile.project_id,
+            kind: "dup_action_by_mobile",
+            input_value: g.mobile,
+            suggested_value: action,
+            confirmations: 1,
+            status: "active",
+            last_seen_at: new Date().toISOString(),
+          });
+        }
+        // Fire-and-forget: audit + learning should not block the queue kickoff.
+        if (auditRows.length) supabase.from("duplicate_audit_log").insert(auditRows).then(() => {}, () => {});
+        for (const l of learnRows) {
+          supabase.from("import_learning_suggestions")
+            .upsert(l, { onConflict: "project_id,kind,input_value,suggested_value" })
+            .then(() => {}, () => {});
+        }
+      }
+
+
 
       // 3) Kick worker (fire-and-forget: worker runs up to 40s and self-invokes to drain the queue).
       // Awaiting here would block the UI and can surface as "Failed to send a request to the Edge Function"
@@ -610,6 +793,10 @@ export default function BulkImportPage() {
       updated: updatedCount,
       skipped: skipped.length + rejects.length,
       duplicates: Object.keys(existingByExtId).length,
+      duplicateCustomers: dupGroups.length,
+      duplicateOrders: dupGroups.reduce((n, g) => n + g.matchedOrderIds.length, 0),
+      merged: 0,
+
       newCustomers,
       existingCustomers,
       repeatOrders,
@@ -675,6 +862,8 @@ export default function BulkImportPage() {
     setMapping({}); setMatchedTemplate(null);
     setCleanedRows([]); setAiReport(null);
     setExistingByExtId({}); setDupDecisions({});
+    setDupGroups([]); setDupState(EMPTY_DUP_STATE);
+
     setFinalReport(null);
     setLiveRunId(null);
   };
@@ -919,65 +1108,20 @@ export default function BulkImportPage() {
           </div>
         )}
 
-        {/* ---------- DUPLICATES ---------- */}
+        {/* ---------- DUPLICATES (grouped by customer) ---------- */}
         {step === "duplicates" && (
-          <div className="rounded-xl border border-border bg-card p-5 card-shadow">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-sm font-semibold">Duplicate Order IDs</h3>
-                <p className="text-xs text-muted-foreground">{Object.keys(existingByExtId).length} orders already exist. Choose what to do.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => applyToAll("update")}>Update all</Button>
-                <Button size="sm" variant="outline" onClick={() => applyToAll("skip")}>Skip all</Button>
-              </div>
-            </div>
-            <div className="border border-border rounded-lg divide-y divide-border max-h-[420px] overflow-auto">
-              {Object.entries(existingByExtId).map(([extId, existing]) => {
-                const incoming = cleanedRows.find((r) => (r.externalOrderId || "").trim() === extId);
-                const dec = dupDecisions[extId] || "update";
-                return (
-                  <div key={extId} className="p-3 text-sm">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium">Order ID: {extId}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground mb-2">
-                      <div className="border border-border rounded p-2">
-                        <p className="text-[10px] uppercase font-semibold text-foreground mb-1">Existing</p>
-                        <p>{existing.customer_name} · {existing.mobile}</p>
-                        <p>{existing.product_title || "—"} · ৳{existing.price} · {existing.delivery_status || "—"}</p>
-                        <p>{existing.order_date}</p>
-                      </div>
-                      <div className="border border-border rounded p-2">
-                        <p className="text-[10px] uppercase font-semibold text-foreground mb-1">Incoming</p>
-                        <p>{incoming?.recipientName} · {incoming?.recipientPhone}</p>
-                        <p>{incoming?.product || "—"} · ৳{incoming?.codAmount} · {incoming?.deliveryStatus || "—"}</p>
-                        <p>{incoming?.orderDate || "—"}</p>
-                      </div>
-                    </div>
-                    <RadioGroup
-                      value={dec}
-                      onValueChange={(v) => {
-                        if (v === "create") { setConfirmCreateFor(extId); return; }
-                        setDupDecisions((d) => ({ ...d, [extId]: v as DupDecision }));
-                      }}
-                      className="flex flex-wrap gap-4"
-                    >
-                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                        <RadioGroupItem value="update" /> Update existing
-                      </label>
-                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                        <RadioGroupItem value="skip" /> Skip
-                      </label>
-                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                        <RadioGroupItem value="create" /> Create new order anyway
-                      </label>
-                    </RadioGroup>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-4 flex items-center justify-between">
+          <div className="space-y-3">
+            <DuplicateGroupsReview
+              groups={dupGroups}
+              decisions={dupState}
+              onDecisions={setDupState}
+              onPreview={(mobile, customerId) => {
+                setPreviewMobile(mobile);
+                setPreviewCustomerId(customerId);
+                setPreviewOpen(true);
+              }}
+            />
+            <div className="flex items-center justify-between">
               <Button variant="ghost" onClick={() => setStep("simulate")}><ArrowLeft className="h-4 w-4 mr-1.5" /> Back</Button>
               <Button onClick={runQueuedImport} disabled={queuing}>
                 {queuing ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Queuing…</> : <>Start background import <ArrowRight className="h-4 w-4 ml-1.5" /></>}
@@ -985,6 +1129,7 @@ export default function BulkImportPage() {
             </div>
           </div>
         )}
+
 
         {/* ---------- EXECUTE (background live dashboard) ---------- */}
         {step === "execute" && liveRunId && (
@@ -1037,6 +1182,10 @@ export default function BulkImportPage() {
                 <Stat label="Updated" value={finalReport.updated} tone="success" />
                 <Stat label="Skipped" value={finalReport.skipped} tone="warning" />
                 <Stat label="Duplicates found" value={finalReport.duplicates} />
+                <Stat label="Duplicate customers" value={finalReport.duplicateCustomers ?? 0} />
+                <Stat label="Duplicate orders" value={finalReport.duplicateOrders ?? 0} />
+                <Stat label="Merged" value={finalReport.merged ?? 0} />
+
                 <Stat label="New customers" value={finalReport.newCustomers} />
                 <Stat label="Existing customers" value={finalReport.existingCustomers} />
                 <Stat label="Repeat orders" value={finalReport.repeatOrders} />
@@ -1090,7 +1239,15 @@ export default function BulkImportPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <CustomerPreviewPanel
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        customerId={previewCustomerId}
+        mobile={previewMobile}
+        projectId={profile?.project_id ?? null}
+      />
     </AppLayout>
+
   );
 }
 
