@@ -672,8 +672,11 @@ serve(async (req) => {
       if (error) return json({ error: error.message }, 400);
       const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id, role");
       const roleMap = new Map((roles || []).map((r: any) => [r.user_id, r.role]));
-      const { data: profiles } = await supabaseAdmin.from("profiles").select("user_id, full_name, project_id, phone, ai_voice_enabled");
+      const { data: profiles } = await supabaseAdmin
+        .from("profiles")
+        .select("user_id, full_name, project_id, phone, ai_voice_enabled, avatar_url, employee_id, department, status, supervisor_id, last_login_at");
       const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
+      const nameOf = (id: string | null | undefined) => (id ? (profileMap.get(id)?.full_name || null) : null);
       const result = users
         .filter((u: any) => {
           const prof = profileMap.get(u.id);
@@ -682,20 +685,180 @@ serve(async (req) => {
           if (!callerProjectId) return true;
           return prof?.project_id === callerProjectId;
         })
-        .map((u: any) => ({
-          id: u.id,
-          email: u.email,
-          fullName: profileMap.get(u.id)?.full_name || u.user_metadata?.full_name || "",
-          phone: profileMap.get(u.id)?.phone || "",
-          role: roleMap.get(u.id) || null,
-          createdAt: u.created_at,
-          lastSignIn: u.last_sign_in_at,
-          emailConfirmed: !!u.email_confirmed_at,
-          banned: u.banned_until ? new Date(u.banned_until) > new Date() : false,
-          aiVoiceEnabled: profileMap.get(u.id)?.ai_voice_enabled || false,
-        }));
+        .map((u: any) => {
+          const p = profileMap.get(u.id) || {};
+          return {
+            id: u.id,
+            email: u.email,
+            fullName: p.full_name || u.user_metadata?.full_name || "",
+            phone: p.phone || "",
+            role: roleMap.get(u.id) || null,
+            createdAt: u.created_at,
+            lastSignIn: p.last_login_at || u.last_sign_in_at,
+            emailConfirmed: !!u.email_confirmed_at,
+            banned: u.banned_until ? new Date(u.banned_until) > new Date() : false,
+            aiVoiceEnabled: p.ai_voice_enabled || false,
+            avatarUrl: p.avatar_url || null,
+            employeeId: p.employee_id || null,
+            department: p.department || null,
+            status: p.status || "active",
+            supervisorId: p.supervisor_id || null,
+            supervisorName: nameOf(p.supervisor_id),
+            joinDate: u.created_at,
+          };
+        });
       return json({ users: result });
     }
+
+    if (action === "get_member_detail") {
+      const { userId } = body;
+      if (!userId) return json({ error: "userId required" }, 400);
+      const { data: authUser, error: e1 } = await supabaseAdmin.auth.admin.getUserById(userId);
+      if (e1) return json({ error: e1.message }, 400);
+      const { data: p } = await supabaseAdmin.from("profiles").select("*").eq("user_id", userId).maybeSingle();
+      if (!p || (callerProjectId && p.project_id !== callerProjectId)) return json({ error: "Not found" }, 404);
+      const { data: r } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", userId).maybeSingle();
+      let supervisorName: string | null = null;
+      if (p.supervisor_id) {
+        const { data: s } = await supabaseAdmin.from("profiles").select("full_name, employee_id").eq("user_id", p.supervisor_id).maybeSingle();
+        supervisorName = s?.full_name || null;
+      }
+      return json({
+        member: {
+          id: userId,
+          email: authUser.user?.email || "",
+          fullName: p.full_name || "",
+          phone: p.phone || "",
+          avatarUrl: p.avatar_url || null,
+          employeeId: p.employee_id || null,
+          department: p.department || null,
+          status: p.status || "active",
+          role: r?.role || null,
+          supervisorId: p.supervisor_id || null,
+          supervisorName,
+          projectId: p.project_id,
+          joinDate: authUser.user?.created_at || null,
+          lastSignIn: p.last_login_at || authUser.user?.last_sign_in_at || null,
+          banned: authUser.user?.banned_until ? new Date(authUser.user.banned_until) > new Date() : false,
+        },
+      });
+    }
+
+    if (action === "update_profile_fields") {
+      const { userId, phone, department, avatarUrl } = body;
+      if (!userId) return json({ error: "userId required" }, 400);
+      const upd: any = {};
+      if (phone !== undefined) upd.phone = phone;
+      if (department !== undefined) upd.department = department;
+      if (avatarUrl !== undefined) upd.avatar_url = avatarUrl;
+      if (Object.keys(upd).length === 0) return json({ success: true });
+      const { error } = await supabaseAdmin.from("profiles").update(upd).eq("user_id", userId);
+      if (error) return json({ error: error.message }, 400);
+      return json({ success: true });
+    }
+
+    // status: active | on_hold | suspended | resigned | archived
+    if (action === "update_status") {
+      const { userId, status, reason } = body;
+      if (!userId || !status) return json({ error: "userId and status required" }, 400);
+      if (userId === caller.id) return json({ error: "Cannot change your own status" }, 400);
+      const allowed = ["active", "on_hold", "suspended", "resigned", "archived"];
+      if (!allowed.includes(status)) return json({ error: "Invalid status" }, 400);
+      // Update DB via RPC (writes audit)
+      const { error: rpcErr } = await supabaseAdmin.rpc("set_employee_status", { p_user_id: userId, p_status: status, p_reason: reason || null });
+      if (rpcErr) return json({ error: rpcErr.message }, 400);
+      // Enforce login block for non-active statuses
+      const shouldBan = status !== "active";
+      await supabaseAdmin.auth.admin.updateUserById(userId, ({ ban_duration: shouldBan ? "876600h" : "none" } as any));
+      return json({ success: true });
+    }
+
+    if (action === "update_supervisor") {
+      const { userId, supervisorId, reason } = body;
+      if (!userId) return json({ error: "userId required" }, 400);
+      const { error } = await supabaseAdmin.rpc("set_employee_supervisor", { p_user_id: userId, p_supervisor_id: supervisorId || null, p_reason: reason || null });
+      if (error) return json({ error: error.message }, 400);
+      return json({ success: true });
+    }
+
+    if (action === "bulk_status") {
+      const { userIds, status, reason } = body;
+      if (!Array.isArray(userIds) || !status) return json({ error: "userIds and status required" }, 400);
+      const filtered = userIds.filter((id: string) => id !== caller.id);
+      const { data, error } = await supabaseAdmin.rpc("bulk_set_employee_status", { p_user_ids: filtered, p_status: status, p_reason: reason || null });
+      if (error) return json({ error: error.message }, 400);
+      const shouldBan = status !== "active";
+      await Promise.all(filtered.map((id: string) =>
+        supabaseAdmin.auth.admin.updateUserById(id, ({ ban_duration: shouldBan ? "876600h" : "none" } as any))
+      ));
+      return json({ success: true, affected: data });
+    }
+
+    if (action === "bulk_role") {
+      const { userIds, role, reason } = body;
+      if (!Array.isArray(userIds) || !role) return json({ error: "userIds and role required" }, 400);
+      const filtered = userIds.filter((id: string) => id !== caller.id);
+      const { data, error } = await supabaseAdmin.rpc("bulk_set_user_role", { p_user_ids: filtered, p_role: role, p_reason: reason || null });
+      if (error) return json({ error: error.message }, 400);
+      return json({ success: true, affected: data });
+    }
+
+    if (action === "bulk_supervisor") {
+      const { userIds, supervisorId, reason } = body;
+      if (!Array.isArray(userIds)) return json({ error: "userIds required" }, 400);
+      const filtered = userIds.filter((id: string) => id !== caller.id && id !== supervisorId);
+      const { data, error } = await supabaseAdmin.rpc("bulk_set_employee_supervisor", { p_user_ids: filtered, p_supervisor_id: supervisorId || null, p_reason: reason || null });
+      if (error) return json({ error: error.message }, 400);
+      return json({ success: true, affected: data });
+    }
+
+    if (action === "bulk_delete") {
+      const { userIds } = body;
+      if (!Array.isArray(userIds)) return json({ error: "userIds required" }, 400);
+      let n = 0;
+      for (const id of userIds) {
+        if (id === caller.id) continue;
+        try {
+          await supabaseAdmin.from("orders").update({ assigned_to: null, assigned_to_name: "" }).eq("assigned_to", id);
+          await supabaseAdmin.from("user_roles").delete().eq("user_id", id);
+          await supabaseAdmin.from("profiles").delete().eq("user_id", id);
+          await supabaseAdmin.auth.admin.deleteUser(id);
+          n++;
+        } catch (_) { /* skip individual failure */ }
+      }
+      return json({ success: true, affected: n });
+    }
+
+    if (action === "member_activity") {
+      const { userId, limit } = body;
+      if (!userId) return json({ error: "userId required" }, 400);
+      const lim = Math.min(Number(limit) || 100, 300);
+      const [{ data: logs }, { data: hier }, { data: fh }] = await Promise.all([
+        supabaseAdmin.from("order_activity_logs").select("id, order_id, action_type, action_description, user_name, created_at, project_id").eq("user_id", userId).order("created_at", { ascending: false }).limit(lim),
+        supabaseAdmin.from("hierarchy_audit_log").select("id, change_type, old_value, new_value, actor_name, created_at, reason").or(`target_user_id.eq.${userId},actor_user_id.eq.${userId}`).order("created_at", { ascending: false }).limit(50),
+        supabaseAdmin.from("followup_history").select("id, order_id, step_number, note, completed_at").eq("completed_by", userId).order("completed_at", { ascending: false }).limit(lim),
+      ]);
+      return json({ activity: { orderActivity: logs || [], hierarchy: hier || [], followups: fh || [] } });
+    }
+
+    if (action === "member_stats") {
+      const { userId } = body;
+      if (!userId) return json({ error: "userId required" }, 400);
+      const [
+        { count: totalOrders },
+        { count: pendingOrders },
+        { count: completedFollowups },
+        { count: assignedCustomers },
+      ] = await Promise.all([
+        supabaseAdmin.from("orders").select("*", { count: "exact", head: true }).eq("assigned_to", userId).eq("is_deleted", false),
+        supabaseAdmin.from("orders").select("*", { count: "exact", head: true }).eq("assigned_to", userId).eq("is_deleted", false).eq("current_status", "pending"),
+        supabaseAdmin.from("followup_history").select("*", { count: "exact", head: true }).eq("completed_by", userId),
+        supabaseAdmin.from("customers").select("*", { count: "exact", head: true }).eq("last_executive_name", (await supabaseAdmin.from("profiles").select("full_name").eq("user_id", userId).maybeSingle()).data?.full_name || "__none__"),
+      ]);
+      return json({ stats: { totalOrders: totalOrders || 0, pendingOrders: pendingOrders || 0, completedFollowups: completedFollowups || 0, assignedCustomers: assignedCustomers || 0 } });
+    }
+
+
 
     if (action === "toggle_voice_permission") {
       const { userId, enabled } = body;
