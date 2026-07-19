@@ -518,7 +518,7 @@ export default function BulkImportPage() {
         import_mode: importMode,
         chunk_size: CHUNK,
         mapping,
-        duplicate_decisions: dupDecisions,
+        duplicate_decisions: dupGroups.length ? (dupState as any) : dupDecisions,
         assignments: {
           assigned_to: (assignToExec && assignToExec !== "__none__") ? assignToExec : null,
           assigned_to_name: execName,
