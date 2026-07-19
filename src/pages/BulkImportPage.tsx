@@ -333,31 +333,154 @@ export default function BulkImportPage() {
 
   const goToDuplicates = async () => {
     if (!profile?.project_id) return;
-    // find DB duplicates for external_order_id
-    const ids = Array.from(new Set(cleanedRows.map((r) => (r.externalOrderId || "").trim()).filter(Boolean)));
-    if (!ids.length) { setExistingByExtId({}); setStep("execute"); return; }
-    const { data } = await supabase
-      .from("orders")
-      .select("id, external_order_id, customer_name, mobile, product_title, price, order_date, delivery_status")
-      .eq("project_id", profile.project_id)
-      .eq("is_deleted", false)
-      .in("external_order_id", ids as any);
-    const map: Record<string, any> = {};
-    (data || []).forEach((row: any) => { map[row.external_order_id] = row; });
-    setExistingByExtId(map);
-    if (Object.keys(map).length === 0) { setStep("execute"); return; }
-    // default all duplicates to "update"
-    const decisions: Record<string, DupDecision> = {};
-    Object.keys(map).forEach((id) => { decisions[id] = "update"; });
-    setDupDecisions(decisions);
+    const projectId = profile.project_id;
+
+    // Collect keys from incoming
+    const rowsByMobile = new Map<string, CleanedRow[]>();
+    const rowsByExtId = new Map<string, CleanedRow>();
+    const rowsByTracking = new Map<string, CleanedRow>();
+    const rowsByInvoice = new Map<string, CleanedRow>();
+    for (const r of cleanedRows) {
+      const p = normalizePhone(r.recipientPhone || "");
+      if (p) {
+        const arr = rowsByMobile.get(p) || [];
+        arr.push(r);
+        rowsByMobile.set(p, arr);
+      }
+      const eid = (r.externalOrderId || "").trim();
+      if (eid) rowsByExtId.set(eid, r);
+      const tc = (r.trackingCode || "").trim();
+      if (tc) rowsByTracking.set(tc, r);
+      const inv = (r.invoiceNo || "").trim();
+      if (inv) rowsByInvoice.set(inv, r);
+    }
+
+    const mobiles = Array.from(rowsByMobile.keys());
+    const extIds = Array.from(rowsByExtId.keys());
+    const trackings = Array.from(rowsByTracking.keys());
+    const invoices = Array.from(rowsByInvoice.keys());
+
+    // 1) Existing orders that match on any of the 4 keys (batched IN queries)
+    const chunk = <T,>(arr: T[], n = 500): T[][] => {
+      const out: T[][] = [];
+      for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+      return out;
+    };
+    const orderCols = "id, external_order_id, customer_id, customer_name, mobile, product_title, price, order_date, delivery_status, tracking_code, invoice_no";
+    const collect: any[] = [];
+    for (const c of chunk(mobiles)) {
+      const { data } = await supabase.from("orders").select(orderCols)
+        .eq("project_id", projectId).eq("is_deleted", false).in("mobile", c);
+      collect.push(...(data || []));
+    }
+    for (const c of chunk(extIds)) {
+      const { data } = await supabase.from("orders").select(orderCols)
+        .eq("project_id", projectId).eq("is_deleted", false).in("external_order_id", c);
+      collect.push(...(data || []));
+    }
+    for (const c of chunk(trackings)) {
+      const { data } = await supabase.from("orders").select(orderCols)
+        .eq("project_id", projectId).eq("is_deleted", false).in("tracking_code", c);
+      collect.push(...(data || []));
+    }
+    for (const c of chunk(invoices)) {
+      const { data } = await supabase.from("orders").select(orderCols)
+        .eq("project_id", projectId).eq("is_deleted", false).in("invoice_no", c);
+      collect.push(...(data || []));
+    }
+
+    // dedupe by id
+    const uniqueOrders = new Map<string, any>();
+    for (const o of collect) uniqueOrders.set(o.id, o);
+
+    // Group by mobile (normalized)
+    const groupsMap = new Map<string, {
+      customerId: string | null;
+      customerName: string;
+      existingOrders: any[];
+      matchedOrderIds: Set<string>;
+      matchedTrackingCodes: Set<string>;
+      matchedInvoices: Set<string>;
+    }>();
+
+    for (const o of uniqueOrders.values()) {
+      const m = normalizePhone(o.mobile || "");
+      if (!m) continue;
+      if (!rowsByMobile.has(m) && !rowsByExtId.has(o.external_order_id || "") &&
+          !rowsByTracking.has(o.tracking_code || "") && !rowsByInvoice.has(o.invoice_no || "")) {
+        continue;
+      }
+      let g = groupsMap.get(m);
+      if (!g) {
+        g = {
+          customerId: o.customer_id || null,
+          customerName: o.customer_name || "",
+          existingOrders: [],
+          matchedOrderIds: new Set(),
+          matchedTrackingCodes: new Set(),
+          matchedInvoices: new Set(),
+        };
+        groupsMap.set(m, g);
+      }
+      g.existingOrders.push(o);
+      if (o.external_order_id && rowsByExtId.has(o.external_order_id)) g.matchedOrderIds.add(o.external_order_id);
+      if (o.tracking_code && rowsByTracking.has(o.tracking_code)) g.matchedTrackingCodes.add(o.tracking_code);
+      if (o.invoice_no && rowsByInvoice.has(o.invoice_no)) g.matchedInvoices.add(o.invoice_no);
+    }
+
+    // Fetch learning suggestions for these mobiles
+    const suggestionByMobile = new Map<string, DupAction>();
+    if (mobiles.length) {
+      for (const c of chunk(mobiles)) {
+        const { data } = await supabase
+          .from("import_learning_suggestions")
+          .select("input_value, suggested_value, confirmations")
+          .eq("project_id", projectId)
+          .eq("kind", "dup_action_by_mobile")
+          .in("input_value", c);
+        (data || []).forEach((s: any) => {
+          if ((s.confirmations ?? 0) >= 1 && ["skip","update","create","merge"].includes(s.suggested_value)) {
+            suggestionByMobile.set(s.input_value, s.suggested_value as DupAction);
+          }
+        });
+      }
+    }
+
+    const groups: DuplicateGroup[] = Array.from(groupsMap.entries()).map(([mobile, g]) => {
+      const incomingRows = rowsByMobile.get(mobile) || [];
+      return {
+        mobile,
+        customerId: g.customerId,
+        customerName: g.customerName,
+        existingOrders: g.existingOrders.slice(0, 20),
+        existingCount: g.existingOrders.length,
+        incomingCount: incomingRows.length || 1,
+        incomingRowNumbers: incomingRows.map((r) => r.rowNumber),
+        matchedOrderIds: Array.from(g.matchedOrderIds),
+        matchedTrackingCodes: Array.from(g.matchedTrackingCodes),
+        matchedInvoices: Array.from(g.matchedInvoices),
+        suggestedAction: suggestionByMobile.get(mobile),
+      };
+    }).sort((a, b) => b.incomingCount - a.incomingCount);
+
+    // Legacy map: extId -> existing (still used by the AI/simulate inline path)
+    const legacyMap: Record<string, any> = {};
+    const legacyDec: Record<string, DupDecision> = {};
+    for (const o of uniqueOrders.values()) {
+      if (o.external_order_id) {
+        legacyMap[o.external_order_id] = o;
+        legacyDec[o.external_order_id] = "update";
+      }
+    }
+    setExistingByExtId(legacyMap);
+    setDupDecisions(legacyDec);
+    setDupGroups(groups);
+    setDupState(EMPTY_DUP_STATE);
+
+    if (groups.length === 0) { setStep("execute"); return; }
     setStep("duplicates");
   };
 
-  const applyToAll = (decision: DupDecision) => {
-    const next: Record<string, DupDecision> = {};
-    Object.keys(existingByExtId).forEach((id) => { next[id] = decision; });
-    setDupDecisions(next);
-  };
 
   // ---------------- Queued (background) import ----------------
   const runQueuedImport = async () => {
