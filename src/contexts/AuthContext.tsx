@@ -7,7 +7,7 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   role: UserRole | null;
-  profile: { full_name: string; phone: string; avatar_url: string; project_id: string | null } | null;
+  profile: { full_name: string; phone: string; avatar_url: string; project_id: string | null; status?: string | null; employee_id?: string | null; department?: string | null } | null;
   loading: boolean;
   roleChecked: boolean;
   requestStatus: string | null;
