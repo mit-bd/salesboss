@@ -619,18 +619,13 @@ serve(async (req) => {
     const callerProjectId = callerProfile?.project_id;
 
     if (action === "create") {
-      const { email, password, fullName, role } = body;
-      if (!email || !password || !role) return json({ error: "email, password, and role are required" }, 400);
+      const { email, password, fullName } = body;
+      if (!email || !password) return json({ error: "email and password are required" }, 400);
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email, password, email_confirm: true,
         user_metadata: { full_name: fullName || "" },
       });
       if (createError) return json({ error: createError.message }, 400);
-      const { error: roleError } = await supabaseAdmin.from("user_roles").insert({ user_id: newUser.user.id, role });
-      if (roleError) return json({ error: roleError.message }, 400);
-      if (callerProjectId) {
-        await supabaseAdmin.from("profiles").update({ project_id: callerProjectId }).eq("user_id", newUser.user.id);
-      }
       return json({ success: true, userId: newUser.user.id });
     }
 
