@@ -20,7 +20,7 @@ import { RotateCcw, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function DeletedOrdersPage() {
-  const { deletedOrders, restoreOrder, hardDelete, refreshOrders } = useOrderStore();
+  const { deletedOrders, restoreOrder, hardDelete, bulkHardDelete, refreshOrders } = useOrderStore();
   const { isAdmin, role } = useRole();
   const isOwner = role === "owner";
   const { hasPermission } = usePermissions();
