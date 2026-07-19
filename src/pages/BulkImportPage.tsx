@@ -90,6 +90,9 @@ type DupDecision = "update" | "skip" | "create";
 
 type Step = "upload" | "mapping" | "clean" | "simulate" | "duplicates" | "execute" | "report";
 
+const EMPTY_DUP_STATE: DupDecisionState = { version: 2, global: null, customers: {}, orders: {} };
+
+
 // ---------- Helpers ----------
 function normalizePhone(v: string): string {
   const d = (v || "").replace(/[^\d]/g, "");
