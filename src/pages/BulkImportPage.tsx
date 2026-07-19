@@ -601,10 +601,11 @@ export default function BulkImportPage() {
         if (auditRows.length) supabase.from("duplicate_audit_log").insert(auditRows).then(() => {}, () => {});
         for (const l of learnRows) {
           supabase.from("import_learning_suggestions")
-            .upsert(l, { onConflict: "project_id,kind,input_value" })
+            .upsert(l, { onConflict: "project_id,kind,input_value,suggested_value" })
             .then(() => {}, () => {});
         }
       }
+
 
 
       // 3) Kick worker (fire-and-forget: worker runs up to 40s and self-invokes to drain the queue).
