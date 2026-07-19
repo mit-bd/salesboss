@@ -21,8 +21,9 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function DeletedOrdersPage() {
   const { deletedOrders, restoreOrder, hardDelete, refreshOrders } = useOrderStore();
-  const { isAdmin, isOwner } = useRole();
-  const { hasPermission } = usePermissions();
+  const { isAdmin, role } = useRole();
+  const isOwner = role === "owner";
+
   const { toast } = useToast();
   const [hardDeleteId, setHardDeleteId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
