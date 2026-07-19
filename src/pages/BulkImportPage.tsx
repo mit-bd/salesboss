@@ -1228,7 +1228,15 @@ export default function BulkImportPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <CustomerPreviewPanel
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        customerId={previewCustomerId}
+        mobile={previewMobile}
+        projectId={profile?.project_id ?? null}
+      />
     </AppLayout>
+
   );
 }
 
