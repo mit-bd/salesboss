@@ -142,6 +142,36 @@ export default function ProtectedRoute({ children, allowedRoles, requiredPermiss
     );
   }
 
+  // Employee status gate — non-owner accounts must be Active.
+  // On Hold / Suspended / Resigned / Archived → block access, show notice.
+  if (role !== "owner" && profile?.status && profile.status !== "active") {
+    const statusMap: Record<string, { title: string; msg: string }> = {
+      on_hold:  { title: "Account On Hold",   msg: "Your account has been placed on hold by an administrator. Please contact your administrator to regain access." },
+      suspended:{ title: "Account Suspended", msg: "Your account has been suspended. Please contact your administrator." },
+      resigned: { title: "Account Closed",    msg: "This account has been marked as resigned. Please contact your administrator if this is an error." },
+      archived: { title: "Account Archived",  msg: "This account has been archived and cannot be used to sign in." },
+    };
+    const info = statusMap[profile.status] || statusMap.on_hold;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-6">
+        <div className="max-w-md w-full text-center space-y-4">
+          <div className="mx-auto h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 text-destructive" />
+          </div>
+          <h1 className="text-xl font-semibold text-foreground">{info.title}</h1>
+          <p className="text-muted-foreground">{info.msg}</p>
+          <button
+            onClick={async () => { await supabase.auth.signOut(); window.location.href = "/login"; }}
+            className="mt-2 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+
   // Wait for permissions only for non-owner users
   if (permLoading) {
     return (

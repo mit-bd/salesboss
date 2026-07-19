@@ -33,6 +33,8 @@ import ProductsPage from "./pages/ProductsPage";
 import DeliveryMethodPage from "./pages/DeliveryMethodPage";
 import BulkImportPage from "./pages/BulkImportPage";
 import TeamPage from "./pages/TeamPage";
+import TeamMemberDetailPage from "./pages/TeamMemberDetailPage";
+
 import SettingsPage from "./pages/SettingsPage";
 import SalesExecutivesPage from "./pages/SalesExecutivesPage";
 import SalesExecutiveDetailPage from "./pages/SalesExecutiveDetailPage";
@@ -97,7 +99,9 @@ const App = () => (
                         <Route path="/products" element={<ProtectedRoute requiredPermission="products.view"><ProductsPage /></ProtectedRoute>} />
                         <Route path="/delivery-methods" element={<ProtectedRoute requiredPermission="delivery.view"><DeliveryMethodPage /></ProtectedRoute>} />
                         <Route path="/bulk-import" element={<ProtectedRoute requiredPermission="orders.create"><BulkImportPage /></ProtectedRoute>} />
-                        <Route path="/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
+                       <Route path="/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
+                       <Route path="/team/:userId" element={<ProtectedRoute><TeamMemberDetailPage /></ProtectedRoute>} />
+
                         <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                         <Route path="/roles" element={<ProtectedRoute requiredPermission="roles.manage"><RolesPage /></ProtectedRoute>} />
                         <Route path="/deleted-orders" element={<ProtectedRoute requiredPermission="orders.delete"><DeletedOrdersPage /></ProtectedRoute>} />

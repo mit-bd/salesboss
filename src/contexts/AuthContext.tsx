@@ -7,7 +7,7 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   role: UserRole | null;
-  profile: { full_name: string; phone: string; avatar_url: string; project_id: string | null } | null;
+  profile: { full_name: string; phone: string; avatar_url: string; project_id: string | null; status?: string | null; employee_id?: string | null; department?: string | null } | null;
   loading: boolean;
   roleChecked: boolean;
   requestStatus: string | null;
@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
-  const [profile, setProfile] = useState<{ full_name: string; phone: string; avatar_url: string; project_id: string | null } | null>(null);
+  const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
   const [loading, setLoading] = useState(true);
   const [roleChecked, setRoleChecked] = useState(false);
   const [requestStatus, setRequestStatus] = useState<string | null>(null);
@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data } = await supabase
         .from("profiles")
-        .select("full_name, phone, avatar_url, project_id")
+        .select("full_name, phone, avatar_url, project_id, status, employee_id, department")
         .eq("user_id", userId)
         .maybeSingle();
       setProfile(data ?? null);
@@ -72,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("[Auth] Profile fetch error:", err);
     }
   };
+
 
   const fetchRequestStatus = async (userId: string) => {
     try {
