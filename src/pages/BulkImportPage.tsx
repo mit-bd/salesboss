@@ -792,6 +792,10 @@ export default function BulkImportPage() {
       updated: updatedCount,
       skipped: skipped.length + rejects.length,
       duplicates: Object.keys(existingByExtId).length,
+      duplicateCustomers: dupGroups.length,
+      duplicateOrders: dupGroups.reduce((n, g) => n + g.matchedOrderIds.length, 0),
+      merged: 0,
+
       newCustomers,
       existingCustomers,
       repeatOrders,
