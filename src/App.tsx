@@ -33,6 +33,8 @@ import ProductsPage from "./pages/ProductsPage";
 import DeliveryMethodPage from "./pages/DeliveryMethodPage";
 import BulkImportPage from "./pages/BulkImportPage";
 import TeamPage from "./pages/TeamPage";
+import TeamMemberDetailPage from "./pages/TeamMemberDetailPage";
+
 import SettingsPage from "./pages/SettingsPage";
 import SalesExecutivesPage from "./pages/SalesExecutivesPage";
 import SalesExecutiveDetailPage from "./pages/SalesExecutiveDetailPage";
