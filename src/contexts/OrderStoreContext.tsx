@@ -16,6 +16,7 @@ interface OrderStoreContextType {
   softDelete: (orderId: string, reason?: string) => Promise<void>;
   restoreOrder: (orderId: string) => Promise<void>;
   hardDelete: (orderId: string) => Promise<void>;
+  bulkHardDelete: (orderIds: string[], reason?: string) => Promise<{ deleted: number }>;
 
   updateOrder: (updated: Order) => Promise<void>;
   addOrder: (order: Omit<Order, "id">) => Promise<void>;
