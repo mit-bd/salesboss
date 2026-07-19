@@ -102,7 +102,7 @@ export default function TeamPage() {
 
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
-  const { has } = usePermission();
+  const { hasPermission: has } = usePermissions();
 
   const canManage = has("team.manage") || has("users.manage");
   const canBulk = has("team.bulk") || canManage;
