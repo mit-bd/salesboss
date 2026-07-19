@@ -1181,6 +1181,10 @@ export default function BulkImportPage() {
                 <Stat label="Updated" value={finalReport.updated} tone="success" />
                 <Stat label="Skipped" value={finalReport.skipped} tone="warning" />
                 <Stat label="Duplicates found" value={finalReport.duplicates} />
+                <Stat label="Duplicate customers" value={finalReport.duplicateCustomers ?? 0} />
+                <Stat label="Duplicate orders" value={finalReport.duplicateOrders ?? 0} />
+                <Stat label="Merged" value={finalReport.merged ?? 0} />
+
                 <Stat label="New customers" value={finalReport.newCustomers} />
                 <Stat label="Existing customers" value={finalReport.existingCustomers} />
                 <Stat label="Repeat orders" value={finalReport.repeatOrders} />
