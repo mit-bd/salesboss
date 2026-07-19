@@ -2535,6 +2535,29 @@ export type Database = {
           user_id: string
         }[]
       }
+      list_team_members_full: {
+        Args: never
+        Returns: {
+          ai_voice_enabled: boolean
+          avatar_url: string
+          banned: boolean
+          created_at: string
+          department: string
+          email: string
+          email_confirmed: boolean
+          employee_id: string
+          full_name: string
+          id: string
+          join_date: string
+          last_sign_in: string
+          phone: string
+          project_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          status: Database["public"]["Enums"]["employee_status"]
+          supervisor_id: string
+          supervisor_name: string
+        }[]
+      }
       mark_ai_profile_dirty: {
         Args: { _customer_id: string }
         Returns: undefined

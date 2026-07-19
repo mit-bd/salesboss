@@ -112,13 +112,33 @@ export default function TeamPage() {
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.functions.invoke("manage-team", {
-      body: { action: "list_users" },
-    });
-    if (error || data?.error) {
-      toast({ title: "Failed to load team", description: data?.error || error?.message, variant: "destructive" });
+    const { data, error } = await supabase.rpc("list_team_members_full");
+    if (error) {
+      toast({ title: "Failed to load team", description: error.message, variant: "destructive" });
+      setUsers([]);
     } else {
-      setUsers(data.users || []);
+      const rows = (data || []) as any[];
+      setUsers(
+        rows.map((r) => ({
+          id: r.id,
+          email: r.email || "",
+          fullName: r.full_name || "",
+          phone: r.phone || "",
+          role: r.role,
+          createdAt: r.created_at,
+          lastSignIn: r.last_sign_in,
+          emailConfirmed: r.email_confirmed,
+          banned: r.banned,
+          aiVoiceEnabled: r.ai_voice_enabled,
+          avatarUrl: r.avatar_url,
+          employeeId: r.employee_id,
+          department: r.department,
+          status: r.status,
+          supervisorId: r.supervisor_id,
+          supervisorName: r.supervisor_name,
+          joinDate: r.join_date,
+        })),
+      );
     }
     setLoading(false);
   }, [toast]);
