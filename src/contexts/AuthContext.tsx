@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data } = await supabase
         .from("profiles")
-        .select("full_name, phone, avatar_url, project_id")
+        .select("full_name, phone, avatar_url, project_id, status, employee_id, department")
         .eq("user_id", userId)
         .maybeSingle();
       setProfile(data ?? null);
@@ -72,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("[Auth] Profile fetch error:", err);
     }
   };
+
 
   const fetchRequestStatus = async (userId: string) => {
     try {
