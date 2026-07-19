@@ -149,6 +149,12 @@ export default function BulkImportPage() {
   const [existingByExtId, setExistingByExtId] = useState<Record<string, any>>({});
   const [dupDecisions, setDupDecisions] = useState<Record<string, DupDecision>>({});
   const [confirmCreateFor, setConfirmCreateFor] = useState<string | null>(null);
+  const [dupGroups, setDupGroups] = useState<DuplicateGroup[]>([]);
+  const [dupState, setDupState] = useState<DupDecisionState>(EMPTY_DUP_STATE);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewMobile, setPreviewMobile] = useState<string | null>(null);
+  const [previewCustomerId, setPreviewCustomerId] = useState<string | null>(null);
+
 
   // execute
   const [executing, setExecuting] = useState(false);
