@@ -190,11 +190,13 @@ export default function TeamPage() {
   const selectedList = users.filter((u) => selectedIds.has(u.id));
 
   const handleToggleVoice = async (userId: string, enabled: boolean) => {
-    const { data, error } = await supabase.functions.invoke("manage-team", {
-      body: { action: "toggle_voice_permission", userId, enabled },
+    const { error } = await (supabase.rpc as any)("toggle_team_member_voice", {
+      p_user_id: userId,
+      p_enabled: enabled,
+      p_reason: null,
     });
-    if (error || data?.error) {
-      toast({ title: "Error", description: data?.error || error?.message, variant: "destructive" });
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
       toast({ title: enabled ? "Voice Input Enabled" : "Voice Input Disabled" });
       fetchUsers();
@@ -202,11 +204,13 @@ export default function TeamPage() {
   };
 
   const handleStatusChange = async (u: TeamUser, status: string) => {
-    const { data, error } = await supabase.functions.invoke("manage-team", {
-      body: { action: "update_status", userId: u.id, status },
+    const { error } = await (supabase.rpc as any)("set_employee_status", {
+      p_user_id: u.id,
+      p_status: status,
+      p_reason: null,
     });
-    if (error || data?.error) {
-      toast({ title: "Error", description: data?.error || error?.message, variant: "destructive" });
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
       toast({ title: `Status → ${prettify(status)}`, description: `${u.fullName || u.email} updated.` });
       fetchUsers();
@@ -217,11 +221,12 @@ export default function TeamPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("manage-team", {
-        body: { action: "delete_user", userId: deleteTarget.id },
+      const { error } = await (supabase.rpc as any)("remove_team_member_profile", {
+        p_user_id: deleteTarget.id,
+        p_reason: null,
       });
-      if (error || data?.error) throw new Error(data?.error || error?.message);
-      toast({ title: "Deleted", description: `${deleteTarget.fullName} has been removed.` });
+      if (error) throw new Error(error.message);
+      toast({ title: "Removed", description: `${deleteTarget.fullName} has been removed from the team.` });
       setDeleteTarget(null);
       fetchUsers();
     } catch (err: any) {
@@ -251,9 +256,48 @@ export default function TeamPage() {
   const runBulk = async (invokeBody: Record<string, unknown>, successMsg: string) => {
     setBulkBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke("manage-team", { body: invokeBody });
-      if (error || data?.error) throw new Error(data?.error || error?.message);
-      toast({ title: successMsg, description: `${data.affected ?? selectedIds.size} members updated.` });
+      let affected: number | null = null;
+      let error: any = null;
+
+      const action = invokeBody.action;
+      const userIds = (invokeBody.userIds as string[] | undefined) || Array.from(selectedIds);
+      if (action === "bulk_status") {
+        const res = await (supabase.rpc as any)("bulk_set_employee_status", {
+          p_user_ids: userIds,
+          p_status: invokeBody.status,
+          p_reason: invokeBody.reason ?? null,
+        });
+        affected = res.data ?? null;
+        error = res.error;
+      } else if (action === "bulk_role") {
+        const res = await (supabase.rpc as any)("bulk_set_user_role", {
+          p_user_ids: userIds,
+          p_role: invokeBody.role,
+          p_reason: invokeBody.reason ?? null,
+        });
+        affected = res.data ?? null;
+        error = res.error;
+      } else if (action === "bulk_supervisor") {
+        const res = await (supabase.rpc as any)("bulk_set_employee_supervisor", {
+          p_user_ids: userIds,
+          p_supervisor_id: invokeBody.supervisorId ?? null,
+          p_reason: invokeBody.reason ?? null,
+        });
+        affected = res.data ?? null;
+        error = res.error;
+      } else if (action === "bulk_delete") {
+        const res = await (supabase.rpc as any)("bulk_remove_team_member_profiles", {
+          p_user_ids: userIds,
+          p_reason: invokeBody.reason ?? null,
+        });
+        affected = res.data ?? null;
+        error = res.error;
+      } else {
+        throw new Error("Unsupported bulk action");
+      }
+
+      if (error) throw new Error(error.message);
+      toast({ title: successMsg, description: `${affected ?? selectedIds.size} members updated.` });
       setSelectedIds(new Set());
       setBulkStatusDialog(null);
       setBulkRoleDialog("");
@@ -491,7 +535,7 @@ export default function TeamPage() {
             <AlertDialogTitle>Delete Team Member</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete <span className="font-semibold">{deleteTarget?.fullName}</span>?
-              This permanently removes their account, role, and profile.
+              This removes their team profile and role access. Any assigned orders will be unassigned.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -626,7 +670,7 @@ export default function TeamPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {selectedList.length} team member{selectedList.length === 1 ? "" : "s"}</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently removes the selected accounts, their roles, and profiles.
+              This removes the selected team profiles and role access.
               Any orders assigned to these users will be unassigned. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -634,8 +678,8 @@ export default function TeamPage() {
             <AlertDialogCancel disabled={bulkBusy}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => runBulk(
-                { action: "bulk_delete", userIds: Array.from(selectedIds) },
-                "Members deleted",
+                { action: "bulk_delete", userIds: Array.from(selectedIds), reason: "Bulk team member removal" },
+                "Members removed",
               )}
               disabled={bulkBusy}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"

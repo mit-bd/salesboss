@@ -99,17 +99,18 @@ export default function AddTeamMemberDialog({ editMember, onClose, onSuccess, su
       let targetUserId = editMember?.id;
 
       if (editMember) {
-        const { data: updateData, error: updateError } = await supabase.functions.invoke("manage-team", {
-          body: { action: "update_user", userId: editMember.id, fullName: form.name.trim(), email: form.email.trim() },
+        const nextSup = form.supervisorId === "none" ? null : form.supervisorId;
+        const { error: profileError } = await (supabase.rpc as any)("update_team_member_profile", {
+          p_user_id: editMember.id,
+          p_full_name: form.name.trim(),
+          p_phone: form.phone.trim() || "",
+          p_department: form.department.trim() || "",
+          p_employee_id: form.employeeId.trim() || "",
+          p_role: form.role,
+          p_supervisor_id: nextSup,
+          p_reason: "Team member profile updated",
         });
-        if (updateError || updateData?.error) throw new Error(updateData?.error || updateError?.message);
-
-        if (form.role !== editMember.role) {
-          const { data: roleData, error: roleError } = await supabase.functions.invoke("manage-team", {
-            body: { action: "update_role", userId: editMember.id, role: form.role },
-          });
-          if (roleError || roleData?.error) throw new Error(roleData?.error || roleError?.message);
-        }
+        if (profileError) throw new Error(profileError.message);
 
         if (form.password) {
           const { data: pwData, error: pwError } = await supabase.functions.invoke("manage-team", {
@@ -129,28 +130,19 @@ export default function AddTeamMemberDialog({ editMember, onClose, onSuccess, su
         });
         if (error || data?.error) throw new Error(data?.error || error?.message);
         targetUserId = data.userId || data.user?.id;
-      }
 
-      // Persist extended profile fields (phone/department/employee_id) + supervisor
-      if (targetUserId) {
-        await supabase.functions.invoke("manage-team", {
-          body: {
-            action: "update_profile_fields",
-            userId: targetUserId,
-            phone: form.phone.trim() || null,
-            department: form.department.trim() || null,
-          },
-        });
-        if (form.employeeId.trim() && form.employeeId !== (editMember?.employeeId || "")) {
-          await supabase.from("profiles").update({ employee_id: form.employeeId.trim() }).eq("user_id", targetUserId);
-        }
         const nextSup = form.supervisorId === "none" ? null : form.supervisorId;
-        const prevSup = editMember?.supervisorId || null;
-        if (nextSup !== prevSup) {
-          await supabase.functions.invoke("manage-team", {
-            body: { action: "update_supervisor", userId: targetUserId, supervisorId: nextSup },
-          });
-        }
+        const { error: profileError } = await (supabase.rpc as any)("update_team_member_profile", {
+          p_user_id: targetUserId,
+          p_full_name: form.name.trim(),
+          p_phone: form.phone.trim() || "",
+          p_department: form.department.trim() || "",
+          p_employee_id: form.employeeId.trim() || "",
+          p_role: form.role,
+          p_supervisor_id: nextSup,
+          p_reason: "Team member created",
+        });
+        if (profileError) throw new Error(profileError.message);
       }
 
       toast({ title: editMember ? "Member Updated" : "Member Created", description: `${form.name} saved successfully.` });
