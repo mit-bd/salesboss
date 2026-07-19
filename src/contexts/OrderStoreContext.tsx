@@ -611,6 +611,50 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
     [orders, addLog, userName, role, toast]
   );
 
+  const bulkHardDelete = useCallback(
+    async (orderIds: string[], reason?: string): Promise<{ deleted: number }> => {
+      const uniqueIds = Array.from(new Set(orderIds.filter(Boolean)));
+      if (uniqueIds.length === 0) return { deleted: 0 };
+
+      // Mirror single hardDelete: pull in child orders from local state so
+      // parent removal succeeds and children go with them.
+      const allKnown = [...orders, ...deletedOrders];
+      const idSet = new Set(uniqueIds);
+      const childIds = allKnown
+        .filter((o) => o.parentOrderId && idSet.has(o.parentOrderId) && !idSet.has(o.id))
+        .map((o) => o.id);
+      const idsToDelete = Array.from(new Set([...uniqueIds, ...childIds]));
+
+      // Delete in batches using the SAME pipeline as single hardDelete:
+      // a plain DELETE on public.orders via PostgREST. Triggers on the table
+      // handle customer analytics/AI cleanup; FKs cascade dependent rows.
+      const CHUNK = 200;
+      let deleted = 0;
+      for (let i = 0; i < idsToDelete.length; i += CHUNK) {
+        const chunk = idsToDelete.slice(i, i + CHUNK);
+        const { error, count } = await supabase
+          .from("orders")
+          .delete({ count: "exact" })
+          .in("id", chunk);
+        if (error) {
+          console.error("[OrderStore] Bulk hard delete error:", error);
+          throw error;
+        }
+        deleted += count ?? chunk.length;
+      }
+
+      setOrders((prev) => prev.filter((o) => !idsToDelete.includes(o.id)));
+      addLog({
+        actionType: "Order Permanently Deleted",
+        userName,
+        role: role || "unknown",
+        entity: `${uniqueIds.length} order(s)${reason ? ` — ${reason}` : ""}`,
+      });
+      return { deleted };
+    },
+    [orders, deletedOrders, addLog, userName, role]
+  );
+
   const updateOrder = useCallback(
     async (updated: Order) => {
       let query = supabase
