@@ -306,11 +306,16 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
 
   const addOrder = useCallback(
     async (order: Omit<Order, "id">) => {
+      if (!projectId) {
+        toast({ title: "No project", description: "Missing project context.", variant: "destructive" });
+        return;
+      }
       const { data: customerId, error: customerError } = await supabase
         .rpc("find_or_create_customer", {
           p_name: order.customerName,
           p_mobile: order.mobile,
           p_address: order.address,
+          p_project_id: projectId,
         });
 
       if (customerError) {
@@ -319,10 +324,7 @@ export function OrderStoreProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Also set project_id on customer
-      if (projectId && customerId) {
-        await (supabase.from("customers") as any).update({ project_id: projectId }).eq("id", customerId);
-      }
+
 
       const insertPayload: any = {
         customer_name: order.customerName,
