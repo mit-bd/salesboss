@@ -573,6 +573,62 @@ export type Database = {
           },
         ]
       }
+      duplicate_audit_log: {
+        Row: {
+          action: string
+          actor_name: string | null
+          actor_user_id: string | null
+          canonical_customer_id: string | null
+          case_type: string | null
+          created_at: string
+          details: Json | null
+          existing_order_id: string | null
+          id: string
+          incoming_payload: Json | null
+          loser_customer_id: string | null
+          project_id: string
+          reason: string | null
+        }
+        Insert: {
+          action: string
+          actor_name?: string | null
+          actor_user_id?: string | null
+          canonical_customer_id?: string | null
+          case_type?: string | null
+          created_at?: string
+          details?: Json | null
+          existing_order_id?: string | null
+          id?: string
+          incoming_payload?: Json | null
+          loser_customer_id?: string | null
+          project_id: string
+          reason?: string | null
+        }
+        Update: {
+          action?: string
+          actor_name?: string | null
+          actor_user_id?: string | null
+          canonical_customer_id?: string | null
+          case_type?: string | null
+          created_at?: string
+          details?: Json | null
+          existing_order_id?: string | null
+          id?: string
+          incoming_payload?: Json | null
+          loser_customer_id?: string | null
+          project_id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "duplicate_audit_log_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       followup_automation_runs: {
         Row: {
           advanced_count: number
@@ -2255,6 +2311,16 @@ export type Database = {
         Returns: undefined
       }
       data_quality_snapshot: { Args: { p_project_id: string }; Returns: Json }
+      detect_order_duplicate: {
+        Args: {
+          p_external_order_id?: string
+          p_invoice_no?: string
+          p_mobile: string
+          p_project_id: string
+          p_tracking_code?: string
+        }
+        Returns: Json
+      }
       enqueue_import_batches: {
         Args: {
           p_project_id: string
@@ -2267,20 +2333,15 @@ export type Database = {
         Args: { p_category: string; p_message: string; p_queue_id: string }
         Returns: undefined
       }
-      find_or_create_customer:
-        | {
-            Args: { p_address: string; p_mobile: string; p_name: string }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_address: string
-              p_mobile: string
-              p_name: string
-              p_project_id?: string
-            }
-            Returns: string
-          }
+      find_or_create_customer: {
+        Args: {
+          p_address: string
+          p_mobile: string
+          p_name: string
+          p_project_id: string
+        }
+        Returns: string
+      }
       get_next_sku_sequence: { Args: { p_sku: string }; Returns: number }
       get_user_project_id: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
@@ -2307,6 +2368,11 @@ export type Database = {
         Args: { _customer_id: string }
         Returns: undefined
       }
+      merge_customers: {
+        Args: { p_canonical_id: string; p_loser_id: string; p_reason?: string }
+        Returns: Json
+      }
+      normalize_phone_bd: { Args: { p_raw: string }; Returns: string }
       owner_import_analytics: { Args: { p_days?: number }; Returns: Json }
       promote_learning_suggestion: {
         Args: { p_id: string }
