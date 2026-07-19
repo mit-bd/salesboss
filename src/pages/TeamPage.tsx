@@ -226,7 +226,7 @@ export default function TeamPage() {
         p_reason: null,
       });
       if (error) throw new Error(error.message);
-      toast({ title: "Deleted", description: `${deleteTarget.fullName} has been removed.` });
+      toast({ title: "Removed", description: `${deleteTarget.fullName} has been removed from the team.` });
       setDeleteTarget(null);
       fetchUsers();
     } catch (err: any) {
@@ -535,7 +535,7 @@ export default function TeamPage() {
             <AlertDialogTitle>Delete Team Member</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete <span className="font-semibold">{deleteTarget?.fullName}</span>?
-              This permanently removes their account, role, and profile.
+              This removes their team profile and role access. Any assigned orders will be unassigned.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -670,7 +670,7 @@ export default function TeamPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {selectedList.length} team member{selectedList.length === 1 ? "" : "s"}</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently removes the selected accounts, their roles, and profiles.
+              This removes the selected team profiles and role access.
               Any orders assigned to these users will be unassigned. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -679,7 +679,7 @@ export default function TeamPage() {
             <AlertDialogAction
               onClick={() => runBulk(
                 { action: "bulk_delete", userIds: Array.from(selectedIds), reason: "Bulk team member removal" },
-                "Members deleted",
+                "Members removed",
               )}
               disabled={bulkBusy}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
