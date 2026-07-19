@@ -857,6 +857,8 @@ export default function BulkImportPage() {
     setMapping({}); setMatchedTemplate(null);
     setCleanedRows([]); setAiReport(null);
     setExistingByExtId({}); setDupDecisions({});
+    setDupGroups([]); setDupState(EMPTY_DUP_STATE);
+
     setFinalReport(null);
     setLiveRunId(null);
   };
