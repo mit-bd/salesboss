@@ -23,6 +23,8 @@ export default function DeletedOrdersPage() {
   const { deletedOrders, restoreOrder, hardDelete, refreshOrders } = useOrderStore();
   const { isAdmin, role } = useRole();
   const isOwner = role === "owner";
+  const { hasPermission } = usePermissions();
+
 
   const { toast } = useToast();
   const [hardDeleteId, setHardDeleteId] = useState<string | null>(null);
