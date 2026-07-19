@@ -268,6 +268,27 @@ export default function DeletedOrdersPage() {
           onConfirm={runBulkRestore}
         />
       )}
+
+      {canHardDelete && (
+        <BulkHardDeleteDialog
+          open={bulkHardOpen}
+          onOpenChange={(o) => { if (hardPhase === "idle" || hardPhase === "done") setBulkHardOpen(o); }}
+          selectedOrders={selectedOrderRows.map((o) => ({
+            id: o.id,
+            generatedOrderId: o.generatedOrderId,
+            invoiceId: o.invoiceId,
+            customerName: o.customerName,
+            mobile: o.mobile,
+            price: Number(o.price || 0),
+            orderDate: o.orderDate,
+            currentStatus: o.currentStatus,
+          }))}
+          phase={hardPhase}
+          progress={hardProgress}
+          onConfirm={runBulkHardDelete}
+        />
+      )}
+
     </AppLayout>
   );
 }
