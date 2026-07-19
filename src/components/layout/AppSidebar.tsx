@@ -85,7 +85,17 @@ const navCategories: NavCategory[] = [
     label: "Access Control",
     key: "access",
     items: [
-      { label: "Team", icon: Users, path: "/team" },
+      {
+        label: "Team Members", icon: Users, path: "/team",
+        children: [
+          { label: "All Members", path: "/team?role=all", stepNumber: 0 },
+          { label: "Admins", path: "/team?role=admin", stepNumber: 1 },
+          { label: "Managers", path: "/team?role=manager", stepNumber: 2 },
+          { label: "Sub Admins", path: "/team?role=sub_admin", stepNumber: 3 },
+          { label: "Team Leaders", path: "/team?role=team_leader", stepNumber: 4 },
+          { label: "Sales Executives", path: "/team?role=sales_executive", stepNumber: 5 },
+        ],
+      },
       { label: "Roles", icon: KeyRound, path: "/roles", permission: "roles.manage" },
       { label: "Audit Logs", icon: Shield, path: "/audit-logs", permission: "audit.view" },
     ],
