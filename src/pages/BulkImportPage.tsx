@@ -25,6 +25,9 @@ import WarningCenter, { type ImportWarningLite } from "@/components/import/Warni
 import HealthScorePanel, { type HealthScore, type Recommendation } from "@/components/import/HealthScorePanel";
 import ResumeBanner from "@/components/import/ResumeBanner";
 import ImportLiveDashboard from "@/components/import/ImportLiveDashboard";
+import CustomerPreviewPanel from "@/components/import/CustomerPreviewPanel";
+import DuplicateGroupsReview, { type DupAction, type DupDecisionState, type DuplicateGroup } from "@/components/import/DuplicateGroupsReview";
+
 
 // ---------- Canonical fields ----------
 const CANONICAL: { key: string; label: string; required: boolean }[] = [
