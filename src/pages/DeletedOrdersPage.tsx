@@ -20,7 +20,7 @@ import { RotateCcw, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function DeletedOrdersPage() {
-  const { deletedOrders, restoreOrder, hardDelete, refreshOrders } = useOrderStore();
+  const { deletedOrders, restoreOrder, hardDelete, bulkHardDelete, refreshOrders } = useOrderStore();
   const { isAdmin, role } = useRole();
   const isOwner = role === "owner";
   const { hasPermission } = usePermissions();
@@ -119,23 +119,20 @@ export default function DeletedOrdersPage() {
       setHardPhase("checking"); setHardProgress(12);
       // Dependency check already done in dialog on open; skip re-check here.
       setHardPhase("deleting"); setHardProgress(20);
-      const CHUNK = 500;
+
+      // Reuse the SAME delete pipeline as Single Permanent Delete via the
+      // order store. Batches internally; child orders are cascaded.
+      const CHUNK = 200;
       let done = 0;
       let totalDeleted = 0;
-      const ua = typeof navigator !== "undefined" ? navigator.userAgent : null;
       for (let i = 0; i < ids.length; i += CHUNK) {
         const chunk = ids.slice(i, i + CHUNK);
-        const { data, error } = await supabase.rpc("bulk_hard_delete_orders", {
-          p_order_ids: chunk,
-          p_reason: reason || null,
-          p_ip: null,
-          p_user_agent: ua,
-        });
-        if (error) throw error;
-        totalDeleted += Number((data as any)?.deleted || 0);
+        const { deleted } = await bulkHardDelete(chunk, reason || undefined);
+        totalDeleted += deleted;
         done += chunk.length;
         setHardProgress(20 + Math.min(70, Math.round((done / ids.length) * 70)));
       }
+
       setHardPhase("recalculating"); setHardProgress(94);
       await refreshOrders();
       setHardPhase("done"); setHardProgress(100);
