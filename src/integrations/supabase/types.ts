@@ -2356,6 +2356,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _team_actor_name: { Args: { _actor: string }; Returns: string }
       _team_admin_guard: { Args: { _target_user_id: string }; Returns: string }
       advance_followup_steps: { Args: never; Returns: number }
       apply_customer_tags: {
@@ -2393,6 +2394,10 @@ export type Database = {
           p_user_agent?: string
         }
         Returns: Json
+      }
+      bulk_remove_team_member_profiles: {
+        Args: { p_reason?: string; p_user_ids: string[] }
+        Returns: number
       }
       bulk_restore_orders: { Args: { p_order_ids: string[] }; Returns: Json }
       bulk_set_employee_status: {
@@ -2586,6 +2591,10 @@ export type Database = {
         }
         Returns: string
       }
+      remove_team_member_profile: {
+        Args: { p_reason?: string; p_user_id: string }
+        Returns: Json
+      }
       requeue_orphaned_import_batches: { Args: never; Returns: number }
       reset_learning: {
         Args: { p_kind?: string; p_project_id: string }
@@ -2616,6 +2625,23 @@ export type Database = {
       }
       soft_delete_order: {
         Args: { p_order_id: string; p_reason?: string }
+        Returns: Json
+      }
+      toggle_team_member_voice: {
+        Args: { p_enabled: boolean; p_reason?: string; p_user_id: string }
+        Returns: Json
+      }
+      update_team_member_profile: {
+        Args: {
+          p_department?: string
+          p_employee_id?: string
+          p_full_name?: string
+          p_phone?: string
+          p_reason?: string
+          p_role?: Database["public"]["Enums"]["app_role"]
+          p_supervisor_id?: string
+          p_user_id: string
+        }
         Returns: Json
       }
     }
