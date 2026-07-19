@@ -15,12 +15,13 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import BulkDeleteRestoreDialog, { BulkPhase } from "@/components/BulkDeleteRestoreDialog";
+import BulkHardDeleteDialog, { HardDeletePhase } from "@/components/BulkHardDeleteDialog";
 import { RotateCcw, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function DeletedOrdersPage() {
   const { deletedOrders, restoreOrder, hardDelete, refreshOrders } = useOrderStore();
-  const { isAdmin } = useRole();
+  const { isAdmin, isOwner } = useRole();
   const { hasPermission } = usePermissions();
   const { toast } = useToast();
   const [hardDeleteId, setHardDeleteId] = useState<string | null>(null);
@@ -28,8 +29,13 @@ export default function DeletedOrdersPage() {
   const [bulkRestoreOpen, setBulkRestoreOpen] = useState(false);
   const [bulkPhase, setBulkPhase] = useState<BulkPhase>("idle");
   const [bulkProgress, setBulkProgress] = useState(0);
+  const [bulkHardOpen, setBulkHardOpen] = useState(false);
+  const [hardPhase, setHardPhase] = useState<HardDeletePhase>("idle");
+  const [hardProgress, setHardProgress] = useState(0);
 
   const canRestore = isAdmin || hasPermission("orders.delete");
+  const canHardDelete = isOwner || isAdmin || hasPermission("orders.hard_delete");
+
 
   const allChecked = deletedOrders.length > 0 && selected.size === deletedOrders.length;
   const someChecked = selected.size > 0 && selected.size < deletedOrders.length;
