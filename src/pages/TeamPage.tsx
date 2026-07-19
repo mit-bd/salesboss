@@ -87,7 +87,13 @@ export default function TeamPage() {
   const [passwordTarget, setPasswordTarget] = useState<TeamUser | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [pwSaving, setPwSaving] = useState(false);
-  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const roleFilter = searchParams.get("role") || "all";
+  const setRoleFilter = (v: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (v === "all") next.delete("role"); else next.set("role", v);
+    setSearchParams(next, { replace: true });
+  };
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
