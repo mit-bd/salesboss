@@ -803,6 +803,51 @@ export type Database = {
           },
         ]
       }
+      hierarchy_audit_log: {
+        Row: {
+          actor_name: string | null
+          actor_user_id: string | null
+          bd_date: string
+          bd_time: string
+          change_type: string
+          created_at: string
+          id: string
+          new_value: string | null
+          old_value: string | null
+          project_id: string | null
+          reason: string | null
+          target_user_id: string
+        }
+        Insert: {
+          actor_name?: string | null
+          actor_user_id?: string | null
+          bd_date?: string
+          bd_time?: string
+          change_type: string
+          created_at?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          project_id?: string | null
+          reason?: string | null
+          target_user_id: string
+        }
+        Update: {
+          actor_name?: string | null
+          actor_user_id?: string | null
+          bd_date?: string
+          bd_time?: string
+          change_type?: string
+          created_at?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          project_id?: string | null
+          reason?: string | null
+          target_user_id?: string
+        }
+        Relationships: []
+      }
       import_audit_events: {
         Row: {
           action: string
@@ -1900,10 +1945,15 @@ export type Database = {
           ai_voice_enabled: boolean
           avatar_url: string | null
           created_at: string
+          department: string | null
+          employee_id: string | null
           full_name: string | null
           id: string
+          last_login_at: string | null
           phone: string | null
           project_id: string | null
+          status: Database["public"]["Enums"]["employee_status"]
+          supervisor_id: string | null
           updated_at: string
           user_id: string
         }
@@ -1911,10 +1961,15 @@ export type Database = {
           ai_voice_enabled?: boolean
           avatar_url?: string | null
           created_at?: string
+          department?: string | null
+          employee_id?: string | null
           full_name?: string | null
           id?: string
+          last_login_at?: string | null
           phone?: string | null
           project_id?: string | null
+          status?: Database["public"]["Enums"]["employee_status"]
+          supervisor_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1922,10 +1977,15 @@ export type Database = {
           ai_voice_enabled?: boolean
           avatar_url?: string | null
           created_at?: string
+          department?: string | null
+          employee_id?: string | null
           full_name?: string | null
           id?: string
+          last_login_at?: string | null
           phone?: string | null
           project_id?: string | null
+          status?: Database["public"]["Enums"]["employee_status"]
+          supervisor_id?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -2363,6 +2423,10 @@ export type Database = {
         Args: { p_project_id?: string }
         Returns: Json
       }
+      is_in_my_hierarchy: {
+        Args: { _supervisor_user_id: string; _target_user_id: string }
+        Returns: boolean
+      }
       kick_import_worker_if_needed: { Args: never; Returns: undefined }
       mark_ai_profile_dirty: {
         Args: { _customer_id: string }
@@ -2414,7 +2478,19 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "sub_admin" | "sales_executive" | "owner"
+      app_role:
+        | "admin"
+        | "sub_admin"
+        | "sales_executive"
+        | "owner"
+        | "team_leader"
+        | "manager"
+      employee_status:
+        | "active"
+        | "on_hold"
+        | "suspended"
+        | "resigned"
+        | "archived"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2542,7 +2618,21 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "sub_admin", "sales_executive", "owner"],
+      app_role: [
+        "admin",
+        "sub_admin",
+        "sales_executive",
+        "owner",
+        "team_leader",
+        "manager",
+      ],
+      employee_status: [
+        "active",
+        "on_hold",
+        "suspended",
+        "resigned",
+        "archived",
+      ],
     },
   },
 } as const
