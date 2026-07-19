@@ -1054,65 +1054,20 @@ export default function BulkImportPage() {
           </div>
         )}
 
-        {/* ---------- DUPLICATES ---------- */}
+        {/* ---------- DUPLICATES (grouped by customer) ---------- */}
         {step === "duplicates" && (
-          <div className="rounded-xl border border-border bg-card p-5 card-shadow">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-sm font-semibold">Duplicate Order IDs</h3>
-                <p className="text-xs text-muted-foreground">{Object.keys(existingByExtId).length} orders already exist. Choose what to do.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => applyToAll("update")}>Update all</Button>
-                <Button size="sm" variant="outline" onClick={() => applyToAll("skip")}>Skip all</Button>
-              </div>
-            </div>
-            <div className="border border-border rounded-lg divide-y divide-border max-h-[420px] overflow-auto">
-              {Object.entries(existingByExtId).map(([extId, existing]) => {
-                const incoming = cleanedRows.find((r) => (r.externalOrderId || "").trim() === extId);
-                const dec = dupDecisions[extId] || "update";
-                return (
-                  <div key={extId} className="p-3 text-sm">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium">Order ID: {extId}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground mb-2">
-                      <div className="border border-border rounded p-2">
-                        <p className="text-[10px] uppercase font-semibold text-foreground mb-1">Existing</p>
-                        <p>{existing.customer_name} · {existing.mobile}</p>
-                        <p>{existing.product_title || "—"} · ৳{existing.price} · {existing.delivery_status || "—"}</p>
-                        <p>{existing.order_date}</p>
-                      </div>
-                      <div className="border border-border rounded p-2">
-                        <p className="text-[10px] uppercase font-semibold text-foreground mb-1">Incoming</p>
-                        <p>{incoming?.recipientName} · {incoming?.recipientPhone}</p>
-                        <p>{incoming?.product || "—"} · ৳{incoming?.codAmount} · {incoming?.deliveryStatus || "—"}</p>
-                        <p>{incoming?.orderDate || "—"}</p>
-                      </div>
-                    </div>
-                    <RadioGroup
-                      value={dec}
-                      onValueChange={(v) => {
-                        if (v === "create") { setConfirmCreateFor(extId); return; }
-                        setDupDecisions((d) => ({ ...d, [extId]: v as DupDecision }));
-                      }}
-                      className="flex flex-wrap gap-4"
-                    >
-                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                        <RadioGroupItem value="update" /> Update existing
-                      </label>
-                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                        <RadioGroupItem value="skip" /> Skip
-                      </label>
-                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                        <RadioGroupItem value="create" /> Create new order anyway
-                      </label>
-                    </RadioGroup>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-4 flex items-center justify-between">
+          <div className="space-y-3">
+            <DuplicateGroupsReview
+              groups={dupGroups}
+              decisions={dupState}
+              onDecisions={setDupState}
+              onPreview={(mobile, customerId) => {
+                setPreviewMobile(mobile);
+                setPreviewCustomerId(customerId);
+                setPreviewOpen(true);
+              }}
+            />
+            <div className="flex items-center justify-between">
               <Button variant="ghost" onClick={() => setStep("simulate")}><ArrowLeft className="h-4 w-4 mr-1.5" /> Back</Button>
               <Button onClick={runQueuedImport} disabled={queuing}>
                 {queuing ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Queuing…</> : <>Start background import <ArrowRight className="h-4 w-4 ml-1.5" /></>}
@@ -1120,6 +1075,7 @@ export default function BulkImportPage() {
             </div>
           </div>
         )}
+
 
         {/* ---------- EXECUTE (background live dashboard) ---------- */}
         {step === "execute" && liveRunId && (
