@@ -60,14 +60,17 @@ export default function TeamMemberDetailPage() {
     if (!userId) return;
     setLoading(true);
     try {
-      const [detail, statsRes] = await Promise.all([
-        supabase.functions.invoke("manage-team", { body: { action: "get_member_detail", userId } }),
-        supabase.functions.invoke("manage-team", { body: { action: "member_stats", userId } }),
+      // Load profile + stats via direct PostgreSQL RPCs (no Edge Function).
+      const [detailRes, statsRes] = await Promise.all([
+        (supabase.rpc as any)("get_team_member_detail", { p_user_id: userId }),
+        (supabase.rpc as any)("get_team_member_stats", { p_user_id: userId }),
       ]);
-      if (detail.error || detail.data?.error) throw new Error(detail.data?.error || detail.error?.message);
-      setMember(detail.data.member);
-      if (statsRes.data?.stats) setStats(statsRes.data.stats);
+      if (detailRes.error) throw new Error(detailRes.error.message);
+      if (!detailRes.data) throw new Error("Member not found");
+      setMember(detailRes.data as Member);
+      if (!statsRes.error && statsRes.data) setStats(statsRes.data);
 
+      // Assigned orders + linked customers via direct table queries.
       const [{ data: ords }, memberProfile] = await Promise.all([
         supabase.from("orders").select("id, customer_name, price, current_status, followup_step, order_date, delivery_status, invoice_id, generated_order_id").eq("assigned_to", userId).eq("is_deleted", false).order("order_date", { ascending: false }).limit(50),
         supabase.from("profiles").select("full_name").eq("user_id", userId).maybeSingle(),
@@ -79,10 +82,11 @@ export default function TeamMemberDetailPage() {
         setCustomers(cust || []);
       }
 
-      const act = await supabase.functions.invoke("manage-team", { body: { action: "member_activity", userId, limit: 80 } });
-      if (act.data?.activity) setActivity(act.data.activity);
+      // Activity timeline via RPC — non-blocking so its failure never hides the profile.
+      const actRes = await (supabase.rpc as any)("get_team_member_activity", { p_user_id: userId, p_limit: 80 });
+      if (!actRes.error && actRes.data) setActivity(actRes.data as any);
     } catch (e: any) {
-      toast({ title: "Failed to load member", description: e.message, variant: "destructive" });
+      toast({ title: "Failed to load member", description: e.message || "Unknown error", variant: "destructive" });
     } finally {
       setLoading(false);
     }
