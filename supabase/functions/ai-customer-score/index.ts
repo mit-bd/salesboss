@@ -4,26 +4,30 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildCorsHeaders } from "../_shared/cors.ts";
+import { authenticateUser, createEdgeContext, jsonResponse, logEdge } from "../_shared/edge.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 
 serve(async (req) => {
+  const edge = createEdgeContext("ai-customer-score", req);
   const cors = buildCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const j = (b: unknown, s = 200) =>
-    new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
+    jsonResponse(edge, cors, b as Record<string, unknown>, s);
 
   try {
-    const authHeader = req.headers.get("Authorization") || "";
-    const token = authHeader.replace(/^Bearer\s+/i, "");
-    if (!token) return j({ error: "Unauthorized" }, 401);
+    logEdge(edge, "info", "request_started", { method: req.method });
+    const auth = await authenticateUser(req, SUPABASE_URL, ANON_KEY);
+    if (auth.error || !auth.user) {
+      logEdge(edge, "warn", "auth_failed", { supabase_error: auth.supabaseError });
+      return j({ error: "Unauthorized", backend_error: auth.error, supabase_error: auth.supabaseError }, 401);
+    }
+    const userId = auth.user.id;
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-    const { data: userData, error: userErr } = await admin.auth.getUser(token);
-    if (userErr || !userData?.user) return j({ error: "Unauthorized" }, 401);
-    const userId = userData.user.id;
 
     const body = await req.json().catch(() => ({}));
     const customerId: string | undefined = body?.customer_id;
@@ -142,6 +146,7 @@ Currency is BDT (৳). Never invent facts not present in the data.`;
 
     return j({ cached: false, ...upserted });
   } catch (e) {
+    logEdge(edge, "error", "unhandled_exception", { backend_error: (e as Error).message });
     return j({ error: (e as Error).message }, 500);
   }
 });

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildCorsHeaders } from "../_shared/cors.ts";
+import { authenticateUser, createEdgeContext, jsonResponse, logEdge } from "../_shared/edge.ts";
 
 
 // ─── TOOL DEFINITIONS FOR AI COMMAND EXECUTION ───
@@ -96,44 +97,30 @@ const ACTION_TOOLS = [
 ];
 
 serve(async (req) => {
+  const edge = createEdgeContext("ai-assistant", req);
   const corsHeaders = buildCorsHeaders(req);
+  const json = (body: Record<string, unknown>, status = 200) => jsonResponse(edge, corsHeaders, body, status);
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: { ...corsHeaders, "X-Request-ID": edge.requestId, "X-Function-Execution-ID": edge.executionId } });
   }
 
   try {
+    logEdge(edge, "info", "request_started", { method: req.method });
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
 
     if (!lovableApiKey) {
-      return new Response(JSON.stringify({ error: "AI not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "AI not configured", backend_error: "LOVABLE_API_KEY is missing" }, 500);
     }
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const auth = await authenticateUser(req, supabaseUrl, anonKey);
+    if (auth.error || !auth.user) {
+      logEdge(edge, "warn", "auth_failed", { supabase_error: auth.supabaseError });
+      return json({ error: "Unauthorized", backend_error: auth.error, supabase_error: auth.supabaseError }, 401);
     }
-
-    const token = authHeader.replace("Bearer ", "");
-    const callerClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: claimsData, error: claimsError } = await callerClient.auth.getClaims(token);
-    const callerId = claimsData?.claims?.sub as string | undefined;
-    const callerEmail = claimsData?.claims?.email as string | undefined;
-    if (claimsError || !callerId) {
-      console.error("[ai-assistant] Auth failed:", claimsError?.message);
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const caller = { id: callerId, email: callerEmail } as { id: string; email?: string };
+    const caller = auth.user;
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 

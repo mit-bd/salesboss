@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildCorsHeaders } from "../_shared/cors.ts";
+import { authenticateUser, createEdgeContext, jsonResponse, logEdge } from "../_shared/edge.ts";
 
 const CANONICAL_FIELDS = [
   "externalOrderId","recipientName","recipientPhone","recipientAddress","codAmount",
@@ -10,31 +11,33 @@ const CANONICAL_FIELDS = [
 ] as const;
 
 serve(async (req) => {
+  const edge = createEdgeContext("ai-import-cleaner", req);
   const corsHeaders = buildCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    logEdge(edge, "info", "request_started", { method: req.method });
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!lovableApiKey) return jerr(corsHeaders, 500, "AI not configured");
+    if (!lovableApiKey) return jerr(edge, corsHeaders, 500, "AI not configured");
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return jerr(corsHeaders, 401, "Unauthorized");
-    const token = authHeader.replace("Bearer ", "");
-    const caller = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-    const { data: { user }, error: uerr } = await caller.auth.getUser(token);
-    if (uerr || !user) return jerr(corsHeaders, 401, "Unauthorized");
+    const auth = await authenticateUser(req, supabaseUrl, anonKey);
+    if (auth.error || !auth.user) {
+      logEdge(edge, "warn", "auth_failed", { supabase_error: auth.supabaseError });
+      return jerr(edge, corsHeaders, 401, "Unauthorized", auth.error, auth.supabaseError);
+    }
+    const user = auth.user;
 
     const admin = createClient(supabaseUrl, serviceRoleKey);
     const { data: prof } = await admin.from("profiles").select("project_id").eq("user_id", user.id).maybeSingle();
     const projectId = prof?.project_id;
-    if (!projectId) return jerr(corsHeaders, 400, "No project found");
+    if (!projectId) return jerr(edge, corsHeaders, 400, "No project found");
 
     const body = await req.json().catch(() => ({}));
     const { rows, headers, mode = "clean", import_run_id } = body ?? {};
-    if (!Array.isArray(headers) || headers.length === 0) return jerr(corsHeaders, 400, "No headers provided");
+    if (!Array.isArray(headers) || headers.length === 0) return jerr(edge, corsHeaders, 400, "No headers provided");
 
     // ---- Mapping detection (always fast) ----
     const mapping = await detectMapping(headers, lovableApiKey);
@@ -59,7 +62,7 @@ serve(async (req) => {
     }
 
     if (mode === "detect" || !Array.isArray(rows) || rows.length === 0) {
-      return jok(corsHeaders, { mapping, matchedTemplate, headerSignature: sig });
+      return jok(edge, corsHeaders, { mapping, matchedTemplate, headerSignature: sig });
     }
 
     // ---- Load context (products + confirmed aliases) ----
@@ -82,8 +85,8 @@ serve(async (req) => {
       const batch = rows.slice(i, i + BATCH);
       const { cleaned, corrs, ac, nr, warnings, status } =
         await cleanBatch(batch, mapping, productHint, aliasHint, lovableApiKey);
-      if (status === 429) return jerr(corsHeaders, 429, "Rate limit exceeded. Please retry shortly.");
-      if (status === 402) return jerr(corsHeaders, 402, "AI credits exhausted. Please add credits.");
+      if (status === 429) return jerr(edge, corsHeaders, 429, "Rate limit exceeded. Please retry shortly.");
+      if (status === 402) return jerr(edge, corsHeaders, 402, "AI credits exhausted. Please add credits.");
       cleanedAll.push(...cleaned);
       corrections.push(...corrs);
       autoCorrected += ac;
@@ -133,7 +136,7 @@ serve(async (req) => {
       severityCounts: countSeverities(allWarnings),
     };
 
-    return jok(corsHeaders, {
+    return jok(edge, corsHeaders, {
       mapping,
       matchedTemplate,
       headerSignature: sig,
@@ -144,16 +147,16 @@ serve(async (req) => {
       report,
     });
   } catch (e) {
-    console.error("import cleaner error", e);
-    return jerr(buildCorsHeaders(req), 500, e instanceof Error ? e.message : "Unknown error");
+    logEdge(edge, "error", "unhandled_exception", { backend_error: e instanceof Error ? e.message : "Unknown error" });
+    return jerr(edge, buildCorsHeaders(req), 500, e instanceof Error ? e.message : "Unknown error");
   }
 });
 
-function jok(cors: Record<string, string>, body: unknown) {
-  return new Response(JSON.stringify(body), { headers: { ...cors, "Content-Type": "application/json" } });
+function jok(edge: ReturnType<typeof createEdgeContext>, cors: Record<string, string>, body: unknown) {
+  return jsonResponse(edge, cors, body as Record<string, unknown>);
 }
-function jerr(cors: Record<string, string>, status: number, error: string) {
-  return new Response(JSON.stringify({ error }), { status, headers: { ...cors, "Content-Type": "application/json" } });
+function jerr(edge: ReturnType<typeof createEdgeContext>, cors: Record<string, string>, status: number, error: string, backendError?: string, supabaseError?: string) {
+  return jsonResponse(edge, cors, { error, backend_error: backendError, supabase_error: supabaseError }, status);
 }
 function normalizeHeader(h: string) {
   return String(h || "").toLowerCase().replace(/[^a-z0-9]/g, "");
