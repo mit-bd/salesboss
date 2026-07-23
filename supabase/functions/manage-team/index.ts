@@ -1,17 +1,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildCorsHeaders } from "../_shared/cors.ts";
+import { authenticateUser, createEdgeContext, jsonResponse, logEdge } from "../_shared/edge.ts";
 
 serve(async (req) => {
+  const edge = createEdgeContext("manage-team", req);
   const corsHeaders = buildCorsHeaders(req);
   const json = (data: any, status = 200) =>
-    new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    jsonResponse(edge, corsHeaders, data, status);
 
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: { ...corsHeaders, "X-Request-ID": edge.requestId, "X-Function-Execution-ID": edge.executionId } });
   }
 
   try {
+    logEdge(edge, "info", "request_started", { method: req.method });
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
@@ -35,17 +38,17 @@ serve(async (req) => {
     // ============ ALL OTHER ACTIONS REQUIRE AUTH ============
 
     // ============ AUTH CHECK ============
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return json({ error: "Unauthorized" }, 401);
-
-    const token = authHeader.replace("Bearer ", "");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const callerClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-    const { data: { user: caller }, error: userError } = await callerClient.auth.getUser(token);
-    if (userError || !caller) return json({ error: "Unauthorized" }, 401);
+    const auth = await authenticateUser(req, supabaseUrl, anonKey);
+    if (auth.error || !auth.user) {
+      logEdge(edge, "warn", "auth_failed", { supabase_error: auth.supabaseError });
+      return json({ error: "Unauthorized", backend_error: auth.error, supabase_error: auth.supabaseError }, 401);
+    }
+    const caller = auth.user;
 
     const { data: roleData } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", caller.id).maybeSingle();
     const callerRole = roleData?.role;
+    logEdge(edge, "info", "auth_ok", { action, caller_id: caller.id, caller_role: callerRole });
 
     // ============ OWNER ACTIONS ============
     if (callerRole === "owner") {
@@ -890,6 +893,7 @@ serve(async (req) => {
 
     return json({ error: "Unknown action" }, 400);
   } catch (err) {
+    logEdge(edge, "error", "unhandled_exception", { backend_error: (err as Error).message });
     return json({ error: (err as Error).message }, 500);
   }
 });
