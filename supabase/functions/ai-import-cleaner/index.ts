@@ -21,7 +21,7 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!lovableApiKey) return jerr(corsHeaders, 500, "AI not configured");
+    if (!lovableApiKey) return jerr(edge, corsHeaders, 500, "AI not configured");
 
     const auth = await authenticateUser(req, supabaseUrl, anonKey);
     if (auth.error || !auth.user) {
@@ -33,11 +33,11 @@ serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceRoleKey);
     const { data: prof } = await admin.from("profiles").select("project_id").eq("user_id", user.id).maybeSingle();
     const projectId = prof?.project_id;
-    if (!projectId) return jerr(corsHeaders, 400, "No project found");
+    if (!projectId) return jerr(edge, corsHeaders, 400, "No project found");
 
     const body = await req.json().catch(() => ({}));
     const { rows, headers, mode = "clean", import_run_id } = body ?? {};
-    if (!Array.isArray(headers) || headers.length === 0) return jerr(corsHeaders, 400, "No headers provided");
+    if (!Array.isArray(headers) || headers.length === 0) return jerr(edge, corsHeaders, 400, "No headers provided");
 
     // ---- Mapping detection (always fast) ----
     const mapping = await detectMapping(headers, lovableApiKey);
@@ -62,7 +62,7 @@ serve(async (req) => {
     }
 
     if (mode === "detect" || !Array.isArray(rows) || rows.length === 0) {
-      return jok(corsHeaders, { mapping, matchedTemplate, headerSignature: sig });
+      return jok(edge, corsHeaders, { mapping, matchedTemplate, headerSignature: sig });
     }
 
     // ---- Load context (products + confirmed aliases) ----
@@ -85,8 +85,8 @@ serve(async (req) => {
       const batch = rows.slice(i, i + BATCH);
       const { cleaned, corrs, ac, nr, warnings, status } =
         await cleanBatch(batch, mapping, productHint, aliasHint, lovableApiKey);
-      if (status === 429) return jerr(corsHeaders, 429, "Rate limit exceeded. Please retry shortly.");
-      if (status === 402) return jerr(corsHeaders, 402, "AI credits exhausted. Please add credits.");
+      if (status === 429) return jerr(edge, corsHeaders, 429, "Rate limit exceeded. Please retry shortly.");
+      if (status === 402) return jerr(edge, corsHeaders, 402, "AI credits exhausted. Please add credits.");
       cleanedAll.push(...cleaned);
       corrections.push(...corrs);
       autoCorrected += ac;
@@ -136,7 +136,7 @@ serve(async (req) => {
       severityCounts: countSeverities(allWarnings),
     };
 
-    return jok(corsHeaders, {
+    return jok(edge, corsHeaders, {
       mapping,
       matchedTemplate,
       headerSignature: sig,
@@ -152,8 +152,7 @@ serve(async (req) => {
   }
 });
 
-function jok(cors: Record<string, string>, body: unknown) {
-  const edge = createEdgeContext("ai-import-cleaner", new Request("https://internal.local"));
+function jok(edge: ReturnType<typeof createEdgeContext>, cors: Record<string, string>, body: unknown) {
   return jsonResponse(edge, cors, body as Record<string, unknown>);
 }
 function jerr(edge: ReturnType<typeof createEdgeContext>, cors: Record<string, string>, status: number, error: string, backendError?: string, supabaseError?: string) {
