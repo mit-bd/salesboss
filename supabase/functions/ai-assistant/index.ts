@@ -124,12 +124,16 @@ serve(async (req) => {
     const callerClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user: caller }, error: userError } = await callerClient.auth.getUser(token);
-    if (userError || !caller) {
+    const { data: claimsData, error: claimsError } = await callerClient.auth.getClaims(token);
+    const callerId = claimsData?.claims?.sub as string | undefined;
+    const callerEmail = claimsData?.claims?.email as string | undefined;
+    if (claimsError || !callerId) {
+      console.error("[ai-assistant] Auth failed:", claimsError?.message);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const caller = { id: callerId, email: callerEmail } as { id: string; email?: string };
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
